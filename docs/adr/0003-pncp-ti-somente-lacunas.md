@@ -1,0 +1,17 @@
+# 0003 — O servidor pncp-ti expõe só o que o compras-mcp não faz
+
+- Status: aceita (12/10/2026)
+
+## Contexto
+
+Duplicar tools gera confusão para o modelo (duas tools parecidas) e manutenção dobrada.
+
+## Decisão
+
+O `pncp-ti` é um segundo servidor MCP, ao lado do `compras-mcp` no mesmo cliente. Ele cobre apenas:
+histórico local, recorte de TI, preços normalizados, busca em anexos e digest. Sem fork do `compras-mcp`.
+
+## Consequências
+
+- Escopo pequeno e testável.
+- Cada tool nova precisa justificar por que o `compras-mcp` não atende.

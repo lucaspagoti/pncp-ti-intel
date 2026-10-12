@@ -1,0 +1,36 @@
+# pncp-ti-intel — pacote inicial
+
+Base de inteligência de contratações públicas de TI, alimentada pelo PNCP e consultada via MCP.
+Este pacote contém só documentos e configurações de partida. Nenhum código ainda: o código nasce na Fase 0, com o Claude Code.
+
+Plano completo (versão viva, editável): https://claude.ai/code/artifact/b89bd04f-c28e-4fbc-9bd9-f46c9c95aea4
+Cópia estática do plano: `docs/PLANO.md`.
+
+## O que tem aqui
+
+| Caminho | Para quê | Quem usa |
+| --- | --- | --- |
+| `CLAUDE.md` | Regras e contexto que o Claude Code lê em toda sessão | Claude Code |
+| `docs/PLANO.md` | Plano completo: escopo, arquitetura, segurança, roadmap | Você e o Claude Code |
+| `docs/adr/` | As 9 decisões de arquitetura já tomadas | Claude Code |
+| `docs/FASES.md` | Entregas, critérios de aceite e prompt de abertura de cada fase | Você |
+| `docs/GLOSSARIO.md` | Termos de contratação pública usados no código | Claude Code |
+| `docs/referencias/LINKS.md` | Fontes oficiais e de terceiros | Ambos |
+| `scripts/baixar_referencias.ps1` | Baixa as especificações OpenAPI do PNCP e a documentação do compras-mcp | Você (uma vez) |
+| `insumos/` | Modelos de planilha que **só você** pode preencher | Você |
+| `.mcp.json` | Registra o compras-mcp local (stdio, versão fixada) | Claude Code |
+| `.env.example`, `.gitignore` | Base de configuração segura | Claude Code |
+
+## Antes de abrir o Claude Code
+
+1. Descompacte esta pasta onde o projeto vai morar e rode `git init`.
+2. Rode `scripts/baixar_referencias.ps1` (PowerShell) para baixar as referências oficiais para `docs/referencias/`.
+3. Responda as decisões D1 e D2 (ver `docs/PLANO.md`, seção "Decisões pendentes").
+4. Preencha o que der em `insumos/` — veja `insumos/LEIA-ME.md`. Só `contratos_ti_pge.csv` é necessário antes da Fase 1.
+5. Abra o Claude Code na pasta e cole o prompt da Fase 0 de `docs/FASES.md`.
+
+## Finalidade do tratamento de dados (LGPD)
+
+Esta base trata exclusivamente dados públicos divulgados no PNCP, com a finalidade de apoiar o planejamento
+de contratações de TI da GTI/PGE-RJ (pesquisa de preços, adesão a atas e referência de especificações).
+CPFs são mascarados. Nenhum documento interno da PGE é armazenado aqui.

@@ -1,0 +1,34 @@
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Dados locais
+data/
+backups/
+*.dump
+attachments_cache/
+
+# Insumos com dados do órgão (versionar só se o repositório for institucional)
+insumos/contratos_ti_pge.csv
+insumos/amostra_rotulada.csv
+
+# Referências baixadas (regeneráveis pelo script)
+docs/referencias/*.json
+docs/referencias/*.htm
+docs/referencias/compras-mcp-*.md
+docs/referencias/mcp-security-best-practices.md
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
