@@ -123,6 +123,71 @@ async def test_mesma_janela_processada_duas_vezes_mesma_contagem(conn_ingest):
     ).fetchone()
     assert log_rows["n"] >= 1
 
+    # `--forcar` reprocessa uma janela já marcada `ok` de propósito (ex.: depois
+    # de corrigir um mapeador) — não pode bater em UniqueViolation no log.
+    await ingerir_janela(
+        conn_ingest,
+        cliente,
+        limitador,
+        entidade="contratacoes_teste",
+        tabela="contratacoes",
+        chave="numero_controle_pncp",
+        path="/v1/contratacoes/publicacao",
+        janela=janela,
+        filtros={"codigoModalidadeContratacao": 6},
+        mapear=mapear_contratacao,
+        modalidade_id=6,
+        extrair_orgao=extrair_orgao,
+        forcar=True,
+    )
+    assert await contar() == primeira_contagem
+
+
+async def test_item_com_erro_nao_derruba_os_outros_itens_da_pagina(conn_ingest):
+    # Savepoint por item (executar.py): um item sem "numeroControlePNCP" quebra
+    # mapear_contratacao com KeyError, mas isso não pode "envenenar" a conexão
+    # e impedir o upsert do item seguinte na mesma página (bug real: sem
+    # savepoint, o segundo upsert falhava com InFailedSqlTransaction).
+    item_ruim: dict[str, Any] = {"objetoCompra": "sem numeroControlePNCP"}
+    cliente = ClientePNCPFalso({1: [item_ruim, CONTRATACAO_1]})
+    limitador = LimitadorTaxa(1000)
+    janela = Janela(inicio=date(2026, 11, 1), fim=date(2026, 11, 10))
+
+    await ingerir_janela(
+        conn_ingest,
+        cliente,
+        limitador,
+        entidade="contratacoes_teste_item_ruim",
+        tabela="contratacoes",
+        chave="numero_controle_pncp",
+        path="/v1/contratacoes/publicacao",
+        janela=janela,
+        filtros={"codigoModalidadeContratacao": 6},
+        mapear=mapear_contratacao,
+        modalidade_id=6,
+        extrair_orgao=extrair_orgao,
+    )
+
+    linha_boa = await (
+        await conn_ingest.execute(
+            "SELECT 1 FROM contratacoes WHERE numero_controle_pncp = %s",
+            (CONTRATACAO_1["numeroControlePNCP"],),
+        )
+    ).fetchone()
+    assert linha_boa is not None, "o item válido depois do item ruim devia ter sido gravado"
+
+    log_row = await (
+        await conn_ingest.execute(
+            "SELECT status, falhas, registros_gravados FROM log_execucao_ingestao "
+            "WHERE entidade = 'contratacoes_teste_item_ruim'"
+        )
+    ).fetchone()
+    assert log_row["falhas"] == 1
+    assert log_row["registros_gravados"] == 1
+    # Página com falha não pode ficar marcada "ok" — senão o próximo run (sem
+    # --forcar) pula ela pra sempre e o item ruim nunca é revisitado.
+    assert log_row["status"] == "erro"
+
 
 class ClientePNCP204Falso:
     """Simula o quirk real do PNCP: combinação sem resultado responde 204 com

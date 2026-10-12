@@ -8,6 +8,8 @@ def mascarar_ni(ni: str | None, tipo_pessoa: str | None) -> str | None:
     if not ni:
         return None
     digitos = "".join(c for c in ni if c.isdigit())
-    if (tipo_pessoa == "PF" or len(digitos) == 11) and len(digitos) == 11:
-        return f"{digitos[:3]}{'*' * 6}{digitos[-2:]}"
-    return digitos
+    if tipo_pessoa != "PF" and len(digitos) != 11:
+        return digitos
+    if len(digitos) <= 5:
+        return "*" * len(digitos)
+    return f"{digitos[:3]}{'*' * (len(digitos) - 5)}{digitos[-2:]}"

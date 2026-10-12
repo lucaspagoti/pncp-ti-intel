@@ -35,6 +35,24 @@ Mapeador = Callable[[dict[str, Any]], dict[str, Any]]
 Extrator = Callable[[dict[str, Any]], dict[str, Any] | None]
 
 
+def _e_corpo_vazio(exc: ComprasHTTPError) -> bool:
+    """True só quando a mensagem indica corpo de verdade vazio (o 204 real).
+
+    A mensagem do `BaseAsyncClient` reusado é sempre
+    `"Resposta nao-JSON de {api}{path}: {resp.text[:200]}"` — isolamos o que
+    vem depois do único ": " (api/path do PNCP nunca têm dois-pontos) e só
+    tratamos como página vazia se esse resto for realmente vazio. Um 200 com
+    JSON truncado/corrompido tem texto ali e cai como erro de verdade, não
+    fica mascarado de "sem resultado" (e preso pra sempre pelo índice único
+    parcial `WHERE status = 'ok'`).
+    """
+    mensagem = str(exc)
+    if "Resposta nao-JSON" not in mensagem:
+        return False
+    _, _, corpo = mensagem.partition(": ")
+    return corpo.strip() == ""
+
+
 async def _buscar_pagina(
     cliente: PNCPClient, path: str, *, pagina: int, janela: Janela, filtros: dict[str, Any]
 ) -> dict[str, Any]:
@@ -60,7 +78,7 @@ async def _buscar_pagina(
                 **filtros,
             )
         except ComprasHTTPError as exc:
-            if "Resposta nao-JSON" in str(exc):
+            if _e_corpo_vazio(exc):
                 return {"data": [], "totalPaginas": 0}
             if (
                 isinstance(exc, (ComprasRateLimitError, ComprasServerError, ComprasTimeoutError))
@@ -137,15 +155,21 @@ async def ingerir_janela(
         falhas = 0
         for item in itens:
             try:
-                if extrair_orgao is not None:
-                    orgao = extrair_orgao(item)
-                    if orgao is not None:
-                        await upsert(conn, "orgaos", "cnpj", orgao)
-                if extrair_fornecedor is not None:
-                    fornecedor = extrair_fornecedor(item)
-                    if fornecedor is not None:
-                        await upsert(conn, "fornecedores", "ni", fornecedor)
-                await upsert(conn, tabela, chave, mapear(item))
+                # Savepoint por item: se o upsert de um item falhar (CNPJ fora
+                # do tamanho da coluna, FK, etc.), só esse item é desfeito — a
+                # conexão não fica "aborted" pro resto da página (o que faria
+                # o item seguinte, e o próprio `registrar` abaixo, falharem em
+                # cascata com `InFailedSqlTransaction`).
+                async with conn.transaction():
+                    if extrair_orgao is not None:
+                        orgao = extrair_orgao(item)
+                        if orgao is not None:
+                            await upsert(conn, "orgaos", "cnpj", orgao)
+                    if extrair_fornecedor is not None:
+                        fornecedor = extrair_fornecedor(item)
+                        if fornecedor is not None:
+                            await upsert(conn, "fornecedores", "ni", fornecedor)
+                    await upsert(conn, tabela, chave, mapear(item))
                 gravados += 1
             except Exception:
                 falhas += 1
@@ -161,7 +185,10 @@ async def ingerir_janela(
             registros_lidos=len(itens),
             registros_gravados=gravados,
             falhas=falhas,
-            status="ok",
+            # "ok" só sem nenhuma falha de item — uma página com falha fica
+            # "erro" e o `ja_concluida` do próximo run tenta de novo (idempotente,
+            # reprocessar os itens que já tinham dado certo não duplica nada).
+            status="ok" if falhas == 0 else "erro",
         )
         await conn.commit()
 

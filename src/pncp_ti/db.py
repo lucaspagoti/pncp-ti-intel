@@ -36,8 +36,9 @@ async def upsert(
     colunas = list(valores.keys())
     placeholders = [f"%({c})s" for c in colunas]
     atualizacoes = [f"{c} = EXCLUDED.{c}" for c in colunas if c != chave]
+    acao_conflito = f"DO UPDATE SET {', '.join(atualizacoes)}" if atualizacoes else "DO NOTHING"
     sql = (
         f"INSERT INTO {tabela} ({', '.join(colunas)}) VALUES ({', '.join(placeholders)}) "
-        f"ON CONFLICT ({chave}) DO UPDATE SET {', '.join(atualizacoes)}"
+        f"ON CONFLICT ({chave}) {acao_conflito}"
     )
     await conn.execute(sql, dict(valores))

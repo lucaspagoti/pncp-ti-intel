@@ -106,6 +106,21 @@ def extrair_orgao_de_ata(payload: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _raw_sem_cpf(payload: dict[str, Any]) -> dict[str, Any]:
+    """Cópia do payload com `niFornecedor` mascarado antes de ir pro `raw jsonb`.
+
+    A coluna `raw` guarda o payload por completo de propósito (ver docstring do
+    módulo), mas isso não pode incluir um CPF sem máscara — "CPFs sempre
+    mascarados" é regra fixa do CLAUDE.md e vale pra toda coluna, não só pra
+    `ni_fornecedor` estruturada.
+    """
+    if "niFornecedor" not in payload:
+        return payload
+    copia = dict(payload)
+    copia["niFornecedor"] = mascarar_ni(payload.get("niFornecedor"), payload.get("tipoPessoa"))
+    return copia
+
+
 def mapear_contrato(payload: dict[str, Any]) -> dict[str, Any]:
     orgao = payload.get("orgaoEntidade") or {}
     return {
@@ -132,7 +147,7 @@ def mapear_contrato(payload: dict[str, Any]) -> dict[str, Any]:
         "data_publicacao_pncp": payload.get("dataPublicacaoPncp"),
         "data_atualizacao": payload.get("dataAtualizacao"),
         "data_atualizacao_global": payload.get("dataAtualizacaoGlobal"),
-        "raw": Json(payload),
+        "raw": Json(_raw_sem_cpf(payload)),
     }
 
 

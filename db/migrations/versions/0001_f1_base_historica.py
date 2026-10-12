@@ -11,7 +11,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-from pncp_ti.config import get_settings
+from pncp_ti.config import exigir, get_settings
 
 revision = "0001"
 down_revision = None
@@ -213,10 +213,10 @@ def upgrade() -> None:
     # posição do PASSWORD, só literal. Senha vem só do `.env` local (nunca de
     # entrada externa), mas escapamos a aspa simples mesmo assim por hábito seguro.
     if "ingest" not in existing_roles:
-        senha = settings.ingest_password.replace("'", "''")
+        senha = exigir(settings.ingest_password, "PNCP_TI_INGEST_PASSWORD").replace("'", "''")
         bind.exec_driver_sql(f"CREATE ROLE ingest LOGIN PASSWORD '{senha}'")
     if "mcp_reader" not in existing_roles:
-        senha = settings.reader_password.replace("'", "''")
+        senha = exigir(settings.reader_password, "PNCP_TI_READER_PASSWORD").replace("'", "''")
         bind.exec_driver_sql(f"CREATE ROLE mcp_reader LOGIN PASSWORD '{senha}'")
 
     op.execute(
