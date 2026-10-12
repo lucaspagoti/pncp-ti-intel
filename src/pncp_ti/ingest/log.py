@@ -1,37 +1,10 @@
-"""Log de execução da ingestão (ADR 0005) — permite retomar sem reprocessar."""
+"""Log de execução da ingestão (ADR 0005) — registra o resultado de cada página."""
 
 from __future__ import annotations
 
 import psycopg
 
 from pncp_ti.ingest.windows import Janela
-
-
-async def ja_concluida(
-    conn: psycopg.AsyncConnection,
-    entidade: str,
-    modalidade_id: int | None,
-    janela: Janela,
-    pagina: int,
-) -> bool:
-    """True se essa combinação (entidade, modalidade, janela, página) já terminou `ok`."""
-    row = await (
-        await conn.execute(
-            "SELECT 1 FROM log_execucao_ingestao "
-            "WHERE entidade = %(entidade)s "
-            "AND coalesce(modalidade_id, -1) = coalesce(%(modalidade_id)s, -1) "
-            "AND janela_inicio = %(inicio)s AND janela_fim = %(fim)s "
-            "AND pagina = %(pagina)s AND status = 'ok'",
-            {
-                "entidade": entidade,
-                "modalidade_id": modalidade_id,
-                "inicio": janela.inicio,
-                "fim": janela.fim,
-                "pagina": pagina,
-            },
-        )
-    ).fetchone()
-    return row is not None
 
 
 async def registrar(

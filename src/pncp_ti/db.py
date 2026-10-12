@@ -35,7 +35,14 @@ async def upsert(
     """
     colunas = list(valores.keys())
     placeholders = [f"%({c})s" for c in colunas]
-    atualizacoes = [f"{c} = EXCLUDED.{c}" for c in colunas if c != chave]
+    # Órgãos chegam com completude distinta; NULL/ausência não apaga metadado conhecido.
+    atualizacoes = [
+        f"{c} = COALESCE(EXCLUDED.{c}, {tabela}.{c})"
+        if tabela == "orgaos"
+        else f"{c} = EXCLUDED.{c}"
+        for c in colunas
+        if c != chave
+    ]
     acao_conflito = f"DO UPDATE SET {', '.join(atualizacoes)}" if atualizacoes else "DO NOTHING"
     sql = (
         f"INSERT INTO {tabela} ({', '.join(colunas)}) VALUES ({', '.join(placeholders)}) "

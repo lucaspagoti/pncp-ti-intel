@@ -9,15 +9,20 @@ from __future__ import annotations
 
 import os
 import subprocess
+from dataclasses import replace
 from pathlib import Path
+from uuid import uuid4
 
 import psycopg
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
+from psycopg import sql
 from psycopg.rows import dict_row
 
-from pncp_ti.config import get_settings
+from pncp_ti.config import admin_dsn, get_settings, ingest_dsn
+
+os.environ.setdefault("PNCP_TI_IDENTITY_KEY", "synthetic-test-key-32-characters-minimum")
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -54,38 +59,33 @@ def nome_banco_teste() -> str:
     ao final. Evita que fixtures de teste sujem dados reais de ingestão.
     """
     settings = get_settings()
-    nome = f"{settings.postgres_db}_test"
-    dsn_manutencao = (
-        f"postgresql://postgres:{settings.postgres_admin_password}"
-        f"@{settings.postgres_host}:{settings.postgres_port}/postgres"
-    )
+    nome = f"pncp_test_{uuid4().hex}"
+    dsn_manutencao = admin_dsn(replace(settings, postgres_db="postgres"))
     with psycopg.connect(dsn_manutencao, autocommit=True) as conn:
-        conn.execute(f"DROP DATABASE IF EXISTS {nome} WITH (FORCE)")
-        conn.execute(f"CREATE DATABASE {nome}")
+        conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(nome)))
 
     env = os.environ.copy()
     env["POSTGRES_DB"] = nome
-    subprocess.run(
-        ["uv", "run", "alembic", "upgrade", "head"],
-        check=True,
-        env=env,
-        cwd=REPO_ROOT,
-    )
-
-    yield nome
-
-    with psycopg.connect(dsn_manutencao, autocommit=True) as conn:
-        conn.execute(f"DROP DATABASE IF EXISTS {nome} WITH (FORCE)")
+    try:
+        subprocess.run(
+            ["uv", "run", "alembic", "upgrade", "head"],
+            check=True,
+            env=env,
+            cwd=REPO_ROOT,
+        )
+        yield nome
+    finally:
+        with psycopg.connect(dsn_manutencao, autocommit=True) as conn:
+            conn.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nome))
+            )
 
 
 @pytest.fixture
 async def conn_ingest(nome_banco_teste: str):
     """Conexão async com o papel `ingest`, apontada para o banco de teste."""
     settings = get_settings()
-    dsn = (
-        f"postgresql://ingest:{settings.ingest_password}"
-        f"@{settings.postgres_host}:{settings.postgres_port}/{nome_banco_teste}"
-    )
+    dsn = ingest_dsn(replace(settings, postgres_db=nome_banco_teste))
     conn = await psycopg.AsyncConnection.connect(dsn, row_factory=dict_row)
     yield conn
     await conn.close()

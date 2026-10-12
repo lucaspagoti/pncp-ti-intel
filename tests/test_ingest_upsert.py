@@ -8,9 +8,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+import pytest
 from compras_mcp.errors import ComprasHTTPError
 
-from pncp_ti.ingest.executar import ingerir_janela
+from pncp_ti.ingest.executar import FalhasIngestao, _validar_pagina, ingerir_janela
 from pncp_ti.ingest.mapeadores import extrair_orgao, mapear_contratacao
 from pncp_ti.ingest.rate_limit import LimitadorTaxa
 from pncp_ti.ingest.windows import Janela
@@ -112,6 +113,15 @@ async def test_mesma_janela_processada_duas_vezes_mesma_contagem(conn_ingest):
     assert primeira_contagem == 2
 
     await rodar()
+    cliente._paginas[1][0] = {**CONTRATACAO_1, "objetoCompra": "Objeto atualizado"}
+    await rodar()
+    row = await (
+        await conn_ingest.execute(
+            "SELECT objeto_compra FROM contratacoes WHERE numero_controle_pncp = %s",
+            (CONTRATACAO_1["numeroControlePNCP"],),
+        )
+    ).fetchone()
+    assert row["objeto_compra"] == "Objeto atualizado"
     segunda_contagem = await contar()
     assert segunda_contagem == primeira_contagem
 
@@ -153,20 +163,21 @@ async def test_item_com_erro_nao_derruba_os_outros_itens_da_pagina(conn_ingest):
     limitador = LimitadorTaxa(1000)
     janela = Janela(inicio=date(2026, 11, 1), fim=date(2026, 11, 10))
 
-    await ingerir_janela(
-        conn_ingest,
-        cliente,
-        limitador,
-        entidade="contratacoes_teste_item_ruim",
-        tabela="contratacoes",
-        chave="numero_controle_pncp",
-        path="/v1/contratacoes/publicacao",
-        janela=janela,
-        filtros={"codigoModalidadeContratacao": 6},
-        mapear=mapear_contratacao,
-        modalidade_id=6,
-        extrair_orgao=extrair_orgao,
-    )
+    with pytest.raises(FalhasIngestao, match="1 falha"):
+        await ingerir_janela(
+            conn_ingest,
+            cliente,
+            limitador,
+            entidade="contratacoes_teste_item_ruim",
+            tabela="contratacoes",
+            chave="numero_controle_pncp",
+            path="/v1/contratacoes/publicacao",
+            janela=janela,
+            filtros={"codigoModalidadeContratacao": 6},
+            mapear=mapear_contratacao,
+            modalidade_id=6,
+            extrair_orgao=extrair_orgao,
+        )
 
     linha_boa = await (
         await conn_ingest.execute(
@@ -226,3 +237,24 @@ async def test_janela_sem_resultado_204_nao_quebra_a_ingestao(conn_ingest):
     ).fetchone()
     assert log_row["status"] == "ok"
     assert log_row["registros_lidos"] == 0
+
+
+@pytest.mark.parametrize(
+    "resp",
+    [
+        None,
+        {},
+        {"data": None, "totalPaginas": 1},
+        {"data": {}, "totalPaginas": 1},
+        {"data": [1], "totalPaginas": 1},
+        {"data": [], "totalPaginas": "1"},
+        {"data": [], "totalPaginas": True},
+        {"data": [], "totalPaginas": -1},
+        {"data": [{}], "totalPaginas": 0},
+        {"data": [], "totalPaginas": 1},
+        {"data": [{}], "totalPaginas": 1, "numeroPagina": 2},
+    ],
+)
+def test_envelope_malformado_rejeitado(resp):
+    with pytest.raises(ValueError):
+        _validar_pagina(resp)

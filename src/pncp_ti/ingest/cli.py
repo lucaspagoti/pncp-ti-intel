@@ -12,6 +12,7 @@ from pncp_ti.config import get_settings
 from pncp_ti.db import conectar
 from pncp_ti.ingest import atas, contratacoes, contratos
 from pncp_ti.ingest.client import criar_cliente
+from pncp_ti.ingest.executar import FalhasIngestao
 from pncp_ti.ingest.rate_limit import LimitadorTaxa
 from pncp_ti.ingest.windows import gerar_janelas
 
@@ -36,25 +37,36 @@ def _parse_args() -> argparse.Namespace:
         help="lista separada por vírgula (default: todas).",
     )
     parser.add_argument(
-        "--forcar", action="store_true", help="reprocessa mesmo o que já está marcado ok."
+        "--forcar", action="store_true", help="compatibilidade: toda janela já é reprocessada."
     )
     return parser.parse_args()
 
 
-async def _rodar(entidades: list[str], desde: date, ate: date, forcar: bool) -> None:
+async def _rodar(
+    entidades: list[str], desde: date, ate: date, forcar: bool, diario: bool = False
+) -> None:
     settings = get_settings()
     limitador = LimitadorTaxa(settings.requests_per_second)
     janelas = gerar_janelas(desde, ate)
     conn = await conectar(settings)
+    falhas = 0
     try:
         async with criar_cliente() as cliente:
             for nome in entidades:
                 adaptador = ADAPTADORES[nome]
                 for janela in janelas:
                     log.info("ingest.janela_iniciada", entidade=nome, janela=str(janela))
-                    await adaptador(conn, cliente, limitador, janela, forcar=forcar)
+                    opcoes = {"forcar": forcar}
+                    if nome == "contratacoes":
+                        opcoes["atualizacoes"] = diario
+                    try:
+                        await adaptador(conn, cliente, limitador, janela, **opcoes)
+                    except FalhasIngestao as exc:
+                        falhas += exc.falhas
     finally:
         await conn.close()
+    if falhas:
+        raise FalhasIngestao(falhas)
 
 
 def main() -> None:
@@ -71,7 +83,11 @@ def main() -> None:
         desde = args.desde if args.desde is not None else get_settings().backfill_start
         ate = hoje
 
-    asyncio.run(_rodar(entidades, desde, ate, args.forcar))
+    try:
+        asyncio.run(_rodar(entidades, desde, ate, args.forcar, diario=args.diario))
+    except Exception as exc:
+        log.error("ingest.execucao_falhou", erro_tipo=type(exc).__name__)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

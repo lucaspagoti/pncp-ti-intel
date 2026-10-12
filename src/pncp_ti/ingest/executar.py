@@ -20,7 +20,7 @@ from compras_mcp.errors import (
 )
 
 from pncp_ti.db import upsert
-from pncp_ti.ingest.log import ja_concluida, registrar
+from pncp_ti.ingest.log import registrar
 from pncp_ti.ingest.rate_limit import LimitadorTaxa
 from pncp_ti.ingest.windows import Janela
 
@@ -33,6 +33,33 @@ BACKOFF_MAXIMO_SEGUNDOS = 180.0
 
 Mapeador = Callable[[dict[str, Any]], dict[str, Any]]
 Extrator = Callable[[dict[str, Any]], dict[str, Any] | None]
+
+
+class FalhasIngestao(RuntimeError):
+    """Falhas de itens após persistir os itens válidos e concluir a paginação."""
+
+    def __init__(self, falhas: int) -> None:
+        self.falhas = falhas
+        super().__init__(f"ingestão incompleta: {falhas} falha(s)")
+
+
+def _validar_pagina(resp: Any, pagina: int = 1) -> tuple[list[dict[str, Any]], int]:
+    """Rejeita envelopes malformados sem interpretá-los como resultado vazio."""
+    if not isinstance(resp, dict):
+        raise ValueError("envelope inválido")
+    itens = resp.get("data")
+    total = resp.get("totalPaginas")
+    if not isinstance(itens, list) or any(not isinstance(item, dict) for item in itens):
+        raise ValueError("data deve ser lista de objetos")
+    if type(total) is not int or total < 0 or (itens and total == 0):
+        raise ValueError("totalPaginas inválido")
+    if not itens and pagina <= total:
+        raise ValueError("página vazia antes do fim declarado")
+    if "numeroPagina" in resp and (
+        type(resp["numeroPagina"]) is not int or resp["numeroPagina"] != pagina
+    ):
+        raise ValueError("numeroPagina não corresponde à página pedida")
+    return itens, total
 
 
 def _e_corpo_vazio(exc: ComprasHTTPError) -> bool:
@@ -90,7 +117,7 @@ async def _buscar_pagina(
                     pagina=pagina,
                     tentativa=tentativa,
                     espera=espera,
-                    erro=str(exc),
+                    erro_tipo=type(exc).__name__,
                 )
                 await asyncio.sleep(espera)
                 espera = min(espera * 2, BACKOFF_MAXIMO_SEGUNDOS)
@@ -116,24 +143,21 @@ async def ingerir_janela(
     extrair_fornecedor: Extrator | None = None,
     forcar: bool = False,
 ) -> None:
-    """Pagina `path` na janela dada até esgotar, com upsert e log por página.
+    """Reprocessa a janela inteira: páginas do PNCP são mutáveis.
 
-    Resumível: uma página já registrada como `ok` no log é pulada. Se a janela
-    inteira já foi processada antes, isso custa só uma chamada extra (a primeira
-    página além do fim real, que a API responde vazia) antes de parar — barato
-    o bastante pra não precisar guardar o total de páginas por fora do log.
+    Savepoints preservam itens válidos. Falhas são agregadas e sinalizadas ao
+    final, sem registrar payloads, mensagens externas ou variáveis locais.
+    `forcar` permanece aceito por compatibilidade; toda execução atualiza dados.
     """
     pagina = 1
+    total_falhas = 0
     while True:
-        if not forcar and await ja_concluida(conn, entidade, modalidade_id, janela, pagina):
-            pagina += 1
-            continue
-
         await limitador.aguardar()
         try:
             resp = await _buscar_pagina(
                 cliente, path, pagina=pagina, janela=janela, filtros=filtros
             )
+            itens, total_paginas = _validar_pagina(resp, pagina)
         except Exception as exc:
             await registrar(
                 conn,
@@ -145,12 +169,11 @@ async def ingerir_janela(
                 registros_gravados=0,
                 falhas=1,
                 status="erro",
-                erro_mensagem=str(exc)[:500],
+                erro_mensagem=type(exc).__name__,
             )
             await conn.commit()
             raise
 
-        itens = resp.get("data") or []
         gravados = 0
         falhas = 0
         for item in itens:
@@ -168,14 +191,19 @@ async def ingerir_janela(
                     if extrair_fornecedor is not None:
                         fornecedor = extrair_fornecedor(item)
                         if fornecedor is not None:
-                            await upsert(conn, "fornecedores", "ni", fornecedor)
+                            await upsert(conn, "fornecedores", "fornecedor_id", fornecedor)
                     await upsert(conn, tabela, chave, mapear(item))
                 gravados += 1
-            except Exception:
+            except Exception as exc:
                 falhas += 1
-                log.exception("ingest.item_falhou", entidade=entidade, pagina=pagina)
+                log.error(
+                    "ingest.item_falhou",
+                    entidade=entidade,
+                    pagina=pagina,
+                    erro_tipo=type(exc).__name__,
+                )
 
-        total_paginas = resp.get("totalPaginas") or 0
+        total_falhas += falhas
         await registrar(
             conn,
             entidade=entidade,
@@ -185,9 +213,7 @@ async def ingerir_janela(
             registros_lidos=len(itens),
             registros_gravados=gravados,
             falhas=falhas,
-            # "ok" só sem nenhuma falha de item — uma página com falha fica
-            # "erro" e o `ja_concluida` do próximo run tenta de novo (idempotente,
-            # reprocessar os itens que já tinham dado certo não duplica nada).
+            # Uma página parcialmente persistida continua sinalizada como erro.
             status="ok" if falhas == 0 else "erro",
         )
         await conn.commit()
@@ -204,3 +230,6 @@ async def ingerir_janela(
         if not itens or pagina >= total_paginas:
             break
         pagina += 1
+
+    if total_falhas:
+        raise FalhasIngestao(total_falhas)

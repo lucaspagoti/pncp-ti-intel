@@ -214,10 +214,16 @@ def upgrade() -> None:
     # entrada externa), mas escapamos a aspa simples mesmo assim por hábito seguro.
     if "ingest" not in existing_roles:
         senha = exigir(settings.ingest_password, "PNCP_TI_INGEST_PASSWORD").replace("'", "''")
-        bind.exec_driver_sql(f"CREATE ROLE ingest LOGIN PASSWORD '{senha}'")
+        bind.exec_driver_sql(
+            f"CREATE ROLE ingest LOGIN PASSWORD '{senha}'",
+            execution_options={"no_parameters": True},
+        )
     if "mcp_reader" not in existing_roles:
         senha = exigir(settings.reader_password, "PNCP_TI_READER_PASSWORD").replace("'", "''")
-        bind.exec_driver_sql(f"CREATE ROLE mcp_reader LOGIN PASSWORD '{senha}'")
+        bind.exec_driver_sql(
+            f"CREATE ROLE mcp_reader LOGIN PASSWORD '{senha}'",
+            execution_options={"no_parameters": True},
+        )
 
     op.execute(
         "GRANT SELECT, INSERT, UPDATE ON "

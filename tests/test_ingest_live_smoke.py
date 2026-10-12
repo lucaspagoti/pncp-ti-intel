@@ -13,10 +13,12 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
 from compras_mcp.clients.pncp import PNCPClient
 
 from pncp_ti.db import upsert
 from pncp_ti.ingest.client import PNCP_BASE_URL
+from pncp_ti.ingest.executar import _validar_pagina
 from pncp_ti.ingest.mapeadores import (
     extrair_fornecedor,
     extrair_orgao,
@@ -33,17 +35,18 @@ ONTEM = date.today() - timedelta(days=1)
 UMA_SEMANA_ATRAS = date.today() - timedelta(days=7)
 
 
-async def test_contratacoes_publicacao_ao_vivo(conn_ingest):
+@pytest.mark.parametrize("path", ["/v1/contratacoes/publicacao", "/v1/contratacoes/atualizacao"])
+async def test_contratacoes_publicacao_e_atualizacao_ao_vivo(conn_ingest, path):
     async with PNCPClient(base_url=PNCP_BASE_URL) as cliente:
         resp = await cliente.list_resource(
-            "/v1/contratacoes/publicacao",
+            path,
             pagina=1,
             tamanho_pagina=10,
             dataInicial=UMA_SEMANA_ATRAS.strftime("%Y%m%d"),
             dataFinal=date.today().strftime("%Y%m%d"),
             codigoModalidadeContratacao=6,
         )
-    itens = resp.get("data") or []
+    itens, _ = _validar_pagina(resp)
     assert itens, "esperava pelo menos uma contratação publicada ontem/hoje (modalidade 6)"
 
     item = itens[0]
@@ -71,7 +74,7 @@ async def test_atas_ao_vivo(conn_ingest):
             dataInicial=ONTEM.strftime("%Y%m%d"),
             dataFinal=date.today().strftime("%Y%m%d"),
         )
-    itens = resp.get("data") or []
+    itens, _ = _validar_pagina(resp)
     assert itens, "esperava pelo menos uma ata vigente"
 
     item = itens[0]
@@ -99,7 +102,7 @@ async def test_contratos_ao_vivo(conn_ingest):
             dataInicial=ONTEM.strftime("%Y%m%d"),
             dataFinal=date.today().strftime("%Y%m%d"),
         )
-    itens = resp.get("data") or []
+    itens, _ = _validar_pagina(resp)
     assert itens, "esperava pelo menos um contrato publicado ontem/hoje"
 
     item = itens[0]
@@ -108,7 +111,7 @@ async def test_contratos_ao_vivo(conn_ingest):
         await upsert(conn_ingest, "orgaos", "cnpj", orgao)
     fornecedor = extrair_fornecedor(item)
     if fornecedor is not None:
-        await upsert(conn_ingest, "fornecedores", "ni", fornecedor)
+        await upsert(conn_ingest, "fornecedores", "fornecedor_id", fornecedor)
     await upsert(conn_ingest, "contratos", "numero_controle_pncp", mapear_contrato(item))
     await conn_ingest.commit()
 
