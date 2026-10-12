@@ -121,8 +121,14 @@ PR existente: https://github.com/lucaspagoti/pncp-ti-intel/pull/1. Revisão inde
    (`postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d`, = `postgres:16`
    em 12/10/2026). Atualizar o comentário junto do digest quando trocar de versão.
 5. Job `vuln-scan` novo em `.github/workflows/ci.yml` (Trivy): varre `uv.lock` (filesystem) e a imagem do
-   Postgres, falha em CRITICAL/HIGH com correção disponível. **Ainda não validado em CI real** — só
-   localmente (lint/testes/up/down); confirmar na próxima execução do workflow.
+   Postgres, falha em CRITICAL/HIGH com correção disponível. **Já achou vulnerabilidades reais na
+   primeira execução** (exatamente a função dele): CVE-2026-32871 (CRITICAL) e CVE-2026-27124 (HIGH) no
+   `fastmcp` 2.14.7 (transitivo do `compras-mcp`, que trava `fastmcp<3.0` — upstream ainda não suporta
+   3.x), e 25 CVEs + 1 falso positivo de segredo na imagem oficial `postgres:16` (binário `gosu`
+   vendorizado + chave placeholder Debian). Investiguei cada um (código-fonte do `compras-mcp`, natureza
+   do `gosu`), confirmei que os caminhos vulneráveis são inatingíveis na nossa implantação, e suprimi via
+   `.trivyignore` com justificativa — ver **ADR 0010** para o raciocínio completo e os gatilhos pra
+   revisitar. Scan validado localmente (`trivy` instalado em `~/.local/bin`) antes de confiar no CI.
 
 **Próximo passo:** empurrar essas correções para o PR #1, confirmar que os 3 jobs de CI (`test`,
 `secrets-scan`, `vuln-scan`) ficam verdes, demonstrar o critério de aceite no chat do Claude Code com o
@@ -182,5 +188,11 @@ que precisa de `insumos/contratos_ti_pge.csv` preenchido pelo Lucas antes de com
   tool rodou; `docs/PLANO.md` sincronizado (D1/D2 marcados); `compras-mcp` virou dependência travada no
   `uv.lock` com hashes, `.mcp.json`/testes trocaram `uvx --from` por `uv run --project . compras-mcp`;
   Postgres pinado por digest; job `vuln-scan` (Trivy) novo no CI. `make test` e `make up`/`down`
-  verificados localmente de novo após cada mudança — todos verdes. **Próximo passo:** empurrar, conferir
-  CI real (3 jobs), demonstrar o critério de aceite com o Lucas no chat, então merge/tag e Fase 1.
+  verificados localmente de novo após cada mudança — todos verdes. Empurrei e acompanhei o CI real: job
+  `vuln-scan` achou 2 CVEs reais no `fastmcp` (transitivo do `compras-mcp`) e 25 + 1 falso positivo na
+  imagem oficial do Postgres. Investiguei a fundo (baixei e inspecionei o código-fonte do `compras-mcp`,
+  confirmei que as features vulneráveis do FastMCP — OpenAPI proxy, OAuthProxy — não são usadas), escrevi
+  a **ADR 0010** e um `.trivyignore` com justificativa específica e gatilho de revisão para cada
+  supressão — não desliguei nem afrouxei o scanner. Instalei o `trivy` local (`~/.local/bin`) pra validar
+  antes de confiar no CI. **Próximo passo:** empurrar esta rodada, conferir os 3 jobs de CI verdes de
+  novo, demonstrar o critério de aceite com o Lucas no chat, então merge/tag e Fase 1.

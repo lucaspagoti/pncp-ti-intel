@@ -52,6 +52,8 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
+          # Supressões pontuais e justificadas — ver docs/adr/0010.
+          trivyignores: .trivyignore
 
       - name: Varredura de vulnerabilidades na imagem do Postgres
         uses: aquasecurity/trivy-action@v0.36.0
@@ -62,3 +64,4 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
+          trivyignores: .trivyignore

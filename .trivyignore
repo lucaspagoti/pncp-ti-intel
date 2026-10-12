@@ -1,0 +1,57 @@
+# Supressões pontuais — cada entrada precisa de uma justificativa específica e
+# de um gatilho claro pra revisitar. Não suprimir "por enquanto" sem os dois.
+# Contexto completo: docs/adr/0010-cve-fastmcp-suprimida-ate-compras-mcp-atualizar.md
+
+# CVE-2026-32871 (CRITICAL) e CVE-2026-27124 (HIGH) — fastmcp 2.14.7, corrigidas
+# na 3.2.0. Vêm transitivamente do compras-mcp==0.4.0, que trava `fastmcp<3.0`
+# (não dá pra atualizar sem o upstream liberar compatibilidade com 3.x).
+# Ambas as CVEs são em features do FastMCP que o compras-mcp não usa: proxy de
+# OpenAPI (`FastMCP.from_openapi`) e `OAuthProxy`. Conferido no código-fonte do
+# pacote (`compras_mcp/mcp_instance.py`): `FastMCP(name=..., instructions=...)`,
+# sem OAuth, sem proxy de OpenAPI. Servidor roda só via stdio, nunca exposto em
+# rede (ADR 0009) — o caminho vulnerável é inatingível nesta implantação.
+# Revisitar: quando compras-mcp liberar uma versão compatível com fastmcp>=3.2,
+# atualizar a dependência (pyproject.toml) imediatamente e remover estas linhas.
+CVE-2026-32871
+CVE-2026-27124
+
+# --- Imagem oficial postgres:16 (não é código nosso) ---
+# 25 CVEs em `usr/local/bin/gosu` (binário Go vendorizado pela imagem oficial
+# do Postgres, usado só para trocar de usuário antes de iniciar o servidor).
+# Todas em crypto/tls, crypto/x509 e net/url do stdlib do Go — gosu não faz
+# handshake TLS nem parseia certificado/URL de terceiros em uso normal;
+# caminho vulnerável inatingível aqui. Não dá pra corrigir sem recompilar a
+# imagem oficial (fora do nosso controle). Mitigação real: re-puxar e
+# re-pinar `postgres:16` periodicamente (a cada início de fase, no mínimo),
+# o que naturalmente atualiza o gosu embutido.
+CVE-2025-68121
+CVE-2025-61726
+CVE-2025-61729
+CVE-2026-25679
+CVE-2026-27145
+CVE-2026-32280
+CVE-2026-32281
+CVE-2026-32283
+CVE-2026-33811
+CVE-2026-33814
+CVE-2026-33818
+CVE-2026-39820
+CVE-2026-39821
+CVE-2026-39822
+CVE-2026-39836
+CVE-2026-42499
+CVE-2026-42504
+CVE-2026-56853
+CVE-2026-56858
+CVE-2026-56859
+CVE-2026-56860
+CVE-2026-56862
+CVE-2026-78667
+CVE-2026-78669
+CVE-2026-97031
+
+# /etc/ssl/private/ssl-cert-snakeoil.key — chave placeholder padrão do pacote
+# Debian `ssl-cert`, presente em toda imagem Debian/Postgres oficial. Não é
+# segredo real; não usamos SSL no Postgres local (docker-compose.yml não
+# habilita, ADR 0008: tudo em 127.0.0.1).
+private-key
