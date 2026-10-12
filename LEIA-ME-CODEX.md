@@ -433,3 +433,46 @@ atualizações PNCP), bash -n verde, git diff --check verde. Duas depreciações
 
 **Commit de correções:** 04dd623 (fix: protect supplier identity and harden historical ingestion).
 Documentação/handoff registrados em commit local separado. Branch não enviada ao GitHub.
+
+## PR aberto e backfill em andamento — 12/10/2026 (Claude/Sonnet 5)
+
+- Verifiquei de forma independente o que o Codex relatou: `make test` 54/54 verde, árvore limpa,
+  `.env` já com `PNCP_TI_IDENTITY_KEY` preenchida. Dei uma olhada direta em `src/pncp_ti/privacy.py`
+  e na ADR 0013 (HMAC-SHA256 para identidade de fornecedor) — desenho são.
+- Dei push na branch `feat/f1-base-historica` e abri o
+  **PR #2**: https://github.com/lucaspagoti/pncp-ti-intel/pull/2. CI remoto verde nos 3 jobs
+  (`test` — agora com serviço Postgres + `make migrate` antes do `pytest` —, `secrets-scan`,
+  `vuln-scan`).
+- Demonstrei parte do critério de aceite com uma consulta real: contratação de TI de 24/07/2023
+  (implantação/customização de softwares pro Centro de Operações e Inteligência Municipal de
+  Atibaia-SP, R$ 86,1 milhões, `numero_controle_pncp = 45279635000108-1-000671/2023`, fonte
+  https://pncp.gov.br/app/editais/45279635000108/2023/671) — dado que já está fora da janela de
+  365 dias do `compras-mcp` ao vivo, persistido e consultável localmente. Isso cobre a Lacuna 1.
+- **Backfill completo rodando em background**, destacado desta sessão de chat (`setsid nohup ... &
+  disown`), desde 12/10/2026 ~19:44. PID do processo Python: `332963` (via `uv run`, PID pai
+  `332956`). Log em `logs/backfill-20261012T194453.log` (não versionado). Continua rodando mesmo
+  que a sessão de chat termine ou o terminal seja fechado — só para com `kill 332963` (ou
+  `pkill -f pncp_ti.ingest.cli`) ou naturalmente quando acabar.
+  - Acompanhar progresso **sem gastar token/sem ler o log inteiro** — o log é enorme (vai passar de
+    1,6M linhas): usar agregação SQL, nunca `cat`/`tail` do arquivo completo:
+    ```sql
+    SELECT entidade, status, count(*) AS paginas, sum(registros_gravados) AS gravados, max(concluido_em) AS ultimo
+    FROM log_execucao_ingestao GROUP BY entidade, status ORDER BY entidade, status;
+    ```
+    (`docker exec pncp_ti_postgres psql -U postgres -d pncp_ti -c "..."`)
+  - Abri uma aba do Terminal panel do app ("backfill progress") com essa mesma query em `watch -n 5`,
+    pra o Lucas acompanhar sem passar por mim. Se essa aba já tiver sido fechada numa sessão nova,
+    é só abrir de novo com o comando acima.
+  - Ordem de processamento: `contratacoes` (13 modalidades × janelas de 365 dias desde 01/04/2023)
+    primeiro, depois `atas`, depois `contratos` — ver `ADAPTADORES` em `src/pncp_ti/ingest/cli.py`.
+    Em ~8 min já tinha 3.547 contratações gravadas, ainda na primeira entidade — é job de várias
+    horas, principalmente por `contratos` (1,6M registros só em 9 meses de 2026, nacionalmente).
+- **Pendente:** backfill terminar (acompanhar como acima); decidir com o Lucas se mergeia o PR #2
+  antes ou depois do backfill completo (o critério de aceite da F1 em `docs/FASES.md` só fecha com
+  backfill concluído — por paralelismo com a F0, a ideia é mergear/tagear junto da demonstração
+  final, não antes). Depois disso: Fase 2 (precisa que o Lucas rotule
+  `insumos/amostra_rotulada.csv`, mas esse arquivo só é gerado depois que eu montar o classificador —
+  nada a fazer aí ainda).
+
+**Próximo passo:** checar se o backfill terminou (query acima), decidir o timing do merge/tag com o
+Lucas, e então propor o plano da Fase 2 em modo plan.
