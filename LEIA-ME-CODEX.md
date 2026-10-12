@@ -72,9 +72,11 @@ positivo/negativo, injeção via texto de anexo (regra fixa do `CLAUDE.md`). Nã
 
 ## Onde estamos no roadmap (`docs/FASES.md`)
 
-**Fase 0 (Fundação) implementada, ainda não aceita para merge** (branch `feat/f0-fundacao`).
-PR existente: https://github.com/lucaspagoti/pncp-ti-intel/pull/1. Revisão independente feita em
-12/10/2026; há lacunas de aceite e de fixação de dependências (ver log abaixo). O que foi entregue:
+**Fase 0 (Fundação) CONCLUÍDA, mergeada e com tag.** PR #1 mergeado em `master` em 13/10/2026
+(https://github.com/lucaspagoti/pncp-ti-intel/pull/1), tag `f0-fundacao`. Critério de aceite demonstrado
+ao vivo no chat com o Lucas: pergunta real ("quais atas vigentes de outsourcing de impressão existem?")
+respondida via `compras-mcp` local, com fonte (ata do Batalhão da Guarda Presidencial, PNCP). O que foi
+entregue:
 - `pyproject.toml` (uv, Python 3.12, deps dev: pytest, pytest-asyncio, fastmcp, ruff, pre-commit).
 - `tests/conftest.py` com o transporte stdio do `compras-mcp` (mesmo comando do `.mcp.json`).
 - `tests/test_compras_mcp_snapshot.py` + `tests/snapshots/compras_mcp_tools.json` — snapshot de 100 tools,
@@ -107,8 +109,12 @@ PR existente: https://github.com/lucaspagoti/pncp-ti-intel/pull/1. Revisão inde
   cada item), que `dataVigenciaFinal` respeita a janela pedida e que `objeto` de fato contém a
   palavra-chave — não só que a tool rodou. Documenta explicitamente que distinguir outsourcing real de
   falso positivo (papel, plotagem) é trabalho do classificador da Fase 3, não deste teste.
-- ⏳ Demonstração interativa pelo Lucas no chat do Claude Code (com `.mcp.json` carregado) continua
-  pendente — não é algo que uma sessão de terminal consiga fazer sozinha.
+- ✅ Demonstração ao vivo no chat em 13/10/2026: pergunta "quais atas vigentes de outsourcing de
+  impressão existem?" respondida chamando `compras_arp_buscar_por_objeto` de verdade. Resultado: ata
+  90003/2025 do Batalhão da Guarda Presidencial (Comando do Exército), vigência até 14/10/2026, fonte
+  https://pncp.gov.br/app/atas/00394452000103/2025/18457/1. Um 2º match ("outsourcing" de materiais de
+  manutenção predial, IFCE) foi corretamente descartado por não ser sobre impressão — julgamento que a
+  Fase 3 (classificador) vai automatizar, mas que por ora cabe a quem está respondendo (humano ou agente).
 
 **Lacunas da revisão do Codex, fechadas em 13/10/2026 (mesma branch, antes do merge):**
 1. Teste de fumaça fortalecido (ver acima).
@@ -130,10 +136,12 @@ PR existente: https://github.com/lucaspagoti/pncp-ti-intel/pull/1. Revisão inde
    `.trivyignore` com justificativa — ver **ADR 0010** para o raciocínio completo e os gatilhos pra
    revisitar. Scan validado localmente (`trivy` instalado em `~/.local/bin`) antes de confiar no CI.
 
-**Próximo passo:** empurrar essas correções para o PR #1, confirmar que os 3 jobs de CI (`test`,
-`secrets-scan`, `vuln-scan`) ficam verdes, demonstrar o critério de aceite no chat do Claude Code com o
-Lucas, e então merge/tag. Depois propor o plano e aguardar aprovação para a **Fase 1 (Reconciliação)** —
-que precisa de `insumos/contratos_ti_pge.csv` preenchido pelo Lucas antes de começar.
+**Status: fase fechada.** PR #1 mergeado em `master` (`e895b27`), tag `f0-fundacao`. Branch
+`feat/f0-fundacao` deletada (já está em `master`).
+
+**Próximo passo:** propor o plano da **Fase 1 (Reconciliação)** em modo plan e aguardar aprovação do
+Lucas — mas ela só pode começar de verdade depois que `insumos/contratos_ti_pge.csv` estiver preenchido
+(hoje só tem o cabeçalho). Avisar o Lucas disso antes de abrir o plano.
 
 ## Convenções do projeto
 
@@ -196,3 +204,11 @@ que precisa de `insumos/contratos_ti_pge.csv` preenchido pelo Lucas antes de com
   supressão — não desliguei nem afrouxei o scanner. Instalei o `trivy` local (`~/.local/bin`) pra validar
   antes de confiar no CI. **Próximo passo:** empurrar esta rodada, conferir os 3 jobs de CI verdes de
   novo, demonstrar o critério de aceite com o Lucas no chat, então merge/tag e Fase 1.
+- **2026-10-13 (Claude/Sonnet 5, fechamento da Fase 0):** CI real confirmado verde nos 3 jobs
+  (`test`, `vuln-scan`, `secrets-scan`) após a rodada de supressões justificadas. Demonstração ao vivo no
+  chat com o Lucas: pergunta real sobre outsourcing de impressão respondida com fonte via `compras-mcp`
+  (detalhe acima, seção "Onde estamos no roadmap"). Lucas aprovou. Mergeei PR #1 em `master` (`e895b27`,
+  fast-forward/squash pela interface do `gh`), criei e empurrei a tag `f0-fundacao`, deletei a branch
+  `feat/f0-fundacao`. **Fase 0 oficialmente encerrada.** Próxima ação: propor o plano da Fase 1
+  (Reconciliação) em modo plan — mas avisar o Lucas antes que ela está bloqueada até
+  `insumos/contratos_ti_pge.csv` ser preenchido (hoje só tem o cabeçalho).
