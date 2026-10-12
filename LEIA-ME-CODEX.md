@@ -215,9 +215,34 @@ nesta sessão:
   Docker local — não fiz sem o Lucas presente).
 - Ainda não abri PR nem mergeei — branch `feat/f1-base-historica` local, aguardando revisão.
 
-**Próximo passo:** revisão independente (segurança + critério de aceite, como no "Ciclo de cada fase" do
-CLAUDE.md), depois decidir com o Lucas quando rodar `make ingest-backfill` de verdade, abrir PR, e só
-então Fase 2.
+**Revisão independente feita nesta sessão** (8 ângulos via subagentes — correção, comportamento removido,
+cross-file, reuso, simplificação, eficiência, altitude, convenções do CLAUDE.md). Achados reais,
+corrigidos no mesmo branch (commit separado, não amend):
+- Página com item com falha ficava marcada `ok` no log (nunca mais seria reprocessada) — agora só fica
+  `ok` sem nenhuma falha de item.
+- `--forcar` quebrava com `UniqueViolation` ao reprocessar janela já `ok` — `registrar()` agora usa
+  `ON CONFLICT` contra o índice único parcial em vez de `INSERT` puro.
+- Falha num item "envenenava" a conexão (sem savepoint) e derrubava os itens seguintes da mesma página
+  em cascata — cada item agora roda sob savepoint (`conn.transaction()` aninhado).
+- Detecção do quirk 204 do PNCP batia em qualquer JSON malformado, não só corpo vazio de verdade —
+  tratamento restrito ao corpo genuinamente vazio.
+- `raw jsonb` de contrato guardava CPF sem máscara mesmo com a coluna estruturada mascarada; `mascarar_ni`
+  tinha uma condição morta que deixava passar CPF com menos de 11 dígitos sem máscara — os dois
+  corrigidos (regra fixa do CLAUDE.md, "CPFs sempre mascarados").
+- `get_settings()` exigia as três senhas de uma vez; `alembic downgrade`/`make ingest` não usam todas —
+  validação movida pro ponto de uso.
+- `db.upsert()` geraria SQL inválido num caso hoje inexistente (só coluna-chave) — guarda defensiva.
+
+Testes novos por bug corrigido. `make test` 18/18 verde; migração testada do zero de novo depois da
+mudança em `config.py`. Achados de menor severidade (não corrigidos, documentados como decisão): papéis
+de banco criados em duas etapas (SELECT + CREATE ROLE) em vez de um bloco `DO` atômico — risco só sob
+migração concorrente, improvável neste projeto pessoal de operador único; parâmetro `tabela` de
+`ingerir_janela` duplica `entidade` nos três adaptadores atuais, mas são conceitos intencionalmente
+desacoplados (o próprio teste de idempotência usa `entidade` diferente de `tabela` para isolar dados de
+teste) — não é uma falha latente, decidi não unificar.
+
+**Próximo passo:** demonstrar o critério de aceite com o Lucas, decidir quando rodar
+`make ingest-backfill` de verdade (job de horas), abrir PR, e só então Fase 2.
 
 ## Convenções do projeto
 
