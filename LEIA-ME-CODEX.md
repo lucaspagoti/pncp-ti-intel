@@ -43,14 +43,41 @@ e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reco
 
 ## Onde estamos no roadmap (`docs/FASES.md`)
 
-Ainda na **Fase 0 (Fundação)** — nem começada a implementação. Falta:
-- Instalar/registrar `compras-mcp` localmente via stdio (`.mcp.json` já tem a entrada, versão `0.4.0` fixada
-  — falta efetivamente testar que sobe).
-- `pyproject.toml` com `uv`, `Makefile`, `docker-compose.yml` (Postgres, porta só em `127.0.0.1`).
-- CI (lint, testes, varredura de segredos) + pre-commit.
-- Teste de snapshot das tools do `compras-mcp`.
-- Critério de aceite da Fase 0: Claude responde a uma pergunta real usando o `compras-mcp` local;
-  `make test` verde; `make up` sobe o Postgres.
+**Fase 0 (Fundação) concluída** (branch `feat/f0-fundacao`, a mergear). O que foi entregue:
+- `pyproject.toml` (uv, Python 3.12, deps dev: pytest, pytest-asyncio, fastmcp, ruff, pre-commit).
+- `tests/conftest.py` com o transporte stdio do `compras-mcp` (mesmo comando do `.mcp.json`).
+- `tests/test_compras_mcp_snapshot.py` + `tests/snapshots/compras_mcp_tools.json` — snapshot de 100 tools,
+  detecta "rug pull". Atualizar com `uv run python tests/test_compras_mcp_snapshot.py --update` só depois
+  de ler o changelog/diff de uma nova versão do `compras-mcp` (regra do CLAUDE.md).
+- `tests/test_compras_mcp_live_query.py` — chamada real a `compras_arp_buscar_por_objeto` (busca de ARPs
+  vigentes por palavra-chave), cobrindo o critério de aceite "responde a uma pergunta real usando o
+  compras-mcp local".
+- `docker-compose.yml` — Postgres 16, porta só em `127.0.0.1:5432`, healthcheck. Testado: `make up` sobe
+  saudável, `make down` derruba limpo.
+- `Makefile` — `up`, `down`, `test` (lint + format-check + pytest) funcionais; `ingest`/`eval` são
+  placeholders que apontam para as Fases 2/3.
+- `.pre-commit-config.yaml` (ruff + gitleaks) e `.github/workflows/ci.yml` (job `test` roda `make test`;
+  job `secrets-scan` roda gitleaks-action). **Não testado em CI real ainda** — só localmente. Primeira
+  execução de um PR no GitHub vai validar se o workflow passa de fato.
+- `make test` e `make up`/`make down` verificados localmente nesta sessão — todos passaram.
+
+**Pendências que ficaram de fora do escopo da F0 (de propósito, ver plano aprovado):**
+- `src/pncp_ti/` (ingest/classify/normalize/attachments/mcp_server) — começa na Fase 1/2.
+- Alembic/schema do Postgres — Fase 2.
+- `pre-commit install` não foi rodado (hooks configurados mas não instalados no `.git/hooks` local).
+- `scripts/baixar_referencias.ps1` é PowerShell — não roda neste servidor Linux. Se for útil, portar para
+  Python/bash numa fase futura (não bloqueia nada agora).
+
+**Critério de aceite da Fase 0 — status:**
+- ✅ `make test` verde (lint + format-check + 2 testes, incluindo chamada real ao PNCP via `compras-mcp`).
+- ✅ `make up` sobe o Postgres saudável, só em `127.0.0.1:5432`.
+- ✅ Resposta a uma pergunta real via `compras-mcp` local, comprovada pelo teste de fumaça automatizado.
+  A demonstração interativa no chat do Claude Code fica pendente para quando o Lucas abrir uma sessão
+  com `cwd` na raiz do projeto (o `.mcp.json` só carrega no início da sessão).
+
+**Próximo passo:** abrir PR de `feat/f0-fundacao` para `master`, revisão (CLAUDE.md pede revisão por
+subagente de segurança + critério de aceite antes do merge), depois seguir para a **Fase 1
+(Reconciliação)** — que precisa de `insumos/contratos_ti_pge.csv` preenchido pelo Lucas antes de começar.
 
 ## Convenções do projeto
 
@@ -68,3 +95,9 @@ Ainda na **Fase 0 (Fundação)** — nem começada a implementação. Falta:
   https://github.com/lucaspagoti/pncp-ti-intel e dei push do commit inicial. Corrigi a referência a
   Windows/WSL2 no `CLAUDE.md` (agora: servidor Linux via SSH). Criei este arquivo.
   **Próximo passo:** propor o plano da Fase 0 em modo plan para aprovação do Lucas, depois implementar.
+- **2026-10-12 (Claude/Sonnet 5, mesma sessão, Fase 0):** plano da Fase 0 aprovado pelo Lucas. Implementei
+  em `feat/f0-fundacao`: tooling (`pyproject.toml`, `Makefile`, `docker-compose.yml`, pre-commit, CI),
+  testes reais contra o `compras-mcp` (snapshot de 100 tools + chamada de fumaça), tudo verificado
+  localmente (`make test`, `make up`/`make down`). Atualizei `README.md` e `CLAUDE.md`. Ver seção
+  "Onde estamos no roadmap" acima para o detalhe completo e as pendências deixadas de propósito fora do
+  escopo. **Próximo passo:** abrir PR, revisar, mergear, e depois a Fase 1.

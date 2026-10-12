@@ -46,12 +46,14 @@ ADR para toda decisão nova; nenhum segredo no repositório.
 Python 3.12 + `uv`; FastMCP; Postgres (+ pgvector, decisão D3) com migrações Alembic; Docker Compose; pytest.
 Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo (decisão D2). Sem Windows/WSL2.
 
-## Comandos (a criar na Fase 0)
+## Comandos
 
-- `make up` — sobe o Compose
-- `make test` — testes + lint + snapshot de tools
-- `make ingest` — roda a ingestão para uma janela de datas
-- `make eval` — avaliações do filtro de TI e da busca
+- `make up` — sobe o Postgres local (Docker Compose, porta só em `127.0.0.1`).
+- `make down` — derruba os containers do projeto.
+- `make test` — lint (`ruff check`), format-check (`ruff format --check`) e testes
+  (`pytest`, inclui o snapshot e a chamada real às tools do `compras-mcp`).
+- `make ingest` — ainda não implementado (chega na Fase 2).
+- `make eval` — ainda não implementado (chega na Fase 3).
 
 ## Insumos fornecidos pelo Lucas
 

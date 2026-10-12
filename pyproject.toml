@@ -1,0 +1,36 @@
+[project]
+name = "pncp-ti"
+version = "0.1.0"
+description = "Base local de inteligência de contratações de TI (PNCP + MCP) para a GTI/PGE-RJ."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "fastmcp>=2.14,<3",
+    "ruff>=0.8",
+    "pre-commit>=4.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Nenhum pacote próprio ainda (chega na Fase 1/2). Evita erro do hatchling
+# por não encontrar `src/pncp_ti` enquanto o projeto só tem tooling e testes.
+bypass-selection = true
