@@ -8,6 +8,29 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Mesmo digest pinado em docker-compose.yml (ADR 0010) — atualizar os dois
+    # juntos. Senhas aqui são só do Postgres efêmero do job, descartado ao fim;
+    # não são segredos reais (regra do CLAUDE.md é sobre segredos de produção).
+    services:
+      postgres:
+        image: postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+        env:
+          POSTGRES_DB: pncp_ti
+          POSTGRES_PASSWORD: ci-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: pncp_ti
+      POSTGRES_ADMIN_PASSWORD: ci-postgres-password
+      PNCP_TI_INGEST_PASSWORD: ci-ingest-password
+      PNCP_TI_READER_PASSWORD: ci-reader-password
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +42,10 @@ jobs:
       - name: Instalar dependências
         run: uv sync
 
-      - name: Lint, format-check e testes (inclui snapshot do compras-mcp)
+      - name: Aplicar migrações (Fase 1 — schema, papéis, views)
+        run: make migrate
+
+      - name: Lint, format-check e testes (inclui snapshot do compras-mcp e ingestão)
         run: make test
 
   secrets-scan:

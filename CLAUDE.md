@@ -53,7 +53,11 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo (decisão D2).
 - `make down` — derruba os containers do projeto.
 - `make test` — lint (`ruff check`), format-check (`ruff format --check`) e testes
   (`pytest`, inclui o snapshot e a chamada real às tools do `compras-mcp`).
-- `make ingest` — ainda não implementado (chega na Fase 1, Base histórica).
+- `make migrate` — aplica as migrações do Alembic (schema, papéis `ingest`/`mcp_reader`, views).
+- `make ingest` — ingestão diária (janela de ontem até hoje, todas as entidades).
+- `make ingest-backfill` — backfill histórico desde `INGEST_BACKFILL_START` (job longo — ver README).
+- `make backup` — `pg_dump` do container para `backups/` (fora do Git).
+- `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.
 - `make eval` — ainda não implementado (chega na Fase 2, Filtro de TI e preços).
 
 ## Insumos fornecidos pelo Lucas

@@ -32,7 +32,8 @@ proponha o plano da fase em modo plan e espere minha aprovação.
 ## F1 · Base histórica
 
 **Entregas**
-- Schema e migrações (contratações, itens, contratos, atas, órgãos, fornecedores, log de execução).
+- Schema e migrações (contratações, contratos, atas, órgãos, fornecedores, log de execução).
+  Itens/preços unitários adiados por decisão aprovada para a Fase 2, após classificação de TI.
 - Ingestão diária e backfill em janelas de datas, idempotente (ADR 0005).
 - Papéis `ingest` (escrita) e `mcp_reader` (só `SELECT` em views).
 - Backup diário com `pg_dump`.
@@ -41,6 +42,10 @@ proponha o plano da fase em modo plan e espere minha aprovação.
 - A mesma janela processada duas vezes gera as mesmas contagens.
 - Backfill do período combinado concluído.
 - Restauração do backup testada em banco limpo.
+
+**Status: 🚧 em andamento** (branch `feat/f1-base-historica`, 12/10/2026). Schema, papéis, ingestão
+diária/backfill e testes implementados e verdes (`make test`); backfill completo (01/04/2023 até hoje)
+e restauração de backup ainda não executados de verdade — ver `LEIA-ME-CODEX.md` para o detalhe.
 
 ## F2 · Filtro de TI e preços
 
