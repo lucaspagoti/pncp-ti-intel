@@ -36,3 +36,29 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  vuln-scan:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Varredura de vulnerabilidades nas dependências (uv.lock)
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Varredura de vulnerabilidades na imagem do Postgres
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: image
+          # mesmo digest pinado em docker-compose.yml — atualizar os dois juntos.
+          image-ref: postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true

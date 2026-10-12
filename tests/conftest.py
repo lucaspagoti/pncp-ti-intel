@@ -7,18 +7,23 @@ local") e detecta mudanças no servidor de terceiro (ADR 0002, "rug pull").
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
 
-COMPRAS_MCP_VERSION = "0.4.0"
-
 
 def compras_mcp_transport() -> StdioTransport:
-    """Mesmo comando registrado em `.mcp.json`, para os dois ficarem sempre em sincronia."""
+    """Mesmo comando registrado em `.mcp.json`, para os dois ficarem sempre em sincronia.
+
+    Usa `uv run` (não `uvx --from`) para rodar a versão travada no `uv.lock` com
+    hashes — protege a árvore de dependências transitiva, não só o pacote
+    top-level (ADR 0002, defesa contra "rug pull").
+    """
     return StdioTransport(
-        command="uvx",
-        args=["--from", f"compras-mcp=={COMPRAS_MCP_VERSION}", "compras-mcp"],
+        command="uv",
+        args=["run", "--project", str(Path(__file__).parent.parent), "compras-mcp"],
         env={
             "TRANSPARENCIA_API_KEY": "",
             "INCLUIR_CPF_COMPLETO": "false",

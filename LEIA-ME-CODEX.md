@@ -102,15 +102,32 @@ PR existente: https://github.com/lucaspagoti/pncp-ti-intel/pull/1. Revisão inde
 
 **Critério de aceite da Fase 0 — status:**
 - ✅ `make test` verde (lint + format-check + 2 testes, incluindo chamada real ao PNCP via `compras-mcp`).
-- ✅ `make up` sobe o Postgres saudável, só em `127.0.0.1:5432`.
-- ⚠️ Comunicação real via `compras-mcp` local comprovada, mas o teste só exige que atas sejam
-  examinadas; não comprova outsourcing nem adesão. Demonstração adicional via stdio em 12/10/2026
-  examinou 5.000 atas e retornou 18 matches para "impressao", incluindo falsos positivos de papel
-  e materiais gráficos. Critério funcional e demonstração pelo Lucas permanecem pendentes.
+- ✅ `make up` sobe o Postgres saudável, só em `127.0.0.1:5432`, imagem pinada por digest.
+- ✅ Teste de fumaça endurecido (13/10/2026): agora valida contrato estrutural (campos esperados em
+  cada item), que `dataVigenciaFinal` respeita a janela pedida e que `objeto` de fato contém a
+  palavra-chave — não só que a tool rodou. Documenta explicitamente que distinguir outsourcing real de
+  falso positivo (papel, plotagem) é trabalho do classificador da Fase 3, não deste teste.
+- ⏳ Demonstração interativa pelo Lucas no chat do Claude Code (com `.mcp.json` carregado) continua
+  pendente — não é algo que uma sessão de terminal consiga fazer sozinha.
 
-**Próximo passo:** resolver as lacunas da revisão no PR #1, validar CI e demonstrar o aceite com
-Lucas antes de merge/tag. Depois propor o plano e aguardar aprovação para a **Fase 1
-(Reconciliação)** — que precisa de `insumos/contratos_ti_pge.csv` preenchido pelo Lucas antes de começar.
+**Lacunas da revisão do Codex, fechadas em 13/10/2026 (mesma branch, antes do merge):**
+1. Teste de fumaça fortalecido (ver acima).
+2. `docs/PLANO.md` sincronizado: D1 e D2 marcados como resolvidos.
+3. `compras-mcp` agora é dependência declarada em `pyproject.toml` (`==0.4.0`), travada no `uv.lock` com
+   hashes — protege a árvore transitiva inteira, não só o pacote top-level (ADR 0002). `.mcp.json` e
+   `tests/conftest.py` trocaram de `uvx --from ...` para `uv run --project . compras-mcp`, usando o
+   ambiente travado. Testado: `uv sync`, `make test` e `make up` continuam verdes.
+4. Postgres pinado por digest em `docker-compose.yml`
+   (`postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d`, = `postgres:16`
+   em 12/10/2026). Atualizar o comentário junto do digest quando trocar de versão.
+5. Job `vuln-scan` novo em `.github/workflows/ci.yml` (Trivy): varre `uv.lock` (filesystem) e a imagem do
+   Postgres, falha em CRITICAL/HIGH com correção disponível. **Ainda não validado em CI real** — só
+   localmente (lint/testes/up/down); confirmar na próxima execução do workflow.
+
+**Próximo passo:** empurrar essas correções para o PR #1, confirmar que os 3 jobs de CI (`test`,
+`secrets-scan`, `vuln-scan`) ficam verdes, demonstrar o critério de aceite no chat do Claude Code com o
+Lucas, e então merge/tag. Depois propor o plano e aguardar aprovação para a **Fase 1 (Reconciliação)** —
+que precisa de `insumos/contratos_ti_pge.csv` preenchido pelo Lucas antes de começar.
 
 ## Convenções do projeto
 
@@ -158,3 +175,12 @@ Lucas antes de merge/tag. Depois propor o plano e aguardar aprovação para a **
   A resposta da busca não comprova autorização/saldo para adesão estadual.
   **CI após correção:** jobs `test` e `secrets-scan` verdes na execução 38302340655
   (https://github.com/lucaspagoti/pncp-ti-intel/actions/runs/38302340655).
+- **2026-10-13 (Claude/Sonnet 5, fechando as lacunas da revisão do Codex):** revisei os apontamentos
+  (commits `44a5c66` e `f0bfd26`) um por um, confirmei que `perguntas_reais.csv` tem mesmo só 6 linhas
+  preenchidas (`awk` confere). Concordei com as 5 lacunas e fechei todas na mesma branch
+  `feat/f0-fundacao`: teste de fumaça agora valida contrato estrutural e janela de vigência, não só que a
+  tool rodou; `docs/PLANO.md` sincronizado (D1/D2 marcados); `compras-mcp` virou dependência travada no
+  `uv.lock` com hashes, `.mcp.json`/testes trocaram `uvx --from` por `uv run --project . compras-mcp`;
+  Postgres pinado por digest; job `vuln-scan` (Trivy) novo no CI. `make test` e `make up`/`down`
+  verificados localmente de novo após cada mudança — todos verdes. **Próximo passo:** empurrar, conferir
+  CI real (3 jobs), demonstrar o critério de aceite com o Lucas no chat, então merge/tag e Fase 1.

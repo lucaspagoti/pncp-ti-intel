@@ -123,8 +123,8 @@ Riscos reais: injeção de instruções no texto dos anexos, componente de terce
 
 ## Decisões pendentes
 
-- [ ] **D1. Repositório:** GitHub privado pessoal ou da instituição.
-- [ ] **D2. Ambiente local:** Docker Desktop + WSL2 instalado; pasta do projeto.
+- [x] **D1. Repositório:** GitHub privado pessoal. https://github.com/lucaspagoti/pncp-ti-intel (12/10/2026).
+- [x] **D2. Ambiente local:** servidor Linux (homelab) via SSH, Docker nativo — sem Windows/WSL2 (12/10/2026).
 - [ ] **D3. Índice vetorial:** pgvector no Postgres (recomendado) ou Qdrant.
 - [ ] **D4. Modelos locais:** classificador e embeddings na GPU local (recomendado) ou via API.
 - [ ] **D5. Norma de pesquisa de preços:** a tool do `compras-mcp` segue a IN SEGES/ME 65/2021 (federal); confirmar o regulamento estadual aplicável ao RJ.

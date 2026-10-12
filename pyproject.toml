@@ -4,7 +4,13 @@ version = "0.1.0"
 description = "Base local de inteligência de contratações de TI (PNCP + MCP) para a GTI/PGE-RJ."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    # Pinado em exatamente 0.4.0 (ADR 0002). Declarado aqui — e não via `uvx
+    # --from` — para entrar no uv.lock com hashes: protege a árvore de
+    # dependências transitiva contra deriva/rug-pull, não só o pacote top-level.
+    # Atualizar só após ler o changelog e o diff (regra do CLAUDE.md).
+    "compras-mcp==0.4.0",
+]
 
 [dependency-groups]
 dev = [
