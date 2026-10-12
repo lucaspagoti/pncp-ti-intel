@@ -42,6 +42,10 @@ proponha o plano da fase em modo plan e espere minha aprovação.
 - Backfill do período combinado concluído.
 - Restauração do backup testada em banco limpo.
 
+**Status: 🚧 em andamento** (branch `feat/f1-base-historica`, 12/10/2026). Schema, papéis, ingestão
+diária/backfill e testes implementados e verdes (`make test`); backfill completo (01/04/2023 até hoje)
+e restauração de backup ainda não executados de verdade — ver `LEIA-ME-CODEX.md` para o detalhe.
+
 ## F2 · Filtro de TI e preços
 
 **Insumo necessário:** Lucas rotula a amostra gerada em `insumos/amostra_rotulada.csv`.

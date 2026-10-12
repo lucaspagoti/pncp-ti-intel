@@ -21,13 +21,16 @@ Cópia estática do plano: `docs/PLANO.md`.
 | `insumos/` | Modelos de planilha que **só você** pode preencher | Você |
 | `.mcp.json` | Registra o compras-mcp local (stdio, versão fixada) | Claude Code |
 | `.env.example`, `.gitignore` | Base de configuração segura | Claude Code |
+| `src/pncp_ti/` | Código da ingestão (Fase 1) — schema, upsert, adaptadores por entidade, CLI | Claude Code |
+| `db/migrations/` | Migrações Alembic (schema, papéis `ingest`/`mcp_reader`, views) | Claude Code |
+| `scripts/backup_postgres.sh` | `pg_dump` diário do Postgres local | Você (cron no homelab) |
 
 ## Status
 
-**Fase 0 (Fundação) concluída.** `compras-mcp` roda localmente via stdio; `pyproject.toml` (uv), `Makefile`,
-`docker-compose.yml` (Postgres só em `127.0.0.1`), CI (lint, testes, varredura de segredos) e snapshot das
-tools do `compras-mcp` estão no lugar. Ver `LEIA-ME-CODEX.md` para o handoff detalhado e `docs/FASES.md`
-para a Fase 1 (Reconciliação), que já pode começar.
+**Fase 0 (Fundação) concluída**, tag `f0-fundacao`. **Fase 1 (Base histórica) em andamento**: schema
+(Alembic), papéis `ingest`/`mcp_reader`, ingestão idempotente (diária + backfill) de contratações, atas
+e contratos do PNCP. Ver `LEIA-ME-CODEX.md` para o handoff detalhado e `docs/FASES.md` para os critérios
+de aceite de cada fase.
 
 D1 (GitHub privado pessoal) e D2 (servidor Linux via SSH, sem WSL2) resolvidas — ver `docs/adr/` e
 `LEIA-ME-CODEX.md`.
@@ -37,7 +40,43 @@ D1 (GitHub privado pessoal) e D2 (servidor Linux via SSH, sem WSL2) resolvidas �
 ```
 cp .env.example .env   # preencha as senhas antes de usar
 make up                # sobe o Postgres local
-make test               # lint + testes (inclui o compras-mcp real)
+make migrate            # aplica o schema (tabelas, papéis ingest/mcp_reader, views)
+make test               # lint + testes (inclui compras-mcp e PNCP reais)
+```
+
+## Ingestão (Fase 1)
+
+```
+make ingest             # diário: janela de ontem até hoje, todas as entidades
+make ingest-backfill    # histórico: desde INGEST_BACKFILL_START (.env) até hoje — job longo
+make backup             # pg_dump para backups/ (fora do Git)
+```
+
+`make ingest-backfill` cobre contratações, atas e contratos nacionalmente desde 01/04/2023 (início da
+obrigatoriedade do PNCP para a Lei 14.133/2021) — é um job de horas, não minutos: só contratos teve mais
+de 1,6 milhão de registros em 9 meses de 2026, nacionalmente. É seguro interromper (Ctrl-C) e rodar de
+novo — `log_execucao_ingestao` guarda o que já terminou `ok` por (entidade, modalidade, janela, página) e
+a ingestão pula direto pro que falta, sem reprocessar (ADR 0005). Para acompanhar o progresso enquanto
+roda:
+
+```sql
+SELECT entidade, status, count(*), max(concluido_em)
+FROM log_execucao_ingestao
+GROUP BY entidade, status
+ORDER BY entidade, status;
+```
+
+Para rodar só uma entidade: `uv run python -m pncp_ti.ingest.cli --backfill --entidades contratacoes`.
+Itens de contratação (preço por unidade) não entram na Fase 1 de propósito — só a Fase 2, e só para as
+contratações que o classificador de TI marcar como relevantes (ver `docs/FASES.md`).
+
+### Restauração do backup (testar antes de confiar)
+
+```
+docker compose down -v                 # Postgres limpo (CUIDADO: apaga o volume local)
+make up
+make migrate
+docker exec -i pncp_ti_postgres pg_restore -U postgres -d pncp_ti < backups/<arquivo>.dump
 ```
 
 ## Antes de abrir o Claude Code (pacote original — já feito nesta instância)

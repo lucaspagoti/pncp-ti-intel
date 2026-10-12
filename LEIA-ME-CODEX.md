@@ -148,9 +148,76 @@ entregue:
 **Status: fase fechada.** PR #1 mergeado em `master` (`e895b27`), tag `f0-fundacao`. Branch
 `feat/f0-fundacao` deletada (já está em `master`).
 
-**Próximo passo:** propor o plano da **Fase 1 (Base histórica)** em modo plan e aguardar aprovação do
-Lucas — ela não tem mais bloqueio de insumo (a antiga Fase de Reconciliação, que dependia de
-`insumos/contratos_ti_pge.csv`, foi removida — ver pivô de escopo, ADR 0011).
+**Próximo passo (superado — ver Fase 1 abaixo):** propor o plano da Fase 1 em modo plan.
+
+**Fase 1 (Base histórica) — EM ANDAMENTO**, branch `feat/f1-base-historica`, plano aprovado pelo Lucas
+em 12/10/2026 (duas decisões de escopo confirmadas por `AskUserQuestion` antes de implementar: itens de
+contratação/preço por unidade ficam fora da F1 — só entram na Fase 2, e só para contratações marcadas TI
+pelo classificador; backfill retroativo até 01/04/2023, início da obrigatoriedade do PNCP). Entregue
+nesta sessão:
+- `db/migrations/0001_f1_base_historica.py` (Alembic) — tabelas `orgaos`, `fornecedores`, `contratacoes`,
+  `atas`, `contratos` (cada uma com coluna `raw jsonb` guardando o payload inteiro — protege contra campo
+  novo/renomeado no PNCP sem quebrar a ingestão) e `log_execucao_ingestao` (ADR 0005). Papéis `ingest`
+  (INSERT/UPDATE/SELECT nas tabelas base) e `mcp_reader` (SELECT só em `v_contratacoes`/`v_atas`/
+  `v_contratos`, sem acesso a `raw`) — testado manualmente que `mcp_reader` não lê nem escreve tabela
+  base. `make migrate` novo no Makefile.
+- `src/pncp_ti/` — pacote novo (`pyproject.toml` deixou de usar `bypass-selection`). `config.py` (lê
+  `.env`), `db.py` (upsert genérico por chave natural), `mask.py` (CPF mascarado — regra fixa do
+  CLAUDE.md), `ingest/` com `windows.py`, `rate_limit.py`, `client.py` (reusa
+  `compras_mcp.clients.pncp.PNCPClient`, ADR 0004 — nenhum cliente HTTP novo), `mapeadores.py`,
+  `executar.py` (núcleo paginação+upsert+log, compartilhado pelos 3 adaptadores), `contratacoes.py`,
+  `atas.py`, `contratos.py`, `log.py`, `cli.py` (`--diario` e `--backfill`).
+- **Dois achados reais por chamada direta à API do PNCP (não documentados no `compras-mcp`), que mudaram
+  o desenho da ingestão:**
+  1. O limite real de janela é **365 dias** para `/v1/contratacoes/publicacao`, `/v1/atas` e
+     `/v1/contratos` — o comentário do `compras-mcp` cita "~30 dias" para contratações, mas testei
+     diretamente e o próprio PNCP aceita até 365 (422 só acima disso). `windows.py` usa 365 para as três.
+  2. `/v1/atas` filtra por **sobreposição de vigência**, não por data de publicação — uma ata com
+     vigência de anos aparece em toda janela que a sobrepõe (confirmado: uma janela de 1 dia já trouxe
+     ~490 mil atas nacionalmente). Inofensivo pro upsert (idempotente), só caro em chamadas; documentado
+     em `atas.py`.
+  3. **Quirk de robustez real, corrigido:** quando uma combinação (modalidade/entidade/janela) não tem
+     nenhum resultado, o PNCP responde **204 com corpo vazio** em vez de `200 {data: []}` — o
+     `BaseAsyncClient` do `compras-mcp` tenta decodificar JSON vazio e levanta `ComprasHTTPError`. Sem
+     tratar isso, a ingestão diária quebraria toda vez que uma modalidade não tivesse nada no dia (a
+     maioria dos dias, pra a maioria das 13 modalidades). `executar.py` (`_buscar_pagina`) trata esse
+     caso como página vazia real, e separadamente faz retry com backoff (até 6 tentativas, 15s→180s)
+     pra `ComprasRateLimitError`/`ComprasServerError`/`ComprasTimeoutError` — descobri na prática que o
+     backfill real bate em 429 sustentado numa modalidade concorrida (Pregão Eletrônico) mesmo com
+     limitador de 2 req/s, e os 2 retries internos do cliente não bastam pra um job de horas. Os dois
+     comportamentos têm teste (`tests/test_ingest_upsert.py`), incluindo um client PNCP falso simulando
+     o 204.
+- **Testes** (`make test` verde, 11 testes): `test_ingest_windows.py` (geração de janela, sem rede/banco);
+  `test_ingest_upsert.py` (idempotência real — mesma janela processada duas vezes via um client PNCP
+  falso → mesma contagem em `contratacoes`, critério de aceite da fase; mais o teste do quirk 204) contra
+  um Postgres de teste dedicado (`pncp_ti_test`, criado e migrado por fixture de sessão em
+  `tests/conftest.py`, nunca o banco de desenvolvimento); `test_ingest_live_smoke.py` (rede real, 1
+  chamada pequena por entidade — contratações, atas, contratos — grava no banco de teste, detecta campo
+  renomeado na API antes de confiar num backfill de horas).
+- **CI** (`.github/workflows/ci.yml`): job `test` ganhou um serviço Postgres (mesmo digest pinado do
+  `docker-compose.yml`) e um passo `make migrate` antes de `make test` — as credenciais no YAML são só do
+  Postgres efêmero do job (descartado ao fim), não segredos reais.
+- `scripts/backup_postgres.sh` (`pg_dump` custom format) + `make backup`; passo de restauração
+  documentado no `README.md` (não automatizado em CI — é operacional, não testável sem destruir o volume
+  local).
+- `README.md` e `CLAUDE.md` atualizados (comandos novos, status, nota de que itens ficam pra Fase 2).
+  Corrigi também a referência obsoleta no `README.md` à extinta "Fase 1 (Reconciliação)".
+- Validado localmente: `make up`, `make migrate`, `make test` (11/11), e uma chamada real da CLI
+  (`--backfill --desde <2 dias atrás> --entidades contratacoes`) até bater no 429 sustentado acima — foi
+  esse teste que revelou o achado 3. Depois de corrigir, **não tornei a rodar um backfill completo**: o
+  banco de desenvolvimento foi limpo (`TRUNCATE`) de volta a vazio de propósito, pra o Lucas decidir
+  quando/como rodar o backfill real (`make ingest-backfill`, horas de duração — ver README).
+
+**Pendências que ficaram de propósito fora do escopo desta sessão:**
+- Não rodei o backfill completo (2023-04-01 até hoje) — é um job de horas; decisão de quando rodar é do
+  Lucas. `log_execucao_ingestao` garante que pode ser interrompido e retomado sem reprocessar.
+- Não testei restauração de backup de verdade (passo documentado, mas exige destruir e recriar o volume
+  Docker local — não fiz sem o Lucas presente).
+- Ainda não abri PR nem mergeei — branch `feat/f1-base-historica` local, aguardando revisão.
+
+**Próximo passo:** revisão independente (segurança + critério de aceite, como no "Ciclo de cada fase" do
+CLAUDE.md), depois decidir com o Lucas quando rodar `make ingest-backfill` de verdade, abrir PR, e só
+então Fase 2.
 
 ## Convenções do projeto
 
