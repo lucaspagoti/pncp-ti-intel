@@ -1,11 +1,13 @@
 # 0006 — Filtro de TI em duas camadas
 
-- Status: aceita (12/10/2026)
+- Status: aceita (12/10/2026); generalizada em 13/10/2026 (ADR 0011 — escopo nacional, sem vínculo institucional)
 
 ## Contexto
 
-O SIGA-RJ usa catálogo próprio de materiais e serviços. Itens do RJ podem chegar ao PNCP sem código
-CATMAT/CATSER ou com código genérico.
+Nem todo item publicado no PNCP traz um código CATMAT/CATSER útil: estados e municípios podem usar
+catálogo próprio de materiais e serviços (ex: SIGA no Estado do RJ) que não mapeia bem para o catálogo
+federal, e alguns itens chegam ao PNCP sem código ou com código genérico — isso vale pra qualquer órgão
+do país, não só um estado específico.
 
 ## Decisão
 

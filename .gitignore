@@ -17,8 +17,7 @@ backups/
 *.dump
 attachments_cache/
 
-# Insumos com dados do órgão (versionar só se o repositório for institucional)
-insumos/contratos_ti_pge.csv
+# Insumos pessoais (não versionar)
 insumos/amostra_rotulada.csv
 
 # Referências baixadas (regeneráveis pelo script)

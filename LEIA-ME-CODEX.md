@@ -57,18 +57,27 @@ positivo/negativo, injeção via texto de anexo (regra fixa do `CLAUDE.md`). Nã
 - **D1 (repositório):** GitHub **privado pessoal** (não institucional). Criado e com push feito:
   https://github.com/lucaspagoti/pncp-ti-intel (branch `master`).
 - **D2 (ambiente local):** servidor Linux via SSH, sem WSL2 (ver seção acima).
-- D3–D6 (índice vetorial, modelos locais, norma de preços do RJ, metas do filtro de TI) seguem **pendentes**,
-  como registrado em `docs/PLANO.md`.
+- **D5 (norma de pesquisa de preços):** deixou de ser bloqueante (ADR 0011) — projeto pessoal, sem
+  processo formal de órgão a instruir. Nota opcional em `docs/PLANO.md`.
+- D3, D4, D6 (índice vetorial, modelos locais, metas do filtro de TI) seguem **pendentes**.
+- **D7 nova (ADR 0012):** mecanismo de autenticação pra exposição pública — pendente, decidir na fase
+  "Exposição pública autenticada".
+- **13/10/2026 — pivô de escopo (ADR 0011 e 0012):** o Lucas decidiu que o projeto não tem vínculo
+  institucional nenhum (nada de PGE/GTI), escopo passa a ser **nacional** (todo o PNCP, não só RJ), e o
+  destino final é hospedagem no domínio pessoal do Lucas, atrás de autenticação (só ele acessa, não é
+  serviço público). A antiga Fase 1 (Reconciliação, que cruzava com uma lista de contratos da PGE) foi
+  **removida** — ver `docs/FASES.md` pra numeração atual. Detalhe completo nas ADRs 0011 e 0012.
 
 ## Estado dos insumos (`insumos/`)
 
 - `perguntas_reais.csv` — 20 linhas numeradas, mas apenas **6 perguntas preenchidas**; as linhas
   7–20 estão vazias. As 6 perguntas têm status "sugestão - revisar". Lucas ainda
-  precisa revisar/confirmar antes da Fase 4.
-- `contratos_ti_pge.csv` — **vazio** (só cabeçalho). Bloqueia a Fase 1. Precisa ser preenchido pelo Lucas.
-- `amostra_rotulada.csv` — vazio, **correto por enquanto** (é gerado pelo sistema na Fase 3; não preencher antes).
-- `insumos/normas/` — vazio. Falta o regulamento estadual de pesquisa de preços do RJ (decisão D5) e
-  normas internas de TI que o Lucas queira referenciar.
+  precisa revisar/confirmar antes da fase "MCP pncp-ti v1".
+- `amostra_rotulada.csv` — vazio, **correto por enquanto** (é gerado pelo sistema na fase "Filtro de TI e
+  preços"; não preencher antes).
+- `insumos/normas/` — vazio, **opcional** (não bloqueia mais nada desde o pivô de escopo).
+- `contratos_ti_pge.csv` — **removido** (13/10/2026, junto com o pivô de escopo). Nunca foi preenchido;
+  sem a antiga Fase 1, não tinha mais função.
 
 ## Onde estamos no roadmap (`docs/FASES.md`)
 
@@ -139,9 +148,9 @@ entregue:
 **Status: fase fechada.** PR #1 mergeado em `master` (`e895b27`), tag `f0-fundacao`. Branch
 `feat/f0-fundacao` deletada (já está em `master`).
 
-**Próximo passo:** propor o plano da **Fase 1 (Reconciliação)** em modo plan e aguardar aprovação do
-Lucas — mas ela só pode começar de verdade depois que `insumos/contratos_ti_pge.csv` estiver preenchido
-(hoje só tem o cabeçalho). Avisar o Lucas disso antes de abrir o plano.
+**Próximo passo:** propor o plano da **Fase 1 (Base histórica)** em modo plan e aguardar aprovação do
+Lucas — ela não tem mais bloqueio de insumo (a antiga Fase de Reconciliação, que dependia de
+`insumos/contratos_ti_pge.csv`, foi removida — ver pivô de escopo, ADR 0011).
 
 ## Convenções do projeto
 
@@ -209,6 +218,19 @@ Lucas — mas ela só pode começar de verdade depois que `insumos/contratos_ti_
   chat com o Lucas: pergunta real sobre outsourcing de impressão respondida com fonte via `compras-mcp`
   (detalhe acima, seção "Onde estamos no roadmap"). Lucas aprovou. Mergeei PR #1 em `master` (`e895b27`,
   fast-forward/squash pela interface do `gh`), criei e empurrei a tag `f0-fundacao`, deletei a branch
-  `feat/f0-fundacao`. **Fase 0 oficialmente encerrada.** Próxima ação: propor o plano da Fase 1
-  (Reconciliação) em modo plan — mas avisar o Lucas antes que ela está bloqueada até
-  `insumos/contratos_ti_pge.csv` ser preenchido (hoje só tem o cabeçalho).
+  `feat/f0-fundacao`. **Fase 0 oficialmente encerrada.** Próxima ação registrada então: propor o plano
+  da Fase 1 (Reconciliação) — **superada pelo pivô abaixo, no mesmo dia.**
+- **2026-10-13 (Claude/Sonnet 5, pivô de escopo):** o Lucas pediu, antes de eu propor o plano da Fase 1,
+  pra remover todo vínculo institucional do projeto (nada de PGE/GTI), remover a fase de Reconciliação
+  por completo, e definir o destino final como hospedagem no domínio pessoal dele, atrás de autenticação
+  (só ele acessa). Esclareci com perguntas: escopo geográfico vira **nacional** (todo o PNCP, não só
+  RJ); critério de "o que é TI" continua curadoria pessoal dele. Documentei em modo plan, aprovado, e
+  executei: `CLAUDE.md`, `README.md`, `docs/PLANO.md`, `docs/FASES.md` (removida a F1, fases renumeradas
+  F1–F7), `docs/GLOSSARIO.md`, `docs/referencias/LINKS.md`, `insumos/LEIA-ME.md`,
+  `insumos/normas/LEIA-ME.md`, `Makefile`, `pyproject.toml` generalizados; `insumos/contratos_ti_pge.csv`
+  removido (nunca foi preenchido); ADR 0001 e 0006 com contexto generalizado (decisão em si não mudou);
+  ADR 0011 (escopo nacional, sem vínculo institucional) e ADR 0012 (exposição pública autenticada —
+  mecanismo fica como decisão D7, não travado agora) criadas. Validei com
+  `grep -ril "pge\|gti\|siga-rj"` que não sobrou menção fora deste log e da própria ADR 0011 (que cita a
+  PGE como contexto histórico da mudança, de propósito). **Próximo passo:** propor o plano da **Fase 1
+  (Base histórica)** em modo plan — sem bloqueio de insumo, pode começar assim que aprovado.

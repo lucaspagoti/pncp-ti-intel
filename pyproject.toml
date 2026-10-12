@@ -1,7 +1,7 @@
 [project]
 name = "pncp-ti"
 version = "0.1.0"
-description = "Base local de inteligência de contratações de TI (PNCP + MCP) para a GTI/PGE-RJ."
+description = "Base local de inteligência de contratações de TI (PNCP + MCP), projeto pessoal."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [

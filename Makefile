@@ -15,8 +15,8 @@ test: ## Lint + format-check + testes (inclui snapshot e fumaça do compras-mcp)
 	uv run ruff format --check .
 	uv run pytest
 
-ingest: ## Ainda não implementado — chega na Fase 2 (base histórica).
-	@echo "make ingest: nada a fazer ainda. Ingestão entra na Fase 2 (docs/FASES.md)."
+ingest: ## Ainda não implementado — chega na Fase 1 (base histórica).
+	@echo "make ingest: nada a fazer ainda. Ingestão entra na Fase 1 (docs/FASES.md)."
 
-eval: ## Ainda não implementado — chega na Fase 3 (filtro de TI e preços).
-	@echo "make eval: nada a fazer ainda. Avaliações entram na Fase 3 (docs/FASES.md)."
+eval: ## Ainda não implementado — chega na Fase 2 (filtro de TI e preços).
+	@echo "make eval: nada a fazer ainda. Avaliações entram na Fase 2 (docs/FASES.md)."

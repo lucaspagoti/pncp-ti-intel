@@ -14,4 +14,4 @@ só atrás de proxy com token e escutando em `127.0.0.1`.
 
 ## Consequências
 
-- As consultas da PGE não passam por servidor de terceiro (não revelam o que a PGE está estudando).
+- As consultas não passam por servidor de terceiro (não revelam a quem opera o terceiro o que está sendo pesquisado).

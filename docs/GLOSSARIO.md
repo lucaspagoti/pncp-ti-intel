@@ -14,8 +14,8 @@
 | Edital | Ato convocatório da licitação; costuma vir como ZIP com anexos | Anexo indexado (Fase 5) |
 | Modalidade | Pregão, concorrência, concurso, leilão, diálogo competitivo (art. 28); código obrigatório em algumas rotas da API | Parâmetro de ingestão |
 | CATMAT / CATSER | Catálogos federais de materiais e serviços | Primeira camada do filtro de TI |
-| Catálogo SIGA | Catálogo próprio do Estado do RJ; pode não mapear para CATMAT/CATSER | Motivo do classificador |
+| Catálogo próprio de órgão | Alguns estados/municípios usam catálogo de materiais/serviços próprio (ex: SIGA no RJ), que pode não mapear para CATMAT/CATSER | Motivo do classificador (ADR 0006) |
 | Pesquisa de preços | Estimativa do valor da contratação (art. 23); federal: IN SEGES/ME 65/2021 | Tools do `compras-mcp` |
 | PCA | Plano de Contratações Anual | Consultado via `compras-mcp` |
-| UASG | Unidade Administrativa de Serviços Gerais (federal) | Raramente relevante para o RJ |
+| UASG | Unidade Administrativa de Serviços Gerais (federal) | Raramente relevante fora da esfera federal |
 | Esfera | F (federal), E (estadual), M (municipal), D (distrital) | Filtro de consulta |

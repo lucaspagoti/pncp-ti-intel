@@ -5,18 +5,18 @@ Entregas e critérios de aceite por fase: `docs/FASES.md`. Decisões: `docs/adr/
 
 ## Visão e escopo
 
-O produto é uma base local e curada de contratações públicas de TI, alimentada diariamente pelo PNCP e consultada por agentes via MCP. Responde em segundos o que hoje exige horas de busca manual: que atas vigentes aceitam adesão, quanto outros órgãos pagaram por um item e como especificaram contratações parecidas.
+É um projeto pessoal do Lucas: uma base local e curada de contratações públicas de TI, alimentada diariamente pelo PNCP (escopo nacional) e consultada por agentes via MCP. Responde em segundos o que hoje exige horas de busca manual: que atas vigentes aceitam adesão, quanto outros órgãos pagaram por um item e como especificaram contratações parecidas. Serve a pesquisa e aprendizado pessoal — não está atrelado a nenhum órgão (ADR 0011).
 
 **Estratégia: compor, não construir.** O MCP Compras.gov.br (`compras-mcp`, MIT) já entrega consulta ao vivo ao PNCP, pesquisa de preços no padrão IN 65/2021, atas para adesão e links de TR/ETP. Ele entra no dia 1, rodando localmente. O projeto constrói só o que ele não faz.
 
-**Usos prioritários na GTI/PGE-RJ**
+**Usos prioritários**
 
 1. Pesquisa de preços para ETP e TR (contratações similares de até 1 ano, art. 23, §1º, II da Lei 14.133).
 2. Localizar atas de registro de preços vigentes para adesão.
 3. Referenciar especificações, SLAs e modelos de TR/ETP de outros órgãos.
 4. Digest diário de novas contratações de TI.
 
-**Fora de escopo:** SIGA-RJ, contratos sob a Lei 8.666, estatais (Lei 13.303), geração automática de documentos licitatórios e qualquer escrita em sistemas oficiais. Nenhuma saída substitui a análise do servidor responsável.
+**Fora de escopo:** sistemas internos próprios de órgãos (ex: portais estaduais de licitação), contratos sob a Lei 8.666, estatais (Lei 13.303), geração automática de documentos licitatórios e qualquer escrita em sistemas oficiais. Nenhuma saída substitui análise humana antes de qualquer uso formal.
 
 ## O que já existe e o que construímos
 
@@ -57,7 +57,10 @@ O produto é uma base local e curada de contratações públicas de TI, alimenta
  ┌───────────────────────────────────────────────────────┐
  │ API e arquivos do PNCP (fonte pública única, HTTPS)    │
  └───────────────────────────────────────────────────────┘
- Máquina do Lucas: Docker Compose, portas só em 127.0.0.1
+ Servidor do Lucas (homelab): Docker Compose. Serviços internos (Postgres,
+ MCPs) só em loopback. Destino final: acesso remoto só via reverse proxy
+ próprio, com TLS e autenticação na frente — nunca porta interna exposta
+ direto (ADR 0012; mecanismo de autenticação = decisão D7).
 ```
 
 **Stack:** Python 3.12 + `uv`; FastMCP; Postgres com Alembic; Docker Compose; pytest; modelos locais (D4).
@@ -90,6 +93,10 @@ Riscos reais: injeção de instruções no texto dos anexos, componente de terce
 - Servidores MCP via stdio (recomendação da especificação MCP para servidores locais).
 - Modo HTTP do `compras-mcp` sobe em `0.0.0.0` sem autenticação: não usar assim.
 - Portas só em `127.0.0.1`. Ingestão só sai para `pncp.gov.br`. Leitor de anexos sem rede.
+- **Exposição pública (ADR 0012, Fase "Exposição pública autenticada"):** hoje nada está exposto. Quando
+  essa fase acontecer, acesso remoto só via reverse proxy próprio com TLS e autenticação na frente de
+  tudo — nenhum serviço interno (Postgres, MCPs) sai de loopback diretamente. Mecanismo de autenticação é
+  decisão D7, em aberto.
 
 **Terceiros**
 - `compras-mcp` com versão e hash fixados; snapshot de tools no CI (detecta envenenamento de tools e "rug pull", OWASP MCP Top 10).
@@ -106,7 +113,7 @@ Riscos reais: injeção de instruções no texto dos anexos, componente de terce
 **Segredos e LGPD**
 - `.env` fora do Git; varredura de segredos no pre-commit.
 - Tratamento de dados públicos considera finalidade, boa-fé e interesse público (LGPD, art. 7º, §3º). CPFs mascarados. Finalidade registrada no README.
-- Nenhum documento interno da PGE nesta base.
+- Nenhum documento interno de terceiros nesta base.
 - Log de auditoria por chamada de tool, sem dados pessoais.
 
 ## Riscos
@@ -119,7 +126,8 @@ Riscos reais: injeção de instruções no texto dos anexos, componente de terce
 | Catálogo próprio do RJ derruba o filtro | TI fica de fora | Classificador + amostra rotulada |
 | Anexos escaneados ou ZIP aninhado | Lacunas no RAG | Extração recursiva; OCR só se a eval pedir |
 | Bloqueio pelo WAF | Ingestão interrompida | Limite de taxa, backoff, User-Agent, janelas |
-| Máquina desligada | Digest atrasa | Ingestão retomável; homelab na Fase 7 |
+| Máquina desligada | Digest atrasa | Ingestão retomável; já roda no homelab desde a Fase 0 |
+| Exposição pública mal configurada (Fase "Exposição pública autenticada") | Acesso não autorizado a dados/consultas | Proxy com TLS + autenticação antes de qualquer porta sair de loopback; revisão OWASP MCP Top 10 antes de expor; nenhum serviço interno exposto direto |
 
 ## Decisões pendentes
 
@@ -127,5 +135,10 @@ Riscos reais: injeção de instruções no texto dos anexos, componente de terce
 - [x] **D2. Ambiente local:** servidor Linux (homelab) via SSH, Docker nativo — sem Windows/WSL2 (12/10/2026).
 - [ ] **D3. Índice vetorial:** pgvector no Postgres (recomendado) ou Qdrant.
 - [ ] **D4. Modelos locais:** classificador e embeddings na GPU local (recomendado) ou via API.
-- [ ] **D5. Norma de pesquisa de preços:** a tool do `compras-mcp` segue a IN SEGES/ME 65/2021 (federal); confirmar o regulamento estadual aplicável ao RJ.
-- [ ] **D6. Metas do filtro de TI:** precisão e recall mínimos, definidos na Fase 3.
+- [x] **D5. Norma de pesquisa de preços:** não é mais decisão bloqueante — projeto pessoal, sem processo
+  formal de órgão a instruir. A tool do `compras-mcp` segue a IN SEGES/ME 65/2021 (federal); se um dia o
+  resultado for usado pra alguma decisão formal, conferir a norma aplicável a esse órgão antes de usar.
+- [ ] **D6. Metas do filtro de TI:** precisão e recall mínimos, definidos na fase do filtro de TI.
+- [ ] **D7. Autenticação para exposição pública:** mecanismo (ex: Tailscale Funnel com auth, Cloudflare
+  Access, Authelia atrás de reverse proxy, Basic Auth + TLS) — decidir na fase "Exposição pública
+  autenticada" (ADR 0012).

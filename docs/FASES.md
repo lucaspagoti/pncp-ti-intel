@@ -1,6 +1,8 @@
 # Fases do projeto
 
-Cada fase começa só quando a anterior cumpre o critério de aceite. Os portões (G1, G2, G3) são decisões do Lucas: seguir, ajustar ou parar.
+Cada fase começa só quando a anterior cumpre o critério de aceite. Os portões (G2, G3 — numeração
+histórica, mantida mesmo sem G1 depois da remoção da antiga Fase de Reconciliação) são decisões do Lucas:
+seguir, ajustar ou parar.
 
 Prompt-padrão de abertura (substitua N e cole o bloco da fase):
 
@@ -25,20 +27,9 @@ proponha o plano da fase em modo plan e espere minha aprovação.
 - Claude responde "quais atas vigentes de outsourcing de impressão existem?" usando o `compras-mcp` local.
 - `make test` verde; `make up` sobe o Postgres.
 
-## F1 · Reconciliação
+**Status: ✅ concluída** (13/10/2026, tag `f0-fundacao`).
 
-**Insumo necessário:** `insumos/contratos_ti_pge.csv` preenchido.
-
-**Entregas**
-- Spike comparando `pypncp`, `pncp-cli` e o cliente interno do `compras-mcp`; escolha registrada em ADR.
-- Script que puxa 12 meses de contratos da PGE-RJ no PNCP e cruza com `insumos/contratos_ti_pge.csv`.
-- Perfil dos itens do RJ: percentual com código CATMAT/CATSER, percentual com código genérico ou ausente.
-
-**Critério de aceite**
-- Relatório em `docs/relatorios/F1-cobertura.md` com: % dos contratos da lista encontrados no PNCP; % de itens com código de catálogo útil.
-- **Portão G1:** Lucas decide se a cobertura basta para seguir só com o PNCP.
-
-## F2 · Base histórica
+## F1 · Base histórica
 
 **Entregas**
 - Schema e migrações (contratações, itens, contratos, atas, órgãos, fornecedores, log de execução).
@@ -51,7 +42,7 @@ proponha o plano da fase em modo plan e espere minha aprovação.
 - Backfill do período combinado concluído.
 - Restauração do backup testada em banco limpo.
 
-## F3 · Filtro de TI e preços
+## F2 · Filtro de TI e preços
 
 **Insumo necessário:** Lucas rotula a amostra gerada em `insumos/amostra_rotulada.csv`.
 
@@ -64,7 +55,7 @@ proponha o plano da fase em modo plan e espere minha aprovação.
 - Relatório de avaliação em `evals/`.
 - **Portão G2:** metas da decisão D6 atingidas.
 
-## F4 · MCP pncp-ti v1
+## F3 · MCP pncp-ti v1
 
 **Insumo necessário:** `insumos/perguntas_reais.csv` com 20 perguntas.
 
@@ -77,7 +68,7 @@ proponha o plano da fase em modo plan e espere minha aprovação.
 - As 20 perguntas respondidas com link de fonte no PNCP.
 - **Portão G3:** 2 semanas de uso real; lista do que faltou alimenta as fases seguintes.
 
-## F5 · Anexos e RAG
+## F4 · Anexos e RAG
 
 **Entregas**
 - Download dos anexos pelos links do PNCP; extração recursiva de ZIP; texto de PDF.
@@ -88,30 +79,34 @@ proponha o plano da fase em modo plan e espere minha aprovação.
 - Recall@5 medido em perguntas com resposta conhecida.
 - Teste com anexo contendo instrução maliciosa: a instrução não é seguida e o trecho sai marcado.
 
-## F6 · Operação
+## F5 · Operação
 
 **Entregas**
 - Digest diário de novas contratações de TI no bot Hermes.
 - Healthcheck diário da API (incluindo `compras_healthcheck`) e alerta de falha.
-- Painel opcional, no design system da PGE.
+- Painel opcional.
 
 **Critério de aceite**
 - Uma semana de digests sem intervenção manual.
 
-## F7 · Homelab
+## F6 · Exposição pública autenticada
 
 **Entregas**
-- Migração do Compose para o homelab.
-- HTTP com token atrás de proxy, só se o Hermes exigir.
+- Domínio próprio + reverse proxy com TLS (ex: Caddy/Let's Encrypt).
+- Autenticação na frente de tudo — mecanismo definido na decisão D7 (ex: Tailscale Funnel com auth,
+  Cloudflare Access, Authelia, Basic Auth + TLS). Nenhum serviço interno (Postgres, MCPs) exposto direto.
+- HTTP dos MCPs (se necessário) só atrás desse proxy, nunca em `0.0.0.0` sem autenticação (ADR 0009).
 - Revisão contra o OWASP MCP Top 10.
 
 **Critério de aceite**
-- Checklist de segurança preenchido; restauração no homelab testada.
+- Checklist de segurança preenchido; acesso remoto testado funcionando só com a autenticação correta (e
+  recusando sem ela).
 
-## F8 · v1.0
+## F7 · v1.0
 
 **Entregas**
-- Manual de uso, runbook de operação e tutorial em vídeo.
+- Manual de uso e runbook de operação (pra você mesmo lembrar como opera, meses depois).
 
 **Critério de aceite**
-- Outra pessoa da GTI usa o sistema só com o manual.
+- Você consegue operar o sistema do zero (restaurar backup, subir tudo, confirmar que está respondendo)
+  só com o manual, sem depender da memória desta conversa.

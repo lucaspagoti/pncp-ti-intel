@@ -1,6 +1,7 @@
 # pncp-ti-intel — pacote inicial
 
-Base de inteligência de contratações públicas de TI, alimentada pelo PNCP e consultada via MCP.
+Projeto pessoal: base de inteligência de contratações públicas de TI, alimentada pelo PNCP (escopo
+nacional) e consultada via MCP.
 Este pacote contém só documentos e configurações de partida. Nenhum código ainda: o código nasce na Fase 0, com o Claude Code.
 
 Plano completo (versão viva, editável): https://claude.ai/code/artifact/b89bd04f-c28e-4fbc-9bd9-f46c9c95aea4
@@ -44,11 +45,11 @@ make test               # lint + testes (inclui o compras-mcp real)
 1. Descompacte esta pasta onde o projeto vai morar e rode `git init`.
 2. Rode `scripts/baixar_referencias.ps1` (PowerShell) para baixar as referências oficiais para `docs/referencias/`.
 3. Responda as decisões D1 e D2 (ver `docs/PLANO.md`, seção "Decisões pendentes").
-4. Preencha o que der em `insumos/` — veja `insumos/LEIA-ME.md`. Só `contratos_ti_pge.csv` é necessário antes da Fase 1.
+4. Preencha o que der em `insumos/` — veja `insumos/LEIA-ME.md` (nada bloqueia o início das fases).
 5. Abra o Claude Code na pasta e cole o prompt da Fase 0 de `docs/FASES.md`.
 
 ## Finalidade do tratamento de dados (LGPD)
 
-Esta base trata exclusivamente dados públicos divulgados no PNCP, com a finalidade de apoiar o planejamento
-de contratações de TI da GTI/PGE-RJ (pesquisa de preços, adesão a atas e referência de especificações).
-CPFs são mascarados. Nenhum documento interno da PGE é armazenado aqui.
+Esta base trata exclusivamente dados públicos divulgados no PNCP, com a finalidade de uso pessoal de
+pesquisa e aprendizado (pesquisa de preços, adesão a atas e referência de especificações). CPFs são
+mascarados. Nenhum documento interno de terceiros é armazenado aqui.

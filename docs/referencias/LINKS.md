@@ -26,4 +26,3 @@ Rode `scripts/baixar_referencias.ps1` para salvar cópias locais das marcadas co
 - Lei 14.133/2021 (script): https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm
 - LGPD, Lei 13.709/2018 (script): https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm
 - TCU — divulgação de contratos no PNCP: https://licitacoesecontratos.tcu.gov.br/5-11-7-divulgacao
-- Regulamento estadual de pesquisa de preços do RJ: **a definir (decisão D5)** — colocar em `insumos/normas/`.

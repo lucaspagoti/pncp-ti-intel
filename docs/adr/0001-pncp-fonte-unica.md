@@ -1,18 +1,19 @@
-# 0001 — PNCP é a fonte única; SIGA-RJ fica fora
+# 0001 — PNCP é a fonte única; nenhum sistema próprio de órgão é integrado
 
-- Status: aceita (12/10/2026)
+- Status: aceita (12/10/2026); generalizada em 13/10/2026 (ADR 0011 — projeto sem vínculo institucional)
 
 ## Contexto
 
 Contratos e aditivos regidos pela Lei 14.133/2021 só têm eficácia após divulgação no PNCP (art. 94).
-Editais também são publicados no PNCP (art. 54). O SIGA-RJ é onde o Estado licita, mas publica no PNCP.
+Editais também são publicados no PNCP (art. 54). Órgãos podem ter sistema próprio de licitação (ex:
+SIGA no Estado do RJ), mas o que importa juridicamente é publicado no PNCP.
 
 ## Decisão
 
-Ingerir apenas do PNCP. Não integrar o SIGA-RJ.
+Ingerir apenas do PNCP. Não integrar sistema próprio de nenhum órgão.
 
 ## Consequências
 
 - Uma API, um formato, uma chave de idempotência.
-- Ficam de fora: contratos antigos sob a Lei 8.666, estatais (Lei 13.303) e dados operacionais do SIGA (propostas, lances).
-- A cobertura real do RJ no PNCP é verificada na Fase 1 (portão G1). Se for insuficiente, esta ADR é revista.
+- Ficam de fora: contratos antigos sob a Lei 8.666, estatais (Lei 13.303) e dados operacionais de sistemas
+  próprios de órgãos (propostas, lances).
