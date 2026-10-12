@@ -44,7 +44,7 @@ ADR para toda decisão nova; nenhum segredo no repositório.
 ## Stack
 
 Python 3.12 + `uv`; FastMCP; Postgres (+ pgvector, decisão D3) com migrações Alembic; Docker Compose; pytest.
-Ambiente: Windows com Docker Desktop/WSL2 (confirmar em D2).
+Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo (decisão D2). Sem Windows/WSL2.
 
 ## Comandos (a criar na Fase 0)
 
