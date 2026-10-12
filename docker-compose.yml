@@ -1,0 +1,22 @@
+services:
+  postgres:
+    # postgres:16 (atualizar o digest junto da versão; ver docs/PLANO.md, seção Segurança).
+    image: postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+    container_name: pncp_ti_postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pncp_ti}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+    volumes:
+      - pncp_ti_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-pncp_ti}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pncp_ti_postgres_data:

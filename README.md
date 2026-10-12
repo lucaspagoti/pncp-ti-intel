@@ -21,7 +21,25 @@ Cópia estática do plano: `docs/PLANO.md`.
 | `.mcp.json` | Registra o compras-mcp local (stdio, versão fixada) | Claude Code |
 | `.env.example`, `.gitignore` | Base de configuração segura | Claude Code |
 
-## Antes de abrir o Claude Code
+## Status
+
+**Fase 0 (Fundação) concluída.** `compras-mcp` roda localmente via stdio; `pyproject.toml` (uv), `Makefile`,
+`docker-compose.yml` (Postgres só em `127.0.0.1`), CI (lint, testes, varredura de segredos) e snapshot das
+tools do `compras-mcp` estão no lugar. Ver `LEIA-ME-CODEX.md` para o handoff detalhado e `docs/FASES.md`
+para a Fase 1 (Reconciliação), que já pode começar.
+
+D1 (GitHub privado pessoal) e D2 (servidor Linux via SSH, sem WSL2) resolvidas — ver `docs/adr/` e
+`LEIA-ME-CODEX.md`.
+
+## Como rodar
+
+```
+cp .env.example .env   # preencha as senhas antes de usar
+make up                # sobe o Postgres local
+make test               # lint + testes (inclui o compras-mcp real)
+```
+
+## Antes de abrir o Claude Code (pacote original — já feito nesta instância)
 
 1. Descompacte esta pasta onde o projeto vai morar e rode `git init`.
 2. Rode `scripts/baixar_referencias.ps1` (PowerShell) para baixar as referências oficiais para `docs/referencias/`.
