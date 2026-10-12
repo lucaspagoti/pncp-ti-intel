@@ -11,7 +11,7 @@ dois papéis abaixo, o tempo todo, sem que o Lucas precise pedir de novo:
 
 **Arquiteto especialista.** Antes de aceitar qualquer plano, decisão ou código — seu ou de uma sessão
 anterior — pergunte-se se é a escolha certa para um sistema de contratações públicas que vai informar
-decisões reais da GTI/PGE-RJ. Isso inclui revisar criticamente o que já está feito, não só o que falta.
+pesquisas pessoais de escopo nacional (ADR 0011). Isso inclui revisar criticamente o que já está feito, não só o que falta.
 Se uma ADR, uma escolha de schema, uma dependência ou uma decisão de segurança te parecer frágil,
 equivocada ou ultrapassada, diga isso ao Lucas explicitamente — com o porquê e uma alternativa concreta —
 em vez de só seguir em frente. Proponha uma ADR nova quando for o caso.
@@ -150,12 +150,17 @@ entregue:
 
 **Próximo passo (superado — ver Fase 1 abaixo):** propor o plano da Fase 1 em modo plan.
 
+**Atualização após a revisão (12/10/2026):** os achados foram corrigidos com autorização de Lucas,
+com migração 0002 e ADR 0013. As descrições de checkpoint e restauração da implementação original
+abaixo são históricas e foram substituídas pela última entrada do log de sessões. A F1 continua
+em andamento porque o backfill completo/CI remoto ainda estão pendentes.
+
 **Fase 1 (Base histórica) — EM ANDAMENTO**, branch `feat/f1-base-historica`, plano aprovado pelo Lucas
 em 12/10/2026 (duas decisões de escopo confirmadas por `AskUserQuestion` antes de implementar: itens de
 contratação/preço por unidade ficam fora da F1 — só entram na Fase 2, e só para contratações marcadas TI
 pelo classificador; backfill retroativo até 01/04/2023, início da obrigatoriedade do PNCP). Entregue
 nesta sessão:
-- `db/migrations/0001_f1_base_historica.py` (Alembic) — tabelas `orgaos`, `fornecedores`, `contratacoes`,
+- `db/migrations/versions/0001_f1_base_historica.py` (Alembic) — tabelas `orgaos`, `fornecedores`, `contratacoes`,
   `atas`, `contratos` (cada uma com coluna `raw jsonb` guardando o payload inteiro — protege contra campo
   novo/renomeado no PNCP sem quebrar a ingestão) e `log_execucao_ingestao` (ADR 0005). Papéis `ingest`
   (INSERT/UPDATE/SELECT nas tabelas base) e `mcp_reader` (SELECT só em `v_contratacoes`/`v_atas`/
@@ -248,7 +253,7 @@ teste) — não é uma falha latente, decidi não unificar.
 
 - Documentação e mensagens: português (Brasil). Código, nomes de variáveis e commits: inglês.
 - Commits seguem conventional commits (ex: `chore:`, `feat:`, `fix:`) — ver `git log`.
-- Toda decisão nova vira ADR em `docs/adr/`, numerada sequencialmente (próxima: `0010-...`).
+- Toda decisão nova vira ADR em `docs/adr/`, numerada sequencialmente (próxima: `0014-...`; 0013 criada nesta correção).
 - Nenhum segredo no repositório; `.env` é local e já está no `.gitignore`.
 
 ## Log de sessões
@@ -326,3 +331,105 @@ teste) — não é uma falha latente, decidi não unificar.
   `grep -ril "pge\|gti\|siga-rj"` que não sobrou menção fora deste log e da própria ADR 0011 (que cita a
   PGE como contexto histórico da mudança, de propósito). **Próximo passo:** propor o plano da **Fase 1
   (Base histórica)** em modo plan — sem bloqueio de insumo, pode começar assim que aprovado.
+
+
+## Revisão geral do Codex — 12/10/2026, HEAD e08caee
+
+**Conclusão: F1 ainda não aprovada para merge/backfill completo.** Revisados os três commits
+4347c41, 55a0d0c e e08caee; revisão independente adicional por subagente de segurança.
+Arquitetura de composição, cliente reusado, views e savepoints são adequados, mas há bugs
+confirmados não cobertos pelos 18 testes. Nenhum código de produção foi alterado nesta revisão.
+
+**Validação:** `make up` saudável e bind 127.0.0.1; `make migrate` passou; `make test` passou
+18/18 (incluindo snapshot e consultas reais às três entidades). Bancos novos descartáveis foram
+migrados e usados para reproduções; removidos ao final. `make backup` falhou: `pg_dump: command
+not found` no host. Alternativa testada com pg_dump do container: backup restaurado em banco limpo
+no mesmo cluster, com contagens de seis tabelas iguais e três views presentes; leitura de view
+permitida ao mcp_reader e tabela base negada. Restaurar em schema já existente falha (`already
+exists`), portanto corrigir receita do README que manda migrar antes do restore. Teste de restore
+não exige destruir volume local. Papéis globais já existiam: falta ensaio em cluster novo.
+Postgres já estava rodando antes da revisão e permaneceu rodando; banco/volume de desenvolvimento
+preservados. Sem backfill completo, push, PR, merge ou tag.
+
+**Achados a resolver:**
+- P1: `_raw_sem_cpf` mascara só niFornecedor. Schema oficial RecuperarContratoDTO também tem
+  niFornecedorSubContratado/tipoPessoaSubContratada; CPF sintético PF desse campo ficou intacto
+  no raw. Corrigir antes de ingerir dados em volume.
+- P1: CPF mascarado usado como PK/FK funde fornecedores distintos; dois CPFs sintéticos válidos
+  produzem a mesma máscara. Separar identidade interna da máscara de apresentação (avaliar HMAC
+  com segredo local em ADR; não armazenar CPF original nem inferir identidade só de máscara upstream).
+- P1: checkpoint por página/janela marcado ok pula atualizações. Reprodução: segunda execução
+  após mudança de objeto só pediu página 2 e preservou dado antigo. Fonte/paginação mutável não
+  tem retomada segura apenas por offset; separar retomada de nova sincronização. A rotina diária
+  também precisa capturar atualizações de publicações antigas.
+- P1: log.exception usa traceback Rich com variáveis locais; reprodução com o mesmo logger
+  expôs CPF sintético do payload. Desativar locais e sanitizar mensagens/contextos de erro.
+- P2: envelope sem data/totalPaginas vira página vazia ok; schema alterado reproduzido no banco.
+  Validar contrato antes de gravar checkpoint, sem valores padrão que escondam schema inválido.
+- P2: erro de item fica no log mas a função/CLI conclui sem sinalizar falha ao job. Preservar itens
+  bons e savepoints, porém agregar falhas e retornar código não zero quando houver perda.
+- P2: backup depende de cliente ausente no host; receita de restore conflita com tabelas pré-criadas.
+  Usar cliente do container ou provisionar versão compatível e restaurar em banco limpo com fail-fast.
+- P2: extrair_orgao_de_ata + upsert apaga poder_id/esfera_id conhecidos com NULL (reproduzido).
+- P2: DSNs interpolam senha sem encoding; caracteres @/% quebram host/decoding/Alembic. Construir
+  conexão de forma estruturada e cobrir caracteres especiais também nas fixtures.
+
+**Melhorias/documentação:** adicionar regressões para os casos acima, atualizar ADR 0004 sobre
+cliente já escolhido, conciliar itens adiados com FASES.md e medir custo da carga diária de atas.
+Próxima ADR livre é 0013 (não 0010). A documentação ainda contém fases antigas, referência à GTI
+no papel de arquiteto e datas de 13/10/2026 em entradas anteriores apesar do contexto desta revisão
+ser 12/10/2026; preservar histórico até confirmar as datas. Caminho real da migração tem versions/.
+
+Relatório detalhado desta revisão salvo em:
+/home/lucas/Documents/Codex/2026-10-12/em-home-lucas-projetos-pncp-ti-5/outputs/revisao-f1.md
+
+**Próximo passo:** corrigir achados e acrescentar testes de regressão na F1; revisar novamente,
+validar CI quando houver PR e então demonstrar critérios de aceite/backfill combinado com Lucas.
+
+
+## Correções autorizadas pelo Lucas — 12/10/2026
+
+A instrução “pode consertar” autorizou fechar os achados desta revisão na mesma branch.
+Implementação e testes revistos novamente por subagente independente; nenhum bloqueador restante
+na revisão final. Alterações ficaram locais, sem push/PR/merge/tag.
+
+- Identidade de fornecedor separada da máscara: fornecedores.fornecedor_id PK, contratos.fornecedor_id
+  FK; HMAC-SHA256 para CPF e escopo por contrato para documento incompleto/mascarado na origem.
+  PNCP_TI_IDENTITY_KEY forte gerada no .env local, nunca versionada/exibida. Backup cifrado da
+  configuração deve preservar essa chave; rotação exige plano de migração/reingestão (ADR 0013).
+- Migração 0002 aplicada ao desenvolvimento sem apagar dados: preserva PJ, limpa CPF de JSON/textos
+  legados e deixa vínculo PF ambíguo NULL até reingestão. Máscara não permite reconstruir identidade.
+  Testes também exercitam upgrade de banco legado com dados sintéticos; downgrade recusa colisões.
+- CPF do subcontratado, campos novos de CPF e CPFs em texto mascarados em raw/colunas textuais.
+  Preços numéricos preservados. Logs de erro só contêm classe e contexto fixo, sem payload/traceback.
+- Toda nova execução reprocessa páginas e faz upsert de verdade. Sem checkpoint por offset de fonte
+  mutável; --forcar mantido por compatibilidade. Diário lê também atualizações de contratações antigas.
+  Envelope/paginação incoerentes geram erro, nunca sucesso vazio. Itens bons preservados por savepoint;
+  falhas agregadas fazem CLI retornar 1. Metadados conhecidos de órgãos não são apagados por NULL.
+- DSNs/URLs estruturados aceitam caracteres especiais; Alembic não usa interpolação de ConfigParser.
+  Criação de papéis também trata % corretamente. Fixtures usam bancos UUID e identificadores SQL
+  escapados, sem apagar bancos existentes. Testes não compartilham o banco de desenvolvimento.
+- make backup usa pg_dump do container, arquivo 0600/publicação atômica e diretório 0700; sem source
+  do .env. make restore exige destino novo, provisiona papéis em banco descartável separado e usa
+  pg_restore --exit-on-error --single-transaction. Recusa destino atual/existente/sistema.
+- README, FASES.md, ADR 0004 e ADR 0013 sincronizados; próximo número ADR livre: 0014.
+
+**Validação operacional:** make migrate passou; backup real novo gravado localmente e validado.
+Restauração exercitada em CLUSTER DOCKER NOVO (tmpfs, porta só em 127.0.0.1), com senhas sintéticas
+contendo @/%/:/?/#/$/&/aspas/barra/espaço: papéis provisionados, dump com dois fornecedores PF com
+mesma máscara restaurado com dois IDs distintos, FK e versão 0002 conferidas; login ingest testado,
+view permitida e tabela base negada ao reader. Segundo restore no mesmo destino foi recusado.
+Bancos/dump/container de validação removidos; banco/volume de desenvolvimento preservados.
+Cron de backup foi documentado, não ativado. Nenhum backfill completo iniciado.
+
+**Avaliação:** correções arquitetadas e testadas com regressões e operação real; critérios parciais
+de idempotência e recuperação demonstrados. A F1 inteira só estará pronta após backfill combinado,
+CI remoto e demonstração final com Lucas. Melhoria concreta futura: reconciliar periodicamente
+janelas e medir chamadas/duração da carga diária de atas; paginação upstream não oferece snapshot
+transacional. Logs por execução com identificador próprio melhorariam auditoria de reexecuções.
+
+**Verificação final:** make test verde (lint, formato e **54/54 testes**, incluindo consulta real de
+atualizações PNCP), bash -n verde, git diff --check verde. Duas depreciações de dependências herdadas.
+
+**Commit de correções:** 04dd623 (fix: protect supplier identity and harden historical ingestion).
+Documentação/handoff registrados em commit local separado. Branch não enviada ao GitHub.

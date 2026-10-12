@@ -56,7 +56,8 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo (decisão D2).
 - `make migrate` — aplica as migrações do Alembic (schema, papéis `ingest`/`mcp_reader`, views).
 - `make ingest` — ingestão diária (janela de ontem até hoje, todas as entidades).
 - `make ingest-backfill` — backfill histórico desde `INGEST_BACKFILL_START` (job longo — ver README).
-- `make backup` — `pg_dump` do Postgres local para `backups/` (fora do Git).
+- `make backup` — `pg_dump` do container para `backups/` (fora do Git).
+- `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.
 - `make eval` — ainda não implementado (chega na Fase 2, Filtro de TI e preços).
 
 ## Insumos fornecidos pelo Lucas
