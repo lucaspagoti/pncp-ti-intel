@@ -52,6 +52,7 @@ continuam pendentes. A F1 já foi mergeada (PR #2); o PR desta entrega parte de 
 - A API não oferece uma fotografia consistente entre páginas. Deduplicação e guardas de paginação
   evitam falhas conhecidas, mas mudanças na fonte durante a carga ainda podem causar omissões.
 - ~80 minutos é o piso teórico para ~9.700 páginas a 2 req/s; medir a duração real com latência/retries.
-- Definir retenção ou resumo para o log por página antes de operar por longo prazo.
+- O log por página das atas TI mantém 30 dias; a limpeza ocorre no início de cada snapshot e é
+  limitada à entidade `atas_ti_snapshot`.
 - Dimensionar a amostra com intervalos de confiança: 100 descartadas ajudam na inspeção inicial,
   mas não demonstram recall elevado de uma classe rara. Usar os pesos dos estratos na avaliação.

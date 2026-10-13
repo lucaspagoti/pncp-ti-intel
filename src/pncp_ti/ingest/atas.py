@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID, uuid4
 
 import psycopg
@@ -20,6 +20,7 @@ log = structlog.get_logger(__name__)
 ENTIDADE = "atas_ti_snapshot"
 PATH = "/v1/atas"
 N_AMOSTRA_DESCARTADAS = 200
+RETENCAO_LOG_PAGINAS_DIAS = 30
 
 
 class _AmostraDescartadas:
@@ -83,6 +84,13 @@ async def _iniciar_snapshot(
         await conn.rollback()
         raise RuntimeError("já existe um snapshot de atas em execução")
     try:
+        # O resumo da execução fica em snapshots_atas_ti; os registros por
+        # página são úteis para diagnóstico, mas não precisam crescer sem fim.
+        await conn.execute(
+            "DELETE FROM log_execucao_ingestao "
+            "WHERE entidade = %s AND janela_fim < %s",
+            (ENTIDADE, referencia - timedelta(days=RETENCAO_LOG_PAGINAS_DIAS)),
+        )
         await conn.execute(
             "INSERT INTO snapshots_atas_ti (id, data_referencia, status) "
             "VALUES (%s, %s, 'em_andamento')",

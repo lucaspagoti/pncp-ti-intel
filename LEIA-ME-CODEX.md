@@ -25,9 +25,11 @@ por compatibilidade com o schema já aplicado no dev, mesmo que 0004 descarte su
 F2B (itens/preços), rotulagem, avaliação D6/G2 e demonstração operacional continuam pendentes.
 Validação desta revisão: `TZ=UTC make test`, 103 testes aprovados; relatório em `docs/REVISAO-F2A.md`.
 
-Melhorias para a operação: definir retenção do log por página (~9.700 linhas/dia); medir duração
-real da carga e dimensionar a amostra de descartadas com intervalos de confiança. A amostra inicial
-não comprova sozinha recall elevado de TI, uma classe rara no universo nacional.
+O log por página das atas TI tem retenção de 30 dias, aplicada no início de cada snapshot e limitada
+à entidade `atas_ti_snapshot`; o índice da migração 0004 dá suporte à limpeza. Permanecem melhorias
+operacionais medir duração real da carga e dimensionar a amostra de descartadas com intervalos de
+confiança. A amostra inicial não comprova sozinha recall elevado de TI, uma classe rara no universo
+nacional.
 
 ## Seu papel: arquiteto especialista + testador, não só executor de tarefas
 
@@ -748,9 +750,8 @@ foi aplicada ao banco e o snapshot real não foi iniciado. O backfill histórico
 - Nenhum commit, push, PR, migração no banco de desenvolvimento ou snapshot nacional foi feito.
 
 **Falta antes de considerar a F2A revisada:** revisão independente por subagente; resolver achados,
-se houver. Depois, Lucas pode demonstrar o critério de aceite. Melhoria registrada: o log por página
-pode crescer ~9.700 registros por snapshot diário; avaliar retenção ou resumo por snapshot antes de
-operar por longo prazo.
+se houver. Depois, Lucas pode demonstrar o critério de aceite. A retenção do log por página, apontada
+na revisão inicial (~9.700 registros por snapshot diário), foi implementada com janela de 30 dias.
 
 ### Revisão Codex da implementação do Luna — 12/10/2026
 
@@ -769,8 +770,9 @@ reclassificação, amostragem e preservação da versão anterior.
 atualizada por fast-forward para `origin/master` antes do commit da F2A. A migração 0004 continua
 sem aplicação no banco de desenvolvimento; nenhum backfill ou snapshot nacional foi iniciado.
 
-Melhorias registradas: retenção do log por página, medição do custo real da carga e amostra com
-intervalos de confiança antes de declarar atingidas as metas D6/G2.
+Melhorias registradas: retenção de 30 dias para o log por página (implementada em commit posterior),
+medição do custo real da carga e amostra com intervalos de confiança antes de declarar atingidas as
+metas D6/G2.
 
 PR aberto: https://github.com/lucaspagoti/pncp-ti-intel/pull/3. Commit de implementação `6d7bd23`.
 Varredura local `pre-commit run gitleaks --all-files` aprovada; CI remoto iniciado no PR.

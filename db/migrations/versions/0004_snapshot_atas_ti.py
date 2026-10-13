@@ -66,6 +66,10 @@ def upgrade() -> None:
     op.execute("ALTER TABLE atas ADD PRIMARY KEY (chave_snapshot)")
     op.execute("CREATE INDEX ix_atas_snapshot_id ON atas (snapshot_id)")
     op.execute("CREATE INDEX ix_atas_numero_controle ON atas (numero_controle_pncp_ata)")
+    op.execute(
+        "CREATE INDEX ix_log_execucao_entidade_janela_fim "
+        "ON log_execucao_ingestao (entidade, janela_fim)"
+    )
 
     op.execute(
         """
@@ -101,6 +105,7 @@ def upgrade() -> None:
         "amostra_atas_descartadas TO ingest"
     )
     op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON orgaos TO ingest")
+    op.execute("GRANT DELETE ON log_execucao_ingestao TO ingest")
     op.execute("GRANT SELECT ON v_atas_ti_vigentes TO mcp_reader")
     op.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ingest")
 

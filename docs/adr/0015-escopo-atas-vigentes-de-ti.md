@@ -53,6 +53,8 @@ Os usos do projeto não pedem esse volume:
 - O motor de ingestão da F1 (janelas, upsert, retry, savepoints, log, privacidade, backup) é
   reaproveitado. Os adaptadores e tabelas de `contratacoes`/`contratos` deixam de ser usados e
   saem do código numa migração própria.
+- O log detalhado por página das atas TI é retido por 30 dias e limpo no início de cada snapshot;
+  os resumos de execução permanecem em `snapshots_atas_ti`.
 - A ingestão de itens via Dados Abertos da F2A (migração 0003, `ingest/itens.py`) não segue.
   Reaproveitam-se `classificar/regra.py` (palavras-chave + catálogo) e `classificar/amostra.py`
   (reservoir, CSV que não sobrescreve rótulos).
