@@ -108,7 +108,8 @@ CATEGORIAS: dict[str, tuple[str, ...]] = {
         r"\bsmartphones?\b",
         r"^monitor( lcd| led| de video| de computador| para computador)?$",
         r"\bmonitores? (lcd|led|de video|de computador|para computador)\b",
-        r"\bimpressoras?\b",
+        # "filme ... impressora unitarizadora" é insumo de embalagem hospitalar, não impressão de TI
+        r"\bimpressoras?\b(?! unitarizadora)",
         r"outsourcing de impressao",
         r"equipamentos? de informatica",
         r"materiais? de informatica",

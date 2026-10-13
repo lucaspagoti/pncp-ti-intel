@@ -91,3 +91,11 @@ def test_categoria_excluida_por_configuracao_continua_funcionando(monkeypatch):
 
 def test_toda_categoria_fora_de_escopo_existe():
     assert CATEGORIAS_FORA_DE_ESCOPO <= set(in05.CATEGORIAS)
+
+
+def test_insumo_de_impressora_unitarizadora_nao_e_impressao_de_ti():
+    """Falso positivo achado na rotulagem do censo (ata 11949, FUNESBOM)."""
+    nome = "FILME IMPRESSAO TERMICA IMPRESSORA UNITARIZADORA"
+    assert not classificar_ata("Aquisição de Insumos DGS", [nome]).is_ti
+    assert classificar_ata("AQUISIÇÃO DE IMPRESSORAS", []).is_ti
+    assert classificar_ata("X", ["IMPRESSORA TERMICA"]).is_ti

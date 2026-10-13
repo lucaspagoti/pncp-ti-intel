@@ -19,8 +19,11 @@ Leia a ADR 0019 e `docs/FASES.md` (R1).
   fornecedor; consumo > demanda em 4.155 linhas (por isso `v_ata_consumo_item`, não "saldo").
 - **Decidido pelo Lucas (13/10/2026):** seguir o Anexo Único da IN 05, inclusive telefonia/voz/
   internet, pontos de rede lógicos e videomonitoramento/CFTV (a resposta anterior excluía isso).
-  Nobreak e drone continuam fora (não constam do anexo). Resultado: 25 atas de TI vigentes.
-- **Pendente:** (1) rotular `insumos/rotulagem_siga.csv` (1.574 atas; não versionado ainda);
+  Nobreak e drone continuam fora (não constam do anexo). Resultado: 24 atas de TI vigentes.
+- **Pré-rotulagem feita pelo Claude** (todas as 786 combinações objeto+catálogo lidas): 24 TI,
+  1.550 não-TI; 12 marcadas `[REVISAR]` em `criterio_pre` (nobreak, drone, televisor, treinamento
+  genérico, almoxarifado virtual, retroprojetor). Não é rótulo final: `rotulo_lucas` está vazio.
+- **Pendente:** (1) o Lucas revisar `insumos/rotulagem_siga.csv` e preencher `rotulo_lucas`;
   (2) `make eval ROT=...` e ajuste da regra até a meta D6 (proposta: recall ≥ 95%, precisão ≥ 85%);
   (3) reclassificar com `make ingest ARGS=--forcar` depois de mudar a regra.
 - **Não fazer:** mudar `CATEGORIAS_FORA_DE_ESCOPO` sem o Lucas; afirmar recall antes da rotulagem;

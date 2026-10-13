@@ -83,8 +83,8 @@ decisão separada.
 ## Consequências
 
 - Resultado em 13/10/2026: 11.662 atas, 52.013 itens, 138.254 participantes; 1.574 atas
-  `Válida` vigentes, 25 delas classificadas como TI (a regra anterior marcava 27, com falsos
-  positivos médicos e de laboratório). Carga completa em cerca de 36 s.
+  `Válida` vigentes, 24 delas classificadas como TI (a regra inicial marcava 27, com falsos
+  positivos médicos e de laboratório; a v1.1 corrige mais um, de embalagem hospitalar). Carga completa em cerca de 36 s.
 - O resultado do SIGA é pequeno (~1,6% das válidas); o valor do produto vem de somar as fontes.
 - O recall da regra só é conhecido depois da rotulagem do censo (D6). A regra v1 não foi
   ajustada contra rótulos.
