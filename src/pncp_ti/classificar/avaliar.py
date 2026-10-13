@@ -23,6 +23,19 @@ class RotuloInvalido(ValueError):
     pass
 
 
+class CensoInvalido(ValueError):
+    """O CSV não é um censo: há `id_ata` repetido ou vazio, o que inflaria as métricas."""
+
+
+def validar_censo(linhas: list[dict[str, str]]) -> None:
+    ids = [linha.get("id_ata", "").strip() for linha in linhas]
+    if not all(ids):
+        raise CensoInvalido("há linha sem id_ata")
+    repetidos = sorted({i for i in ids if ids.count(i) > 1}) if len(set(ids)) != len(ids) else []
+    if repetidos:
+        raise CensoInvalido(f"{len(repetidos)} id_ata repetidos (ex.: {', '.join(repetidos[:5])})")
+
+
 class CsvDefasado(RuntimeError):
     """O CSV rotulado não corresponde à carga ativa (a regra ou os dados mudaram)."""
 
@@ -32,6 +45,7 @@ def conferir_com_carga(linhas: list[dict[str, str]], atuais: dict[str, bool]) ->
 
     Sem isso, `make eval` mediria a regra que gerou o CSV, não a que está valendo.
     """
+    validar_censo(linhas)
     ids = {linha["id_ata"] for linha in linhas}
     so_csv, so_banco = ids - atuais.keys(), atuais.keys() - ids
     if so_csv or so_banco:
@@ -102,6 +116,7 @@ class Avaliacao:
 
 
 def avaliar(linhas: list[dict[str, str]]) -> Avaliacao:
+    validar_censo(linhas)
     tp = tn = sem = concordam = comparadas = 0
     fp: list[dict[str, str]] = []
     fn: list[dict[str, str]] = []
@@ -190,6 +205,10 @@ def main() -> None:
     args = parser.parse_args()
     with args.rotulos.open(newline="", encoding="utf-8") as arquivo:
         linhas = list(csv.DictReader(arquivo))
+    try:
+        validar_censo(linhas)
+    except CensoInvalido as exc:
+        raise SystemExit(f"CSV inválido: {exc}") from None
     if not args.sem_banco:
         try:
             conferir_com_carga(linhas, asyncio.run(_decisoes_ativas()))

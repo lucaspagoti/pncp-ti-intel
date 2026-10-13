@@ -4,6 +4,37 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
+## Revisão vigente do PR #5 — Codex, 13/10/2026
+
+Lucas pediu revisão, sem correção nesta etapa. Head revisado: `cb0cc1d`.
+**Parecer: corrigir antes do merge.** O PR #5 está aberto e não está marcado como draft.
+`make test` passou (181 testes, lint e formatação; 24,93 s), e os três checks CI
+passaram. Revisão independente confirmou os achados principais.
+
+Achados para o Claude corrigir, com regressões:
+- P1: `siga_csv.py:273` preserva texto de processos sem `sanitizar`; CPF fictício
+  atravessou o parser e seria exposto pela view. Mascarar processos e revisar demais
+  textos copiados diretamente. Não foi observado CPF real em processo.
+- P2: início inválido abaixo do limiar de 1% vira NULL e é aceito como vigente.
+  Reproduzido 31/02/2026 em 101 atas; distinguir vazio de inválido.
+- P2: `csv.reader` sem `strict=True` aceita aspas malformadas com colunas corretas.
+  Reproduzidos aspas abertas e texto após fechamento, somente em memória.
+- P2: `conferir_com_carga` aceita IDs duplicados; 100 cópias de TP + 1 FP inflaram
+  precisão para 99,01% em vez de 50%. Rejeitar duplicatas inclusive sem banco.
+- P2: diretório de download com precisão de segundos e arquivos .part fixos podem
+  ser compartilhados por duas execuções; trava DB só protege publicação. Tornar
+  diretório exclusivo e ajustar retenção/testes. Achado por inspeção, sem corrida real.
+
+Alinhar ADR sobre itens sem preço (view mantém linha com NULL), FASES sobre limite
+100 MB (diz 200 MB) e corpo do PR com estado atual. Preservar ressalva de que 100% de
+precisão/recall não é avaliação independente: rótulos foram feitos pelo Claude.
+Os testes verdes atuais não cobrem os cenários reproduzidos acima.
+
+Relatório completo: `/home/lucas/Documents/Codex/2026-10-13/fizemos-umas-mudan-as-no-projeto/outputs/revisao-pr-5.md`.
+Código não alterado; nenhuma carga real, migração principal, serviço, comentário
+GitHub, commit, push ou merge. Só relatório e este handoff. Próximo: Claude corrige,
+adiciona regressões, roda make test e solicita nova revisão do head atualizado.
+
 ## Estado vigente: R1 (SIGA RJ) implementada, aceite pendente — 13/10/2026 (Claude/Sonnet 5.5)
 
 **Este bloco substitui os abaixo.** R0 foi mergeada (PR #4). Branch da R1: `feat/r1-siga-rj`.

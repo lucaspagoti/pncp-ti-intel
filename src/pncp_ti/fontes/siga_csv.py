@@ -150,12 +150,22 @@ def _normalizar(valor: str) -> str:
     return " ".join(valor.split())
 
 
-def _ler_tabela(texto: str, esperado: tuple[str, ...], nome: str) -> list[list[str]]:
-    leitor = csv.reader(io.StringIO(texto, newline=""), delimiter=";", quotechar='"')
+def _ler_tabela(
+    texto: str, esperado: tuple[str, ...], nome: str, numericas: tuple[int, ...]
+) -> list[list[str]]:
+    """Lê o CSV em modo estrito e mascara CPF em toda célula de texto.
+
+    `numericas` (e a última coluna, `data_extracao`) ficam como vieram: um número de 11
+    dígitos não é CPF e perderia o valor. Todo o resto passa por `sanitizar` aqui, então
+    nenhum campo copiado adiante (ids, processos, números) escapa do mascaramento.
+    """
+    leitor = csv.reader(io.StringIO(texto, newline=""), delimiter=";", quotechar='"', strict=True)
     try:
         cabecalho = [c.strip() for c in next(leitor)]
     except StopIteration:
         raise ErroValidacao("vazio", f"{nome}: arquivo vazio") from None
+    except csv.Error as exc:
+        raise ErroValidacao("csv", f"{nome}: CSV malformado no cabeçalho: {exc}") from None
     if tuple(cabecalho) != esperado:
         raise ErroValidacao("cabecalho", f"{nome}: cabeçalho inesperado: {cabecalho!r}")
     linhas: list[list[str]] = []
@@ -168,7 +178,12 @@ def _ler_tabela(texto: str, esperado: tuple[str, ...], nome: str) -> list[list[s
                     "colunas",
                     f"{nome}: linha {numero} com {len(linha)} colunas, esperado {len(esperado)}",
                 )
-            linhas.append([_normalizar(c) for c in linha])
+            linhas.append(
+                [
+                    _normalizar(c) if i in numericas or i == len(linha) - 1 else _texto(c)
+                    for i, c in enumerate(linha)
+                ]
+            )
     except csv.Error as exc:
         raise ErroValidacao("csv", f"{nome}: CSV malformado: {exc}") from None
     if not linhas:
@@ -228,17 +243,22 @@ def montar(
     conteudo_atas: bytes, conteudo_itens: bytes, conteudo_participantes: bytes
 ) -> ConjuntoSiga:
     linhas_atas = _ler_tabela(
-        decodificar(conteudo_atas, "ATA_REGISTRO_PRECO"), CABECALHO_ATAS, "ATA_REGISTRO_PRECO"
+        decodificar(conteudo_atas, "ATA_REGISTRO_PRECO"),
+        CABECALHO_ATAS,
+        "ATA_REGISTRO_PRECO",
+        (),
     )
     linhas_itens = _ler_tabela(
         decodificar(conteudo_itens, "ITENS_ATAS_REGISTRO_PRECO"),
         CABECALHO_ITENS,
         "ITENS_ATAS_REGISTRO_PRECO",
+        (7, 8, 9),
     )
     linhas_part = _ler_tabela(
         decodificar(conteudo_participantes, "PARTICIPANTES_ATAS_REGISTRO_PRECO"),
         CABECALHO_PARTICIPANTES,
         "PARTICIPANTES_ATAS_REGISTRO_PRECO",
+        (6, 7, 8, 9),
     )
 
     datas = {
@@ -259,7 +279,8 @@ def montar(
     for linha in linhas_atas:
         por_id[linha[0]].append(linha)
     atas: list[Ata] = []
-    conflitos = multiprocesso = datas_invalidas = 0
+    quarentena: set[str] = set()  # ata com data de vigência preenchida e inválida
+    conflitos = multiprocesso = 0
     for id_origem, grupo in sorted(por_id.items()):
         grupo.sort(key=lambda linha: (linha[12], linha[11]))
         base = grupo[0]
@@ -269,7 +290,10 @@ def montar(
         if len(grupo) > 1:
             multiprocesso += 1
         inicio, fim = _data(base[5]), _data(base[6])
-        datas_invalidas += (inicio is None and bool(base[5])) + (fim is None and bool(base[6]))
+        # Vazio é "não informado" (aceito); preenchido e inválido NÃO vira vigente por omissão.
+        if (inicio is None and base[5]) or (fim is None and base[6]):
+            quarentena.add(id_origem)
+            continue
         processos = tuple(sorted({g[12] for g in grupo if g[12]}))
         atas.append(
             Ata(
@@ -289,11 +313,11 @@ def montar(
         atas_unicas=len(atas),
         atas_multiprocesso=multiprocesso,
         atas_conflito=conflitos,
-        datas_invalidas=datas_invalidas,
+        datas_invalidas=len(quarentena),
     )
-    if datas_invalidas > LIMITE_CONFLITOS * len(atas):
-        raise ErroValidacao("datas", f"{datas_invalidas} datas de vigência não parseáveis")
-    if conflitos > LIMITE_CONFLITOS * len(atas):
+    if len(quarentena) > LIMITE_CONFLITOS * len(por_id):
+        raise ErroValidacao("datas", f"{len(quarentena)} atas com data de vigência inválida")
+    if conflitos > LIMITE_CONFLITOS * len(por_id):
         raise ErroValidacao(
             "conflito_ata", f"{conflitos} atas com campos divergentes entre linhas do mesmo ID"
         )
@@ -301,8 +325,11 @@ def montar(
 
     # --- itens: dedupe por conteúdo; chave estável ---
     itens: dict[str, Item] = {}
-    orfaos_itens = invalidos = numeros_invalidos = 0
+    orfaos_itens = invalidos = numeros_invalidos = itens_quarentena = 0
     for linha in linhas_itens:
+        if linha[0] in quarentena:
+            itens_quarentena += 1
+            continue
         if linha[0] not in ids:
             orfaos_itens += 1
             continue
@@ -335,8 +362,9 @@ def montar(
     contagens.update(
         linhas_itens=len(linhas_itens),
         itens_orfaos=orfaos_itens,
+        itens_ata_quarentena=itens_quarentena,
         itens_gravados=len(itens),
-        itens_duplicados=len(linhas_itens) - orfaos_itens - len(itens),
+        itens_duplicados=len(linhas_itens) - orfaos_itens - itens_quarentena - len(itens),
         itens_valor_invalido=invalidos,
         itens_numero_invalido=numeros_invalidos,
     )
@@ -357,8 +385,11 @@ def montar(
 
     # --- participantes ---
     participantes: dict[str, Participante] = {}
-    orfaos_part = part_numeros_invalidos = 0
+    orfaos_part = part_numeros_invalidos = part_quarentena = 0
     for linha in linhas_part:
+        if linha[0] in quarentena:
+            part_quarentena += 1
+            continue
         if linha[0] not in ids:
             orfaos_part += 1
             continue
@@ -385,7 +416,11 @@ def montar(
         linhas_participantes=len(linhas_part),
         participantes_orfaos=orfaos_part,
         participantes_gravados=len(participantes),
-        participantes_duplicados=len(linhas_part) - orfaos_part - len(participantes),
+        participantes_ata_quarentena=part_quarentena,
+        participantes_duplicados=len(linhas_part)
+        - orfaos_part
+        - part_quarentena
+        - len(participantes),
         participantes_numero_invalido=part_numeros_invalidos,
     )
     if part_numeros_invalidos > LIMITE_CONFLITOS * len(participantes):

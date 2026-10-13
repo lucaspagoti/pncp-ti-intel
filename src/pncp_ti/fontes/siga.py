@@ -48,7 +48,8 @@ JANELA_GERACAO = timedelta(minutes=15)
 PISO_RELATIVO = 0.5
 PISO_FILHOS = 0.7  # itens e participantes: arquivo regenerado pela metade não pode publicar
 DEFASAGEM_ALERTA_DIAS = 3
-_PASTA_CARGA = re.compile(r"^\d{8}T\d{6}$")
+CHAVE_TRAVA = "carga:siga_rj"
+_PASTA_CARGA = re.compile(r"^\d{8}T\d{6}-[0-9a-f]{8}$")
 RETER_CARGAS = 3
 TENTATIVAS = 3
 RAIZ_DADOS = Path(__file__).resolve().parents[3] / "data" / "siga"
@@ -136,7 +137,7 @@ async def _baixar_um(client: httpx.AsyncClient, nome: str, destino: Path) -> Arq
 async def baixar(
     destino: Path, client: httpx.AsyncClient | None = None
 ) -> dict[str, ArquivoBaixado]:
-    destino.mkdir(parents=True, exist_ok=True, mode=0o700)
+    destino.mkdir(parents=True, exist_ok=False, mode=0o700)  # exclusivo por execução
     proprio = client is None
     if client is None:
         client = httpx.AsyncClient(
@@ -233,7 +234,7 @@ async def _publicar(
     async with conn.transaction():
         bloqueio = await (
             await conn.execute(
-                "SELECT pg_try_advisory_xact_lock(hashtextextended('carga:siga_rj', 0)) AS ok"
+                "SELECT pg_try_advisory_xact_lock(hashtextextended(%s, 0)) AS ok", (CHAVE_TRAVA,)
             )
         ).fetchone()
         if not bloqueio["ok"]:
@@ -435,6 +436,28 @@ def _reter_ultimas(raiz: Path, manter: int = RETER_CARGAS) -> None:
         shutil.rmtree(pasta, ignore_errors=True)
 
 
+async def tentar_trava_sessao(conn: psycopg.AsyncConnection) -> bool:
+    """Trava de sessão que cobre download + parse + publicação (a de transação só cobre o fim).
+
+    Dura até a conexão fechar; sobrevive a commit/rollback.
+    """
+    linha = await (
+        await conn.execute(
+            "SELECT pg_try_advisory_lock(hashtextextended(%s, 0)) AS ok", (CHAVE_TRAVA,)
+        )
+    ).fetchone()
+    await conn.commit()
+    return bool(linha["ok"])
+
+
+async def _conectar_com_trava() -> psycopg.AsyncConnection:
+    conn = await conectar(get_settings())
+    if not await tentar_trava_sessao(conn):
+        await conn.close()
+        raise ErroValidacao("concorrente", "outra execução do SIGA RJ já está em andamento")
+    return conn
+
+
 async def baixar_registrando(
     conn: psycopg.AsyncConnection, destino: Path, client: httpx.AsyncClient | None = None
 ) -> dict[str, ArquivoBaixado]:
@@ -455,12 +478,16 @@ async def principal(argumentos: argparse.Namespace) -> int:
         else:
             RAIZ_DADOS.mkdir(parents=True, exist_ok=True)
             RAIZ_DADOS.chmod(0o700)
-            destino = RAIZ_DADOS / datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+            # Diretório exclusivo: timestamp + sufixo aleatório (duas execuções no mesmo segundo
+            # não compartilham pasta nem arquivos .part).
+            destino = RAIZ_DADOS / (
+                f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}-{uuid4().hex[:8]}"
+            )
             baixou = True
             if argumentos.validar:
                 arquivos = await baixar(destino)
             else:
-                conn = await conectar(get_settings())
+                conn = await _conectar_com_trava()
                 arquivos = await baixar_registrando(conn, destino)
             destino.chmod(0o700)
         if argumentos.validar:
@@ -470,7 +497,7 @@ async def principal(argumentos: argparse.Namespace) -> int:
             )
             return 0
         if conn is None:
-            conn = await conectar(get_settings())
+            conn = await _conectar_com_trava()
         resultado = await carregar(conn, arquivos, forcar=argumentos.forcar)
         log.info(
             "siga_carga",

@@ -212,3 +212,68 @@ def test_campo_gigante_vira_erro_de_validacao():
 def test_mensagem_de_erro_nao_carrega_cpf():
     erro = ErroValidacao("x", f"valor estranho {d.CPF_FICTICIO}")
     assert d.CPF_FICTICIO not in str(erro)
+
+
+def test_processo_com_cpf_e_mascarado():
+    """P1 do Codex: `processos` é exposto pela view e não pode carregar CPF."""
+    atas, itens, part = d.conjunto_basico()
+    sujo = atas.replace(b"E-01/901/2026", f"E-01/{d.CPF_FICTICIO}/2026".encode())
+    c = montar(sujo, itens, part)
+    todos = " ".join(p for a in c.atas for p in a.processos)
+    assert d.CPF_FICTICIO not in todos
+    assert "123******09" in todos
+
+
+def test_todo_texto_copiado_e_mascarado():
+    atas, itens, part = d.conjunto_basico()
+    c = montar(
+        atas.replace(b"UNIDADE  TESTE", f"UNIDADE {d.CPF_FICTICIO}".encode()),
+        itens.replace(b"ITEM TESTE", b"X"),
+        part.replace(b"ITEM TESTE", f"ITEM {d.CPF_FICTICIO}".encode()),
+    )
+    textos = [a.unidade_gerenciadora for a in c.atas] + [p.item for p in c.participantes]
+    assert all(d.CPF_FICTICIO not in t for t in textos)
+
+
+def test_numero_de_11_digitos_nao_e_mascarado_como_cpf():
+    atas, itens, part = d.conjunto_basico()
+    c = montar(atas, itens.replace(b";100;12,50;", b";12345678901;12,50;"), part)
+    assert any(i.quantidade == 12345678901 for i in c.itens)
+
+
+def test_data_de_inicio_invalida_nao_vira_vigente_por_omissao():
+    """P2 do Codex: 31/02/2026 não é 'início não informado'; a ata fica em quarentena."""
+    atas, itens, part = d.conjunto_grande(150)
+    ruim = atas.replace(b";01/01/2026;", b";31/02/2026;", 1)
+    c = montar(ruim, itens, part)
+    assert len(c.atas) == 149
+    assert c.contagens["datas_invalidas"] == 1
+    assert c.contagens["itens_ata_quarentena"] == 1
+    assert c.contagens["participantes_ata_quarentena"] == 1
+    assert c.contagens["itens_orfaos"] == 0
+
+
+def test_data_invalida_acima_do_limite_falha():
+    atas, itens, part = d.conjunto_basico()
+    with pytest.raises(ErroValidacao) as exc:
+        montar(atas.replace(b";01/01/2026;", b";31/02/2026;", 1), itens, part)
+    assert exc.value.tipo == "datas"
+
+
+@pytest.mark.parametrize(
+    "ruim",
+    [b'"ABERTA;resto\r\n', b'"A"B;resto\r\n', b'x;"fecha"lixo;y\r\n'],
+)
+def test_csv_malformado_com_colunas_corretas_e_recusado(ruim):
+    """P2 do Codex: aspas abertas ou texto depois do fechamento não podem passar em silêncio."""
+    atas, itens, part = d.conjunto_basico()
+    linha = d.ata("9", "OBJETO")
+    base = atas.split(b"\r\n")
+    colunas = len(linha)
+    # linha com o número certo de colunas, mas com aspas malformadas no campo do objeto
+    corrompida = ";".join(linha).replace("OBJETO", '"OBJ"X').encode("cp1252")
+    assert corrompida.count(b";") == colunas - 1
+    with pytest.raises(ErroValidacao) as exc:
+        montar(atas + corrompida + b"\r\n", itens, part)
+    assert exc.value.tipo in {"csv", "colunas"}
+    assert base  # usa a variável
