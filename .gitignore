@@ -14,11 +14,12 @@ __pycache__/
 # Dados locais
 data/
 backups/
+logs/
 *.dump
 attachments_cache/
 
 # Insumos pessoais (não versionar)
-insumos/amostra_rotulada.csv
+insumos/amostra_rotulada*.csv
 
 # Referências baixadas (regeneráveis pelo script)
 docs/referencias/*.json

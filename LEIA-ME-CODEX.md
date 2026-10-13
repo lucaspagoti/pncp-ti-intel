@@ -4,6 +4,33 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
+## Estado vigente — revisão Codex da F2A — 12/10/2026
+
+**Escopo: somente atas de TI vigentes; backfill histórico cancelado (ADR 0015).** Os registros
+abaixo desta seção são histórico de sessões e podem conter instruções já superadas.
+
+A F1 foi mergeada no PR #2, confirmado no GitHub. A F2A está na branch
+`feat/f2-atas-vigentes-ti`, publicada no [PR #3](https://github.com/lucaspagoti/pncp-ti-intel/pull/3)
+contra `master` (commit de implementação `6d7bd23`). Lucas pediu ao Codex a revisão da implementação do Luna e autorizou
+abrir PR caso aprovada. Essa revisão foi realizada diretamente pelo Codex, sem subagentes.
+
+O desenho foi aprovado após corrigir: publicação indevida de carga parcial após 204 intermediário,
+recuperação de erro SQL na amostra, ausência de proteção contra snapshot nacional vazio e dependência
+dos testes do fuso/ordem de execução. A versão anterior continua visível durante o staging; amostra,
+ativação e remoção do snapshot anterior são transacionais. CLI e view usam `America/Sao_Paulo`.
+
+A migração 0004 **não foi aplicada no banco de desenvolvimento** e nenhum snapshot nacional foi
+executado. A revisão usa bancos UUID efêmeros e consultas reais leves. A migração 0003 é mantida
+por compatibilidade com o schema já aplicado no dev, mesmo que 0004 descarte suas tabelas.
+F2B (itens/preços), rotulagem, avaliação D6/G2 e demonstração operacional continuam pendentes.
+Validação desta revisão: `TZ=UTC make test`, 103 testes aprovados; relatório em `docs/REVISAO-F2A.md`.
+
+O log por página das atas TI tem retenção de 30 dias, aplicada no início de cada snapshot e limitada
+à entidade `atas_ti_snapshot`; o índice da migração 0004 dá suporte à limpeza. Permanecem melhorias
+operacionais medir duração real da carga e dimensionar a amostra de descartadas com intervalos de
+confiança. A amostra inicial não comprova sozinha recall elevado de TI, uma classe rara no universo
+nacional.
+
 ## Seu papel: arquiteto especialista + testador, não só executor de tarefas
 
 Você (Codex) não entra aqui só para marcar itens de uma lista. Em toda sessão neste projeto, assuma os
@@ -474,5 +501,279 @@ Documentação/handoff registrados em commit local separado. Branch não enviada
   `insumos/amostra_rotulada.csv`, mas esse arquivo só é gerado depois que eu montar o classificador —
   nada a fazer aí ainda).
 
-**Próximo passo:** checar se o backfill terminou (query acima), decidir o timing do merge/tag com o
-Lucas, e então propor o plano da Fase 2 em modo plan.
+**Próximo passo (superado — ver Fase 2A abaixo):** checar se o backfill terminou, decidir o timing do
+merge/tag com o Lucas, e então propor o plano da Fase 2 em modo plan.
+
+## Fase 2A — itens de contratação + regra de TI + amostra — 12/10/2026 (Claude/Sonnet 5)
+
+Plano da Fase 2A proposto em modo plan e aprovado pelo Lucas (dividida em 2A/2B porque
+`insumos/amostra_rotulada.csv` é gerado pelo sistema e rotulado à mão pelo Lucas no meio da fase — nada
+do classificador/`evals`/normalização de preço pode começar antes disso). Implementado na branch
+`feat/f2a-itens-filtro-ti` (aberta a partir de `feat/f1-base-historica`, não de `master` — `itens_contratacao`
+não depende de FK em `contratacoes`, mas a decisão de compor sobre o branch da F1 em vez de esperar o
+merge foi deliberada, ver abaixo).
+
+**Achados reais por chamada direta à API (antes de fixar a migração — mesma disciplina da F1):**
+1. Itens de contratação **não vêm embutidos** em `/v1/contratacoes/publicacao` — são endpoint separado.
+   Dois caminhos no `compras-mcp`: um por-compra (`PNCPClient`, N+1 — inviável pro volume do backfill) e
+   um paginado por janela de data (Dados Abertos, `DadosAbertosClient`,
+   `/modulo-contratacoes/2_consultarItensContratacoes_PNCP_14133`). Escolhido o segundo — mesmo espírito
+   do motor de janelas já existente, sem N+1. Lei 14.133-escopado, sem lacuna de cobertura (o backfill da
+   F1 já começa em 01/04/2023, início da obrigatoriedade da 14.133).
+2. `DadosAbertosClient` usa outro envelope (`resultado`/`totalPaginas` em vez de `data`/`totalPaginas`) e
+   outros nomes/formato de filtro de data (`dataInclusaoPncpInicial/Final`, `yyyy-MM-dd`, não
+   `dataInicial/Final yyyyMMdd`) que o `PNCPClient`. `ingerir_janela`/`_buscar_pagina`
+   (`src/pncp_ti/ingest/executar.py`) ganharam dois parâmetros novos (`chave_dados`,
+   `formatar_filtros_data`), com default = comportamento atual — `contratacoes.py`/`atas.py`/
+   `contratos.py` não precisaram mudar.
+3. Campos reais do payload de item (chamada direta, 12/10/2026): `numeroControlePNCPCompra`,
+   `numeroItemCompra`, `descricaoResumida`, **`descricaodetalhada`** (minúsculo — outra inconsistência
+   real do PNCP, igual ao `numeroControlePncpCompra` já documentado em `mapear_contrato`),
+   `materialOuServico`, `codItemCatalogo`, `codigoGrupo`, `codigoClasse`, `unidadeMedida`, `quantidade`,
+   `valorUnitarioEstimado`, **`valorTotal`** (não `valorTotalEstimado`), `valorUnitarioResultado`,
+   `valorTotalResultado`, `codFornecedor`, `nomeFornecedor`, `situacaoCompraItem`, `temResultado`.
+4. **`codFornecedor` existe e pode ser CPF** (11 dígitos, sem marcador de tipo — ao contrário de
+   contrato/fornecedor, que trazem `tipoPessoa` junto) — contrariava a suposição inicial do plano ("item
+   não tem CNPJ/CPF de fornecedor"). Corrigido durante a implementação: `mapear_item`/
+   `extrair_fornecedor_de_item` inferem `tipoPessoa` pelo tamanho do documento (14 = PJ, 11 = PF) e
+   reusam `identificar_fornecedor`/`mascarar_ni` (ADR 0013) via um payload-adaptador, sem tocar
+   `privacy.py`. `itens_contratacao` ganhou `fornecedor_id`/`ni_fornecedor`, mesmo par de colunas que
+   `contratos` (interno vs. mascarado exposto na view).
+5. **Achado de qualidade de dado real, documentado e descartado como sinal:** o payload tem
+   `itemCategoriaIdPncp`/`itemCategoriaNome` (ex. `"Informática (TIC)"`), que parecia à primeira vista o
+   sinal perfeito pra regra de TI. Medido em ~700 itens reais de janelas e tipos de item bem diferentes
+   (cabo elétrico, ar-condicionado, pasta de escritório, pinça cirúrgica) — **sempre** voltou
+   `(3, "Informática (TIC)")`, inclusive pra item claramente não-TI. Campo não confiável (quebrado ou
+   default no Dados Abertos); a regra (`classificar_por_regra`) não usa, só documenta o porquê.
+6. CATMAT grupo 70 ("INFORMÁTICA - EQUIPAMENTOS, PEÇAS, ACESSÓRIOS E SUPRIMENTOS DE TIC") confirmado por
+   chamada real como grupo inteiro de TI (16 classes, todas de equipamento/suprimento de informática,
+   inclusive impressoras — convergente com o próprio exemplo do CLAUDE.md, "outsourcing de impressão").
+   CATSER não tem grupo/seção equivalente sem falso positivo (ex. classe 8713 "manutenção de
+   informática" está dentro de um grupo mecânico mais amplo) — por isso a lista de TI em serviços é por
+   classe, não por grupo. Telefonia/internet (classes 1411-1414, 8411-8422) ficaram **fora** da lista
+   confiante de propósito — decisão de negócio do Lucas, não fato de catálogo; caem em `INDEFINIDO` e a
+   amostra rotulada decide.
+
+**Entregue:**
+- `db/migrations/versions/0003_itens_contratacao.py` — tabela `itens_contratacao` (chave natural
+  `numero_controle_pncp || ':' || numero_item`, sem FK pra `contratacoes` — mesma decisão já tomada pra
+  `contratos.numero_controle_pncp_compra`/`atas.numero_controle_pncp_compra` na migração 0001, pelo
+  mesmo motivo: o item pode ser ingerido fora de ordem da compra-pai), view `v_itens_contratacao`
+  (exclui `raw` e `fornecedor_id`, expõe `ni_fornecedor` mascarado — mesmo padrão de `v_contratos`).
+- `src/pncp_ti/ingest/mapeadores.py`: `mapear_item`, `extrair_fornecedor_de_item`.
+- `src/pncp_ti/ingest/executar.py`: generalização mínima (`chave_dados`, `formatar_filtros_data`).
+- `src/pncp_ti/ingest/client.py`: `criar_cliente_dados_abertos`.
+- `src/pncp_ti/ingest/itens.py` (novo adaptador) + `cli.py` (`ADAPTADORES["itens"]`, mapa `CLIENTES`
+  por entidade — itens usa `DadosAbertosClient`, as outras três `PNCPClient`, então `_rodar()` abre o
+  cliente certo por entidade em vez de um só pro run inteiro).
+- `src/pncp_ti/classificar/regra.py` (`classificar_por_regra`, tri-estado `TI`/`NAO_TI`/`INDEFINIDO`) e
+  `src/pncp_ti/classificar/amostra.py` (`make amostra` → `insumos/amostra_rotulada.csv`, cabeçalho já
+  fixo, amostra estratificada ~50 por estrato, `rotulo_lucas`/`categoria_ti`/`observacao` em branco).
+- Testes novos: `test_mapeadores.py` (item com CNPJ, item com CPF mascarado, item sem resultado, CPF
+  solto em texto livre sanitizado), `test_ingest_upsert.py` (idempotência de `itens_contratacao` com
+  cliente falso no formato Dados Abertos), `test_classificar_regra.py` (um caso por ramo),
+  `test_classificar_amostra.py` (estratificação, cabeçalho exato do CSV), `test_ingest_cli.py` (cliente
+  por entidade — um teste existente precisou trocar de monkeypatchar `criar_cliente` pra monkeypatchar
+  `CLIENTES`, já que o dict agora é resolvido em tempo de definição do módulo). `make test`: 72/72 verde.
+- Validação real feita e depois revertida de propósito (mesma prática da F1): `make migrate` aplicado no
+  Postgres de desenvolvimento (não quebra o backfill da F1 em andamento — só `CREATE TABLE`/`VIEW`/
+  `GRANT` novos); chamada real de `itens.ingerir` numa janela de 2 dias (01-02/06/2024) gravou 10 itens
+  reais com `fornecedor_id`/`ni_fornecedor` corretos (CNPJ intacto, sem CPF vazado); reprocessar a mesma
+  janela manteve a contagem (idempotência); `TRUNCATE itens_contratacao` + limpeza do log depois,
+  deixando o banco de volta vazio pro Lucas decidir quando rodar o backfill de itens de verdade.
+  `make amostra` testado contra a tabela vazia (0 linhas, cabeçalho correto, sem erro) — a amostra com
+  conteúdo real só existe depois do backfill de itens rodar.
+
+**Pendências de propósito fora do escopo desta sessão:**
+- Backfill completo de itens (01/04/2023 até hoje) não rodado — decisão do Lucas, mesmo raciocínio da
+  F1 (job longo, nacional).
+- `make amostra` com conteúdo real não gerado (depende do item acima).
+- Fase 2B (classificador local scikit-learn, `evals/`, normalização de preço por unidade) não iniciada —
+  depende do Lucas rotular a amostra real.
+- Nenhum PR aberto ainda pra esta branch.
+
+**Revisão independente feita nesta sessão** (8 ângulos via subagentes — correção, comportamento
+removido, cross-file, reuso, simplificação, eficiência, altitude, convenções do CLAUDE.md — mesmo
+protocolo usado nas revisões da F0/F1). Achados reais, corrigidos na mesma branch (commit separado):
+- `_buscar_pagina` (quirk do 204 vazio) ainda devolvia a chave hardcoded `"data"`, ignorando o
+  `chave_dados` novo — uma janela de itens genuinamente vazia (caso normal antes do backfill) quebrava
+  a ingestão inteira em `ValueError`, não só a entidade `itens`. Corrigido: o fallback agora usa
+  `chave_dados`. Teste de regressão novo (`test_itens_janela_sem_resultado_204_nao_quebra_a_ingestao`).
+- `_tipo_pessoa_por_digitos` devolvia `None` pra documento com contagem de dígitos ambígua (nem 11 nem
+  14) — `mascarar_ni(ni, None)` interpretava isso como "não é CPF, não mascarar" e deixava passar o
+  documento crú. Risco real de violar a regra fixa "CPFs sempre mascarados" pra um `codFornecedor`
+  mutilado. Corrigido: ambíguo agora vira `"PF"` (lado seguro — mascara por padrão); só 14 dígitos
+  limpos confirma CNPJ. Teste de regressão novo.
+- `classificar_por_regra` tratava qualquer campo de catálogo não-nulo (até só `codigo_item_catalogo`)
+  como "catálogo conhecido" e caía em NAO_TI com confiança mesmo sem o campo que a decisão de verdade
+  usa (`codigo_grupo`/`codigo_classe` nulo, ou `material_ou_servico` ausente/corrompido — lacuna de
+  qualidade de dado real já documentada nesta mesma sessão). Corrigido: só decide por catálogo quando o
+  par material/campo específico está completo; senão cai pra palavra-chave como se não houvesse
+  catálogo. Dois testes de regressão novos.
+- `amostra.py` carregava a tabela `itens_contratacao` inteira na memória (sem `LIMIT`) antes de
+  amostrar ~150 linhas, e fazia `shuffle` completo de cada estrato. Inofensivo hoje (tabela vazia), mas
+  real depois do backfill de itens rodar (mesma escala de milhões de linhas já vista em `contratos` na
+  F1). Corrigido: `ORDER BY random() LIMIT 60000` no Postgres antes de amostrar, e `random.sample` em
+  vez de `shuffle`+slice.
+- Achados de menor severidade, documentados e **não corrigidos** (decisão, não esquecimento):
+  colisão rara de escopo HMAC em `identificar_fornecedor` quando `numeroControlePNCPCompra` falta E o
+  documento é malformado (duplo requisito, baixa severidade); `cli.py` abre um cliente HTTP por
+  entidade em vez de um só pro run inteiro (overhead pequeno, só por execução, não por janela);
+  duplicação da fixture de teste `ClienteDadosAbertosFalso`/`ClientePNCPFalso`; `_tipo_pessoa_por_digitos`
+  reimplementa a inferência PJ/PF por contagem de dígitos que `mask.py`/`privacy.py` já fazem cada um
+  independentemente (três cópias agora) — risco só se a convenção de dígitos mudar.
+- Zero violações de `CLAUDE.md` confirmadas (checado explicitamente: cliente reusado do `compras-mcp`
+  pra Dados Abertos, nenhuma tool MCP nova/duplicada, máscara de CPF, segredos, stdio/127.0.0.1).
+
+`make test`: 76/76 verde depois das correções (72 antes + 4 testes de regressão novos).
+
+**Próximo passo:** Lucas decide quando rodar o backfill de itens (`--entidades itens`, ou junto do resto
+numa nova rodada de backfill), e se/quando comitar e abrir PR desta branch. Depois do backfill,
+`make amostra` de verdade, e só então propor o plano detalhado da Fase 2B.
+
+### Revisão Codex da F2A — 12/10/2026 (supersede o próximo passo acima)
+
+**Veredito: corrigir antes de backfill completo e aceitação.** `make test` executado novamente:
+76 aprovados, 2 avisos de dependência. Revisão independente adicional em leitura e reproduções
+sintéticas confirmaram lacunas não cobertas pelos testes atuais:
+
+- P1: `raw.codFornecedor` permanece integral para documentos ambíguos de 10/13 dígitos e CPF
+  numérico de 11 dígitos. A máscara da coluna não sanitiza esse campo no JSON bruto.
+- P1: diário de itens filtra inclusão e não reconcilia homologação/alteração de item antigo.
+  Evidência real: itens 1/2 de `00394452000103-1-009427/2024`, incluídos em 01/06/2024,
+  atualizados em 21/03/2025. Verificar uso do filtro upstream `dataAtualizacaoPncp`.
+- P2: fornecedores com documento incompleto e mesma máscara colidem entre itens da mesma compra,
+  mesmo com número PNCP preenchido. Escopo ambíguo precisa compra + item; CPF completo continua global.
+- P2: CSV não inclui chave/número do item e sobrescreve arquivo existente, apagando rótulos humanos.
+- P2: telefonia/internet documentadas como `INDEFINIDO` caem em `NAO_TI` (classe 8411 reproduzida).
+- Cobertura nacional ainda não demonstrada. Dez itens do módulo Dados Abertos em dois dias não
+  provam equivalência ao PNCP. Comparação independente encontrou contratações municipais no PNCP
+  na mesma janela, mas datas de publicação/inclusão diferem: tratar como indício e validar por
+  identidade de compras, esfera e plataforma antes de afirmar cobertura ou carregar todo histórico.
+
+**Sequência recomendada:** corrigir achados com regressões, comprovar cobertura e registrar ADR da
+fonte; fazer piloto delimitado e diverso para gerar amostra identificável sem exigir backfill completo;
+preparar commits e PR F2A dependente da F1, depois rotulagem e plano F2B. Não mergear como fase aceita
+com achados abertos. `logs/` não rastreado deve ficar fora dos commits. Melhorar metadados/seed e
+amostragem por estrato; limite SQL atual limita memória Python, não custo de varrer a tabela.
+
+Nesta revisão não foram alterados código funcional ou dados persistentes, iniciado backfill, feito
+TRUNCATE, commit ou PR. Relatório detalhado da sessão:
+`/home/lucas/Documents/Codex/2026-10-12/em-home-lucas-projetos-pncp-ti-5/outputs/revisao-f2a.md`.
+
+### Mudança de escopo — ADR 0015 — 12/10/2026 (Claude/Opus 5.5) — SUPERSEDE TUDO ABAIXO SOBRE F1/F2A
+
+Decisão do Lucas: **só TI e só atas vigentes**, sem "pesquisa infinita". Feito:
+- Backfill nacional **parado** (PIDs 332963/332956). 82.780 contratações ficaram no banco de dev,
+  que será limpo na migração da F2A. Aba "backfill progress" fechada.
+- Medido por chamada real: `/v1/atas` com janela de 1 dia = 484.081 atas vigentes; página
+  limitada a 50 (pedir 500 devolve 50), ~9.700 páginas, ~80 min por snapshot.
+- ADR 0015 criada. ADR 0014 marcada substituída. ADRs 0003/0005/0006 com status atualizado.
+  `docs/PLANO.md`, `docs/FASES.md` (F1 = infraestrutura pronta pra merge; F2 = 2A atas TI
+  vigentes, 2B itens/preços), `CLAUDE.md` (objetivo e comandos) e README atualizados.
+- **Código ainda não mudou.** A working tree tem a F2A antiga (itens via Dados Abertos, migração
+  0003 aplicada no dev) sem commit.
+
+**Próximo passo:** Lucas aprova o plano. Depois: merge da F1 (PR #2), e a F2A nova em modo plan:
+snapshot de atas + filtro de TI + view `v_atas_ti_vigentes`, remoção de contratações/contratos/itens,
+e reaproveitamento de `regra.py`/`amostra.py`/`executar.py`.
+
+### Correções Codex da F2A — 12/10/2026
+
+Lucas autorizou: “pega você pra corrigir as falhas [...] a questao de mascara nao vi problema,
+ja sao dados publicos. De resto, pode arrumar”. A sanitização/máscara permanece como estava;
+esse achado ficou explicitamente fora desta correção, por instrução do usuário. Não interpretar
+esta sessão como aprovação para remover as máscaras existentes da F1.
+
+**Corrigido:**
+- Diário explícito de itens (`--diario --entidades itens`) também reconcilia itens antigos desde
+  `backfill_start`, em janelas de inclusão de 30 dias, com `dataAtualizacaoPncp >= início do diário`.
+  Semântica de limite inferior inclusivo confirmada em consulta real. Janela de 365 dias expirou;
+  janela de 30 dias respondeu rapidamente. Custo depende da história configurada (~43 janelas hoje);
+  filtro não tem teto de atualização: consulta retrospectiva pode trazer estado mais recente.
+- Documento incompleto/mascarado usa HMAC com compra + item; CPF completo mantém HMAC global.
+  Número do item é canônico e validado: rejeita booleano, decimal, zero e negativo.
+- CSV inclui `chave` e `numero_item`, recusa sobrescrita e oferece `--saida`/`--seed`.
+  CLI não cria CSV vazio. Amostragem por reservoir em cada estrato, cursor no servidor e ordem
+  estável substituem o corte aleatório de 60 mil candidatos; memória limitada ao tamanho da amostra.
+  Contagens da população por estrato são apresentadas no comando. Custo ainda inclui ler a população.
+- Telefonia/internet pendentes retornam `INDEFINIDO`; código de catálogo zero/negativo/inválido
+  usa fallback textual. Códigos genéricos positivos precisam de avaliação posterior.
+- Itens ficam fora das entidades padrão da F1. `--ate` permite piloto delimitado de backfill e
+  validação do intervalo; `logs/` e variantes `amostra_rotulada*.csv` ficam fora do Git.
+- ADR 0014, README, FASES e PLANO registram origem complementar e limites de cobertura.
+
+**Cobertura nacional de itens continua não demonstrada:** comparação por CNPJ sem datas falhou
+inclusive no controle positivo; consultas anuais e itens PNCP por compra expiraram. Isso não
+comprova exclusão de municípios nem equivalência nacional. Não liberar backfill de itens como base
+nacional sem repetir ensaio válido por compra/plataforma. Pipeline nacional por compra PNCP com
+enriquecimento Dados Abertos, se necessário, é próximo trabalho; não foi implementado nesta correção.
+
+Revisão independente das correções sem achados bloqueantes; regressões incluem Postgres em banco
+UUID isolado, atualização tardia de preço/fornecedor, dupla execução idempotente, cursor real com
+item sem compra-pai, preservação dos rótulos e separação de identidades. Resultado final dos testes
+`make test`: lint/format aprovados, 112 testes aprovados, 2 avisos de dependência, 19,78 s;
+`git diff --check` aprovado. Nenhum dado de desenvolvimento foi alterado, nenhum
+backfill iniciado/interrompido, commit ou PR criado. Próximo passo: piloto delimitado após escolha
+do período e verificação de cobertura; rotular amostra e seguir ao plano F2B. Esta correção deixa
+a F2A revisável, mas não demonstra o portão G2 nem encerra a F2.
+
+Relatório: `/home/lucas/Documents/Codex/2026-10-12/em-home-lucas-projetos-pncp-ti-5/outputs/correcoes-f2a.md`.
+
+### Escopo confirmado pelo Lucas — 12/10/2026
+
+Lucas reforçou que o backfill foi cancelado e que o foco é **somente atas de registro de preços de
+TI vigentes**. A decisão normativa já está na ADR 0015; README, CLAUDE.md, PLANO e FASES também
+registram o cancelamento. Esta confirmação substitui os próximos passos dos relatórios anteriores
+que sugeriam piloto/backfill de itens ou validação da cobertura Dados Abertos.
+
+Não continuar consultas de cobertura de itens nem executar os comandos antigos de ingestão nacional.
+A reimplementação da F2A começou na branch `feat/f2-atas-vigentes-ti`: snapshot diário de `/v1/atas`,
+filtro de TI na entrada, amostra das descartadas e view das atas vigentes. A migração destrutiva não
+foi aplicada ao banco e o snapshot real não foi iniciado. O backfill histórico permanece cancelado.
+
+### Continuação da implementação da F2A — 12/10/2026
+
+- Normalizei datas `date` da API PNCP antes do INSERT (inclui payloads com timestamp); a coluna
+  `raw` continua guardando o payload sanitizado original.
+- Deduplicação por `numeroControlePNCPAta` em toda a paginação evita contagens/amostras duplicadas.
+  A API usa paginação por offset sobre dados mutáveis, então alteração durante a carga ainda pode
+  causar omissão; não há cursor consistente oferecido pelo endpoint.
+- Ampliei o filtro para incluir `microinformática` e o termo delimitado `TIC`.
+- Corrigi o fuso explicitamente: host em `America/Sao_Paulo` estava no dia 12 e Postgres em UTC já
+  no dia 13; a view excluía itens vigentes na virada. CLI e view agora usam a data de Brasília.
+- A migração 0004 foi testada num banco descartável preenchido com registros sintéticos no schema
+  até 0003; confirmou remoção das tabelas antigas/dados locais e a criação da nova view. Foi teste
+  isolado: o banco de desenvolvimento segue sem alterações.
+- `make test`: 73/73; inclui chamada leve read-only do PNCP e do `compras-mcp`. Dois avisos de
+  depreciação de dependências. `git diff --check` também passou.
+- Nenhum commit, push, PR, migração no banco de desenvolvimento ou snapshot nacional foi feito.
+
+**Falta antes de considerar a F2A revisada:** revisão independente por subagente; resolver achados,
+se houver. Depois, Lucas pode demonstrar o critério de aceite. A retenção do log por página, apontada
+na revisão inicial (~9.700 registros por snapshot diário), foi implementada com janela de 30 dias.
+
+### Revisão Codex da implementação do Luna — 12/10/2026
+
+Lucas pediu revisão e autorizou PR se o desenho fosse aprovado. **Veredito: aprovado para PR após
+correções**, com aceite operacional/rotulagem ainda pendentes. Revisão realizada diretamente pelo
+Codex, reavaliando o trabalho do Luna. Relatório: `docs/REVISAO-F2A.md`.
+
+Reproduzidos e corrigidos: 204 intermediário publicava carga parcial; INSERT inválido na amostra
+impedia limpeza e liberação do lock; CSV podia interpretar objeto externo como fórmula. Corrigidos
+os testes dependentes de fuso/ordem e recuperada cobertura de paginação/retries removida na troca
+de adaptadores. Novas regressões exercitam concorrência, publicação/rollback, vigência, cancelamento,
+reclassificação, amostragem e preservação da versão anterior.
+
+`TZ=UTC make test`: **103 aprovados**, lint/format verdes, dois avisos de dependências;
+`git diff --check` aprovado. A F1 foi confirmada mergeada no GitHub (PR #2), e esta branch foi
+atualizada por fast-forward para `origin/master` antes do commit da F2A. A migração 0004 continua
+sem aplicação no banco de desenvolvimento; nenhum backfill ou snapshot nacional foi iniciado.
+
+Melhorias registradas: retenção de 30 dias para o log por página (implementada em commit posterior),
+medição do custo real da carga e amostra com intervalos de confiança antes de declarar atingidas as
+metas D6/G2.
+
+PR aberto: https://github.com/lucaspagoti/pncp-ti-intel/pull/3. Commit de implementação `6d7bd23`.
+Varredura local `pre-commit run gitleaks --all-files` aprovada; CI remoto iniciado no PR.
+Não houve merge, migração de desenvolvimento ou carga nacional nesta revisão.

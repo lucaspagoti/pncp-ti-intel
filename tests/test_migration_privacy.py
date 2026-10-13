@@ -42,7 +42,7 @@ def test_migracao_limpa_raw_legado_e_desvincula_pf_ambiguo():
                     ('{"niFornecedorSubContratado":"12300002590","tipoPessoaSubContratada":"PF"}',),
                 )
             subprocess.run(
-                ["uv", "run", "alembic", "upgrade", "head"],
+                ["uv", "run", "alembic", "upgrade", "0002"],
                 cwd=ROOT,
                 env=env,
                 check=True,

@@ -1,6 +1,5 @@
-"""Núcleo compartilhado da ingestão: pagina uma janela, faz upsert item a item e
-grava o log de execução (ADR 0005) — usado pelos três adaptadores de entidade
-(contratações, atas, contratos).
+"""Núcleo compartilhado: pagina a janela, faz upsert por registro e grava o log
+de execução (ADR 0005). O snapshot de atas usa o filtro de inclusão antes do upsert.
 """
 
 from __future__ import annotations
@@ -33,28 +32,43 @@ BACKOFF_MAXIMO_SEGUNDOS = 180.0
 
 Mapeador = Callable[[dict[str, Any]], dict[str, Any]]
 Extrator = Callable[[dict[str, Any]], dict[str, Any] | None]
+Incluir = Callable[[dict[str, Any]], bool]
 
 
 class FalhasIngestao(RuntimeError):
-    """Falhas de itens após persistir os itens válidos e concluir a paginação."""
+    """Falhas de registros após persistir os válidos e concluir a paginação."""
 
     def __init__(self, falhas: int) -> None:
         self.falhas = falhas
         super().__init__(f"ingestão incompleta: {falhas} falha(s)")
 
 
-def _validar_pagina(resp: Any, pagina: int = 1) -> tuple[list[dict[str, Any]], int]:
-    """Rejeita envelopes malformados sem interpretá-los como resultado vazio."""
+def _filtros_data_pncp(janela: Janela) -> dict[str, str]:
+    return {
+        "dataInicial": janela.inicio.strftime("%Y%m%d"),
+        "dataFinal": janela.fim.strftime("%Y%m%d"),
+    }
+
+
+def _validar_pagina(
+    resp: Any, pagina: int = 1, *, chave_dados: str = "data"
+) -> tuple[list[dict[str, Any]], int]:
+    """Rejeita envelopes malformados sem interpretá-los como resultado vazio.
+
+    `chave_dados` permite validar envelopes com nomes de lista distintos.
+    """
     if not isinstance(resp, dict):
         raise ValueError("envelope inválido")
-    itens = resp.get("data")
+    itens = resp.get(chave_dados)
     total = resp.get("totalPaginas")
     if not isinstance(itens, list) or any(not isinstance(item, dict) for item in itens):
         raise ValueError("data deve ser lista de objetos")
     if type(total) is not int or total < 0 or (itens and total == 0):
         raise ValueError("totalPaginas inválido")
-    if not itens and pagina <= total:
-        raise ValueError("página vazia antes do fim declarado")
+    if not itens and (pagina != 1 or total != 0):
+        raise ValueError("página vazia durante paginação incompleta")
+    if itens and pagina > total:
+        raise ValueError("página ultrapassa o total declarado")
     if "numeroPagina" in resp and (
         type(resp["numeroPagina"]) is not int or resp["numeroPagina"] != pagina
     ):
@@ -81,7 +95,14 @@ def _e_corpo_vazio(exc: ComprasHTTPError) -> bool:
 
 
 async def _buscar_pagina(
-    cliente: PNCPClient, path: str, *, pagina: int, janela: Janela, filtros: dict[str, Any]
+    cliente: PNCPClient,
+    path: str,
+    *,
+    pagina: int,
+    janela: Janela,
+    filtros: dict[str, Any],
+    formatar_filtros_data: Callable[[Janela], dict[str, str]] = _filtros_data_pncp,
+    chave_dados: str = "data",
 ) -> dict[str, Any]:
     """Busca uma página, absorvendo dois comportamentos reais do PNCP:
 
@@ -100,13 +121,13 @@ async def _buscar_pagina(
                 path,
                 pagina=pagina,
                 tamanho_pagina=TAMANHO_PAGINA,
-                dataInicial=janela.inicio.strftime("%Y%m%d"),
-                dataFinal=janela.fim.strftime("%Y%m%d"),
+                **formatar_filtros_data(janela),
                 **filtros,
             )
         except ComprasHTTPError as exc:
             if _e_corpo_vazio(exc):
-                return {"data": [], "totalPaginas": 0}
+                # A chave do envelope precisa casar com `_validar_pagina`.
+                return {chave_dados: [], "totalPaginas": 0}
             if (
                 isinstance(exc, (ComprasRateLimitError, ComprasServerError, ComprasTimeoutError))
                 and tentativa < MAX_TENTATIVAS_PAGINA
@@ -141,7 +162,10 @@ async def ingerir_janela(
     modalidade_id: int | None = None,
     extrair_orgao: Extrator | None = None,
     extrair_fornecedor: Extrator | None = None,
+    chave_dados: str = "data",
+    formatar_filtros_data: Callable[[Janela], dict[str, str]] = _filtros_data_pncp,
     forcar: bool = False,
+    incluir: Incluir | None = None,
 ) -> None:
     """Reprocessa a janela inteira: páginas do PNCP são mutáveis.
 
@@ -151,13 +175,23 @@ async def ingerir_janela(
     """
     pagina = 1
     total_falhas = 0
+    total_paginas_esperadas = 0
     while True:
         await limitador.aguardar()
         try:
             resp = await _buscar_pagina(
-                cliente, path, pagina=pagina, janela=janela, filtros=filtros
+                cliente,
+                path,
+                pagina=pagina,
+                janela=janela,
+                filtros=filtros,
+                formatar_filtros_data=formatar_filtros_data,
+                chave_dados=chave_dados,
             )
-            itens, total_paginas = _validar_pagina(resp, pagina)
+            itens, total_paginas = _validar_pagina(resp, pagina, chave_dados=chave_dados)
+            # Uma redução no total anunciado não autoriza publicar uma carga
+            # que ainda não percorreu todas as páginas já prometidas pela fonte.
+            total_paginas_esperadas = max(total_paginas_esperadas, total_paginas)
         except Exception as exc:
             await registrar(
                 conn,
@@ -178,6 +212,8 @@ async def ingerir_janela(
         falhas = 0
         for item in itens:
             try:
+                if incluir is not None and not incluir(item):
+                    continue
                 # Savepoint por item: se o upsert de um item falhar (CNPJ fora
                 # do tamanho da coluna, FK, etc.), só esse item é desfeito — a
                 # conexão não fica "aborted" pro resto da página (o que faria
@@ -227,7 +263,7 @@ async def ingerir_janela(
             total_paginas=total_paginas,
             registros=len(itens),
         )
-        if not itens or pagina >= total_paginas:
+        if not itens or pagina >= total_paginas_esperadas:
             break
         pagina += 1
 

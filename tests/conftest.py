@@ -1,6 +1,6 @@
 """Fixtures compartilhadas pelos testes do pncp-ti.
 
-Os testes aqui sobem o `compras-mcp` real (via `uvx`, stdio) — nada é mockado.
+Os testes aqui sobem o `compras-mcp` real (via `uv run`, stdio) — nada é mockado.
 Isso cobre o critério de aceite da Fase 0 ("Claude responde usando o compras-mcp
 local") e detecta mudanças no servidor de terceiro (ADR 0002, "rug pull").
 """
@@ -20,7 +20,7 @@ from fastmcp.client.transports import StdioTransport
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from pncp_ti.config import admin_dsn, get_settings, ingest_dsn
+from pncp_ti.config import admin_dsn, get_settings, ingest_dsn, reader_dsn
 
 os.environ.setdefault("PNCP_TI_IDENTITY_KEY", "synthetic-test-key-32-characters-minimum")
 
@@ -86,6 +86,20 @@ async def conn_ingest(nome_banco_teste: str):
     """Conexão async com o papel `ingest`, apontada para o banco de teste."""
     settings = get_settings()
     dsn = ingest_dsn(replace(settings, postgres_db=nome_banco_teste))
+    conn = await psycopg.AsyncConnection.connect(dsn, row_factory=dict_row)
+    # Cada teste começa isolado; este DSN sempre aponta para o banco UUID efêmero.
+    await conn.execute("DELETE FROM snapshots_atas_ti")
+    await conn.execute("DELETE FROM orgaos")
+    await conn.commit()
+    yield conn
+    await conn.close()
+
+
+@pytest.fixture
+async def conn_reader(nome_banco_teste: str):
+    """Conexão somente leitura, apontada para a view do banco de teste."""
+    settings = get_settings()
+    dsn = reader_dsn(replace(settings, postgres_db=nome_banco_teste))
     conn = await psycopg.AsyncConnection.connect(dsn, row_factory=dict_row)
     yield conn
     await conn.close()

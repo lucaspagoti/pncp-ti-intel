@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -33,7 +32,6 @@ class Settings:
     ingest_password: str | None
     reader_password: str | None
     requests_per_second: float
-    backfill_start: date
 
 
 def exigir(valor: str | None, nome: str) -> str:
@@ -58,7 +56,6 @@ def get_settings() -> Settings:
         ingest_password=os.environ.get("PNCP_TI_INGEST_PASSWORD"),
         reader_password=os.environ.get("PNCP_TI_READER_PASSWORD"),
         requests_per_second=float(os.environ.get("PNCP_REQUESTS_PER_SECOND", "2")),
-        backfill_start=date.fromisoformat(os.environ.get("INGEST_BACKFILL_START", "2023-04-01")),
     )
 
 
@@ -90,6 +87,17 @@ def ingest_dsn(settings: Settings) -> str:
     return make_conninfo(
         user="ingest",
         password=exigir(settings.ingest_password, "PNCP_TI_INGEST_PASSWORD"),
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        dbname=settings.postgres_db,
+    )
+
+
+def reader_dsn(settings: Settings) -> str:
+    """Conninfo do papel mcp_reader, usado nas consultas de leitura."""
+    return make_conninfo(
+        user="mcp_reader",
+        password=exigir(settings.reader_password, "PNCP_TI_READER_PASSWORD"),
         host=settings.postgres_host,
         port=settings.postgres_port,
         dbname=settings.postgres_db,

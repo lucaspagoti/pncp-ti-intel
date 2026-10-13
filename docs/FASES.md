@@ -29,36 +29,57 @@ proponha o plano da fase em modo plan e espere minha aprovação.
 
 **Status: ✅ concluída** (13/10/2026, tag `f0-fundacao`).
 
-## F1 · Base histórica
+## F1 · Infraestrutura de ingestão
+
+Redefinida pela ADR 0015 (12/10/2026). O backfill nacional de contratações, atas e contratos
+foi cancelado: o projeto passou a guardar só atas de TI vigentes. O que a F1 entrega e
+continua valendo é o motor.
 
 **Entregas**
-- Schema e migrações (contratações, contratos, atas, órgãos, fornecedores, log de execução).
-  Itens/preços unitários adiados por decisão aprovada para a Fase 2, após classificação de TI.
-- Ingestão diária e backfill em janelas de datas, idempotente (ADR 0005).
-- Papéis `ingest` (escrita) e `mcp_reader` (só `SELECT` em views).
-- Backup diário com `pg_dump`.
+- Motor de ingestão por janelas, idempotente (ADR 0005): paginação, retry/backoff, savepoint
+  por item, log de execução, tratamento do 204 vazio do PNCP.
+- Papéis `ingest` (escrita) e `mcp_reader` (só `SELECT` em views); privacidade de fornecedor
+  (ADR 0013).
+- Backup com `pg_dump` e restauração em banco novo.
 
 **Critério de aceite**
-- A mesma janela processada duas vezes gera as mesmas contagens.
-- Backfill do período combinado concluído.
-- Restauração do backup testada em banco limpo.
+- A mesma janela processada duas vezes gera as mesmas contagens. ✅ (teste de idempotência)
+- Restauração do backup testada em banco limpo. ✅ (cluster novo, ver `LEIA-ME-CODEX.md`)
+- ~~Backfill do período combinado concluído.~~ Cancelado pela ADR 0015.
 
-**Status: 🚧 em andamento** (branch `feat/f1-base-historica`, 12/10/2026). Schema, papéis, ingestão
-diária/backfill e testes implementados e verdes (`make test`); backfill completo (01/04/2023 até hoje)
-e restauração de backup ainda não executados de verdade — ver `LEIA-ME-CODEX.md` para o detalhe.
+**Status: mergeada** (PR #2, confirmado no GitHub nesta revisão). Os adaptadores históricos
+saem do código na F2A; o backfill continua cancelado.
 
-## F2 · Filtro de TI e preços
+## F2 · Atas de TI vigentes e preços
 
 **Insumo necessário:** Lucas rotula a amostra gerada em `insumos/amostra_rotulada.csv`.
 
-**Entregas**
-- Regra por código de catálogo e palavras-chave + classificador local (ADR 0006).
-- Geração da amostra para rotulagem e relatório de precisão/recall.
+**2A — Atas de TI vigentes**
+- Snapshot diário de `/v1/atas` (janela = hoje, ~484 mil vigentes, mínimo teórico de ~80 min) com filtro de TI na
+  entrada: palavras-chave generosas no `objetoContratacao`. Só candidatas são gravadas.
+- Cada carga guarda também uma amostra pequena das descartadas, para medir recall.
+- View `v_atas_ti_vigentes` (`vigencia_fim >= hoje`, não cancelada) para o `mcp_reader`.
+- Remoção dos adaptadores/tabelas de `contratacoes`, `contratos` e `itens_contratacao` (migração
+  própria) e do código de itens via Dados Abertos (ADR 0014 substituída).
+- `make amostra` sobre atas: candidatas + descartadas, para o Lucas rotular.
+
+**2B — Itens e preços das atas de TI**
+- Itens e valores registrados vindos da compra-mãe de cada ata no PNCP (uma consulta por compra,
+  N = recorte de TI). Regra de catálogo CATMAT/CATSER nos itens (`classificar/regra.py`).
 - Normalização de unidades (licença/mês, usuário/ano, página impressa etc.).
+- Relatório de precisão/recall em `evals/`. Classificador local só se D6 não for atingido.
 
 **Critério de aceite**
-- Relatório de avaliação em `evals/`.
+- Atas de TI vigentes consultáveis localmente, com link de fonte no PNCP; carga diária
+  reexecutável sem duplicar.
+- Relatório de avaliação em `evals/` a partir da amostra rotulada.
 - **Portão G2:** metas da decisão D6 atingidas.
+
+**Status: implementação revisada pelo Codex a pedido do Lucas, preparada para PR** (branch `feat/f2-atas-vigentes-ti`, ADR 0015). O trabalho anterior
+`feat/f2a-itens-filtro-ti` (itens via Dados Abertos) não segue. Reaproveitamos o motor de
+`ingest/executar.py`, as palavras-chave de `classificar/regra.py` e a proteção contra sobrescrita
+em `classificar/amostra.py`; o snapshot substitui a amostragem de itens por candidatas e descartadas.
+A migração 0004 e o snapshot nacional não foram executados no banco de desenvolvimento.
 
 ## F3 · MCP pncp-ti v1
 
@@ -66,7 +87,8 @@ e restauração de backup ainda não executados de verdade — ver `LEIA-ME-CODE
 
 **Entregas**
 - Servidor `pncp-ti` (FastMCP, stdio), registrado em `.mcp.json`.
-- Tools só de SQL: histórico de preços de TI por item, série de contratações de TI, novidades do período.
+- Tools só de SQL sobre atas de TI vigentes: busca por objeto/órgão/UF, preço registrado por item,
+  novas atas do período.
 - Logs de auditoria por chamada; tools no snapshot.
 
 **Critério de aceite**
@@ -87,7 +109,7 @@ e restauração de backup ainda não executados de verdade — ver `LEIA-ME-CODE
 ## F5 · Operação
 
 **Entregas**
-- Digest diário de novas contratações de TI no bot Hermes.
+- Digest diário de novas atas de TI vigentes no bot Hermes.
 - Healthcheck diário da API (incluindo `compras_healthcheck`) e alerta de falha.
 - Painel opcional.
 
