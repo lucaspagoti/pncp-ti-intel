@@ -26,12 +26,13 @@ Leia a ADR 0019 e `docs/FASES.md` (R1).
 - **Decidido pelo Lucas (13/10/2026):** seguir o Anexo Único da IN 05, inclusive telefonia/voz/
   internet, pontos de rede lógicos e videomonitoramento/CFTV (a resposta anterior excluía isso).
   Nobreak e drone continuam fora (não constam do anexo). Resultado: 24 atas de TI vigentes.
-- **Pré-rotulagem feita pelo Claude** (todas as 786 combinações objeto+catálogo lidas): 24 TI,
-  1.550 não-TI; 12 marcadas `[REVISAR]` em `criterio_pre` (nobreak, drone, televisor, treinamento
-  genérico, almoxarifado virtual, retroprojetor). Não é rótulo final: `rotulo_lucas` está vazio.
-- **Pendente:** (1) o Lucas revisar `insumos/rotulagem_siga.csv` e preencher `rotulo_lucas`;
-  (2) `make eval ROT=...` e ajuste da regra até a meta D6 (proposta: recall ≥ 95%, precisão ≥ 85%);
-  (3) reclassificar com `make ingest ARGS=--forcar` depois de mudar a regra.
+- **Rotulagem e eval (13/10/2026):** por instrução do Lucas ("seguir o que temos na IN 05"), o
+  Claude aplicou o anexo literalmente às 1.574 atas e gravou em `rotulo_lucas` (24 TI, 1.550
+  não-TI). `make eval` deu precisão 100% e recall 100% (`evals/siga_20261013.md`). **Não é recall
+  independente**: regra e rótulo usam o mesmo anexo e o mesmo leitor. Itens que o anexo não lista
+  (nobreak, drone, televisor, retroprojetor) ficaram `NAO_TI`.
+- **Pendente:** merge do PR #5 e a R2 (ARP). Se o Lucas quiser rótulo humano de verdade, o
+  caminho é revisar o CSV; reclassificar depois é só `make ingest` (a versão da regra dispara).
 - **Não fazer:** mudar `CATEGORIAS_FORA_DE_ESCOPO` sem o Lucas; afirmar recall antes da rotulagem;
   estender o critério do anexo (norma do RJ) às fontes federal/municipal sem decisão.
 - **Próximo:** fechar a R1 (rótulos + eval + conferência de 10 atas), depois R2 (ARP). A R2 precisa

@@ -69,12 +69,14 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 - Conferência manual de 10 atas contra o CSV bruto. ✅ (10 de 10, 13/10/2026)
 - `v_atas_ti_vigentes` lista as atas de TI vigentes do RJ com itens e preço unitário. ✅ (24 atas
   em 13/10/2026) Conferência manual de 10 atas contra o CSV bruto: ✅ 10 de 10.
-- Precisão e recall medidos contra o rótulo final (D6; meta proposta: recall ≥ 95% e precisão
-  ≥ 85%). **Pendente:** revisão da pré-rotulagem pelo Lucas e rotulagem final do censo (`insumos/rotulagem_siga.csv`, 1.574 atas). Decidido
-  em 13/10/2026: seguir o anexo da IN 05, inclusive telefonia, pontos de rede e videomonitoramento.
+- Precisão e recall medidos contra o rótulo final (D6; meta: recall ≥ 95%, precisão ≥ 85%). ✅
+  100% e 100% sobre o censo de 1.574 atas (`evals/siga_20261013.md`). **Ressalva:** o rótulo foi
+  aplicado pelo Claude, por instrução do Lucas, seguindo o anexo da IN 05 literalmente; regra e
+  rótulo usam o mesmo anexo, então não é um recall independente. Decidido em 13/10/2026: seguir o
+  anexo, inclusive telefonia, pontos de rede e videomonitoramento.
 - Link de origem: processo SEI + CSV de origem. O SIGA não tem URL pública por ata conhecida.
 
-**Status:** implementada na branch `feat/r1-siga-rj`; aceite depende da rotulagem.
+**Status:** implementada e medida na branch `feat/r1-siga-rj` (PR #5); falta o merge.
 
 ## R2 · Ingestão Dados Abertos ARP
 

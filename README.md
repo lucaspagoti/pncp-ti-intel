@@ -32,8 +32,8 @@ SIGA RJ) é a próxima. Ver `docs/FASES.md` e `LEIA-ME-CODEX.md`.
 
 **R1 (ingestão do SIGA RJ) implementada** na branch `feat/r1-siga-rj` (ADR 0019): carga de 36 s,
 11.662 atas, 52.013 itens e 138.254 participantes; 24 atas de TI vigentes em 13/10/2026 (critério: Anexo Único da
-IN PRODERJ 05/2024). O aceite depende da rotulagem do censo (`make amostra`). `make ingest
-FONTE=siga` roda a carga; `ARGS=--forcar` reclassifica com os mesmos arquivos.
+IN PRODERJ 05/2024). Precisão e recall de 100% sobre o censo, rotulado pelo anexo (ver as
+ressalvas em `evals/siga_20261013.md`). `make ingest FONTE=siga` roda a carga; `ARGS=--forcar` reclassifica com os mesmos arquivos.
 
 O banco local está no schema da migração 0005 (aplicada após backup restaurado em banco temporário).
 
