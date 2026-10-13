@@ -4,32 +4,44 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
-## Estado vigente — revisão Codex da F2A — 12/10/2026
+## Estado vigente — F2A mergeada; preparação da Fase 3 — 13/10/2026
 
 **Escopo: somente atas de TI vigentes; backfill histórico cancelado (ADR 0015).** Os registros
 abaixo desta seção são histórico de sessões e podem conter instruções já superadas.
 
-A F1 foi mergeada no PR #2, confirmado no GitHub. A F2A está na branch
-`feat/f2-atas-vigentes-ti`, publicada no [PR #3](https://github.com/lucaspagoti/pncp-ti-intel/pull/3)
-contra `master` (commit de implementação `6d7bd23`). Lucas pediu ao Codex a revisão da implementação do Luna e autorizou
-abrir PR caso aprovada. Essa revisão foi realizada diretamente pelo Codex, sem subagentes.
+A F1 foi mergeada no PR #2. A F2A foi mergeada no [PR #3](https://github.com/lucaspagoti/pncp-ti-intel/pull/3)
+em 13/10/2026 (merge commit `df301c3`; head `dfda755` inclui retenção de 30 dias dos logs por página).
+O CI do head passou. A branch local de trabalho é `feat/f2b-itens-atas`, criada sobre `master` já
+atualizado (`df301c3`); as alterações desta etapa ainda não foram commitadas.
 
 O desenho foi aprovado após corrigir: publicação indevida de carga parcial após 204 intermediário,
 recuperação de erro SQL na amostra, ausência de proteção contra snapshot nacional vazio e dependência
 dos testes do fuso/ordem de execução. A versão anterior continua visível durante o staging; amostra,
 ativação e remoção do snapshot anterior são transacionais. CLI e view usam `America/Sao_Paulo`.
 
-A migração 0004 **não foi aplicada no banco de desenvolvimento** e nenhum snapshot nacional foi
-executado. A revisão usa bancos UUID efêmeros e consultas reais leves. A migração 0003 é mantida
-por compatibilidade com o schema já aplicado no dev, mesmo que 0004 descarte suas tabelas.
-F2B (itens/preços), rotulagem, avaliação D6/G2 e demonstração operacional continuam pendentes.
-Validação desta revisão: `TZ=UTC make test`, 103 testes aprovados; relatório em `docs/REVISAO-F2A.md`.
+A migração 0004 foi aplicada no banco local após um backup ser restaurado com sucesso em um banco
+temporário (schema 0003, sem alterar o banco principal). O primeiro snapshot nacional de 12/10/2026
+está em staging, com taxa temporária de 0,5 req/s após 429 nas taxas maiores; só será publicado se
+terminar completo. A F2 ainda não passou o aceite: rotulagem, D6/G2 e F2B (itens/preços) seguem
+pendentes. A migração 0003 permanece na cadeia por compatibilidade com o schema anterior.
+
+Na preparação da F2B, o manual PNCP confirma `/itens` e `/itens/{numeroItem}/resultados` e define
+`valorUnitarioHomologado` como preço do resultado. Porém, o retorno documentado não traz identificador
+da ATA; contém `ordemClassificacaoSrp`. Não propagar preço para cada ATA da compra sem validar a
+correspondência real; fallback honesto é manter o resultado no nível da compra.
 
 O log por página das atas TI tem retenção de 30 dias, aplicada no início de cada snapshot e limitada
 à entidade `atas_ti_snapshot`; o índice da migração 0004 dá suporte à limpeza. Permanecem melhorias
 operacionais medir duração real da carga e dimensionar a amostra de descartadas com intervalos de
 confiança. A amostra inicial não comprova sozinha recall elevado de TI, uma classe rara no universo
 nacional.
+
+**Preparação da Fase 3:** o escopo foi alinhado em `docs/FASES.md`: consultas locais somente pela view
+`v_atas_ti_vigentes`, SQL fixo/parametrizado e papel `mcp_reader`; nenhuma tool aceita SQL livre.
+Preços dependem de F2B e “novas atas” será entendido como atas vigentes por data de publicação, sem
+alegar histórico entre snapshots. `insumos/perguntas_reais.csv` ainda tem seis sugestões antigas e
+precisa ser revisado/completado por Lucas até 20 perguntas reais. O prompt de abertura está pronto em
+`docs/FASES.md`; usar depois do aceite de F2.
 
 ## Seu papel: arquiteto especialista + testador, não só executor de tarefas
 

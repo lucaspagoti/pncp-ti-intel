@@ -64,9 +64,22 @@ saem do código na F2A; o backfill continua cancelado.
 - `make amostra` sobre atas: candidatas + descartadas, para o Lucas rotular.
 
 **2B — Itens e preços das atas de TI**
-- Itens e valores registrados vindos da compra-mãe de cada ata no PNCP (uma consulta por compra,
-  N = recorte de TI). Regra de catálogo CATMAT/CATSER nos itens (`classificar/regra.py`).
+- Itens da compra-mãe via endpoint PNCP `/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens`;
+  resultados por item via `/itens/{numeroItem}/resultados`. O preço praticado é
+  `valorUnitarioHomologado`; `valorUnitarioEstimado` é orçamento/estimativa e não pode ser rotulado
+  como preço homologado. Ver [manual oficial de itens](https://pncp.gov.br/manual/pt-br/latest/contratacao/consultar_itens_de_uma_contratacao.html)
+  e [resultados](https://pncp.gov.br/manual/pt-br/latest/contratacao/consultar_resultados_de_item_de_uma_contratacao.html).
+- Deduplicar compras-pai referenciadas por várias atas e confirmar no piloto quais itens/resultados
+  pertencem à ata específica; não atribuir automaticamente todos os itens da compra a cada ata. O
+  manual lista `ordemClassificacaoSrp` nos resultados por item, mas não documenta ali um identificador
+  da ATA. Só vincular preço à ATA se o piloto confirmar uma chave confiável; caso contrário, expor o
+  resultado no nível da compra e marcar a associação à ATA como indisponível.
+- Regra de catálogo CATMAT/CATSER nos itens (`classificar/regra.py`) só depois de confirmar que os
+  campos do endpoint PNCP são suficientes para essa classificação; itens sem evidência ficam
+  `INDEFINIDO`, não são descartados silenciosamente.
 - Normalização de unidades (licença/mês, usuário/ano, página impressa etc.).
+- Fila persistente, reprocessável e limitada por taxa; o endpoint por compra/item não é um backfill
+  nacional, e a execução deve cobrir apenas as compras ligadas às atas candidatas vigentes de TI.
 - Relatório de precisão/recall em `evals/`. Classificador local só se D6 não for atingido.
 
 **Critério de aceite**
@@ -75,25 +88,54 @@ saem do código na F2A; o backfill continua cancelado.
 - Relatório de avaliação em `evals/` a partir da amostra rotulada.
 - **Portão G2:** metas da decisão D6 atingidas.
 
-**Status: implementação revisada pelo Codex a pedido do Lucas, preparada para PR** (branch `feat/f2-atas-vigentes-ti`, ADR 0015). O trabalho anterior
-`feat/f2a-itens-filtro-ti` (itens via Dados Abertos) não segue. Reaproveitamos o motor de
-`ingest/executar.py`, as palavras-chave de `classificar/regra.py` e a proteção contra sobrescrita
-em `classificar/amostra.py`; o snapshot substitui a amostragem de itens por candidatas e descartadas.
-A migração 0004 e o snapshot nacional não foram executados no banco de desenvolvimento.
+**F2A: ✅ implementada e mergeada** no PR #3 (`df301c3`, 13/10/2026), conforme ADR 0015. O trabalho
+anterior `feat/f2a-itens-filtro-ti` (itens via Dados Abertos) foi descartado. O snapshot reaproveita
+o motor de `ingest/executar.py`, as palavras-chave de `classificar/regra.py` e a proteção contra
+sobrescrita em `classificar/amostra.py`, com amostra de atas vigentes descartadas.
+
+**F2 ainda não aceita / F2B não iniciada.** A migração 0004 foi aplicada ao banco local depois de
+backup restaurado com sucesso em banco temporário. O primeiro snapshot nacional (12/10/2026) está em
+execução, limitado temporariamente a 0,5 req/s após 429 com as taxas maiores; a versão parcial ainda
+não foi publicada. Rotulagem e avaliação D6/G2 continuam pendentes, assim como itens e preços. Antes
+de iniciar F3, concluir F2: terminar e avaliar a F2A, implementar F2B e registrar o portão G2.
 
 ## F3 · MCP pncp-ti v1
 
-**Insumo necessário:** `insumos/perguntas_reais.csv` com 20 perguntas.
+**Status: preparada no roadmap; início condicionado ao aceite da F2.**
+
+**Insumo necessário:** Lucas revisar e completar `insumos/perguntas_reais.csv` com 20 perguntas que
+realmente faria. O arquivo atual contém seis sugestões antigas, algumas fora do escopo atual (preços,
+contratos e anexos); elas não contam como perguntas validadas.
+
+**Escopo e limites:** registrar `pncp-ti` ao lado de `compras-mcp`, ambos via stdio. Consultas locais
+devem usar SQL parametrizado/fixo e o papel `mcp_reader`, somente sobre `v_atas_ti_vigentes`; nunca
+aceitar SQL do modelo nem ler tabelas-base. Preços dependem da F2B. “Novas atas” deve significar atas
+vigentes por data de publicação, não histórico de mudanças entre snapshots. Cada tool deve cobrir uma
+lacuna que o `compras-mcp` não atende.
 
 **Entregas**
-- Servidor `pncp-ti` (FastMCP, stdio), registrado em `.mcp.json`.
-- Tools só de SQL sobre atas de TI vigentes: busca por objeto/órgão/UF, preço registrado por item,
-  novas atas do período.
-- Logs de auditoria por chamada; tools no snapshot.
+- Servidor `pncp-ti` (FastMCP, stdio), registrado em `.mcp.json` ao lado do servidor `compras`.
+- Tools de busca por objeto/órgão/UF e atas vigentes por período de publicação; tool de preço por item
+  só após a F2B disponibilizar esses dados.
+- Log de auditoria por chamada sem dados pessoais; schema/snapshot das tools coberto no CI.
+- Testes de autorização que provem acesso apenas à view e recusa de escrita/SQL arbitrário.
 
 **Critério de aceite**
-- As 20 perguntas respondidas com link de fonte no PNCP.
+- As 20 perguntas revisadas respondidas corretamente, com link de fonte do PNCP e indicação clara
+  quando a base local não contém dados para responder.
 - **Portão G3:** 2 semanas de uso real; lista do que faltou alimenta as fases seguintes.
+
+**Prompt de abertura (usar quando F2 estiver aceita):**
+
+```text
+Leia CLAUDE.md, docs/PLANO.md, docs/FASES.md e as ADRs 0003, 0007, 0008, 0009, 0011, 0012 e 0015.
+Vamos iniciar a Fase 3, já com a F2 aceita. Revise as 20 perguntas em insumos/perguntas_reais.csv
+e confronte cada uma com as capacidades atuais do compras-mcp e com os dados realmente disponíveis.
+Antes de codar, proponha o plano em modo plan e aguarde minha aprovação. Preserve stdio, SQL fixo e
+parametrizado, papel mcp_reader e acesso exclusivamente à view v_atas_ti_vigentes. Não implemente
+preços sem dados F2B nem alegue histórico entre snapshots. Inclua auditoria sem dados pessoais,
+testes de permissões e snapshot de tools no CI.
+```
 
 ## F4 · Anexos e RAG
 

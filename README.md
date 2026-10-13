@@ -29,10 +29,11 @@ Cópia estática do plano: `docs/PLANO.md`.
 **Escopo (ADR 0015, 12/10/2026): só atas de registro de preços de TI vigentes.** Sem contratações, sem
 contratos, sem histórico. **F0** concluída (tag `f0-fundacao`). **F1** redefinida como infraestrutura de
 ingestão (motor idempotente, papéis, privacidade, backup/restore), mergeada no PR #2. O backfill
-nacional foi cancelado. **F2A** está implementada e em revisão para PR na branch `feat/f2-atas-vigentes-ti`: snapshot
-diário das atas vigentes com filtro de TI na entrada. A migração 0004 é destrutiva e ainda não foi
-aplicada ao banco local; nenhum snapshot nacional foi executado. F2B (itens e preços dessas atas)
-vem depois. Ver `docs/FASES.md` e `LEIA-ME-CODEX.md`.
+nacional foi cancelado. **F2A** (snapshot diário das atas vigentes com filtro de TI) foi mergeada no
+PR #3 (`df301c3`). A migração 0004 foi aplicada após backup restaurado em banco temporário; o primeiro
+snapshot nacional está em andamento e ainda não foi publicado. A F2 ainda não foi aceita: F2B (itens e
+preços), rotulagem e avaliação G2 faltam. F3 está especificada, mas depende do aceite da F2 e de 20
+perguntas reais revisadas em `insumos/perguntas_reais.csv`. Ver `docs/FASES.md` e `LEIA-ME-CODEX.md`.
 
 D1 (GitHub privado pessoal) e D2 (servidor Linux via SSH, sem WSL2) resolvidas — ver `docs/adr/` e
 `LEIA-ME-CODEX.md`.
