@@ -42,10 +42,10 @@ jobs:
       - name: Instalar dependências
         run: uv sync
 
-      - name: Aplicar migrações (Fase 1 — schema, papéis, views)
+      - name: Aplicar migrações (schema, papéis, views)
         run: make migrate
 
-      - name: Lint, format-check e testes (inclui snapshot do compras-mcp e ingestão)
+      - name: Lint, format-check e testes
         run: make test
 
   secrets-scan:

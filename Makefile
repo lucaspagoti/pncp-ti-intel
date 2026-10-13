@@ -10,16 +10,16 @@ up: ## Sobe o Postgres local (porta só em 127.0.0.1).
 down: ## Derruba os containers do projeto.
 	docker compose down
 
-test: ## Lint + format-check + testes (inclui snapshot e fumaça do compras-mcp).
+test: ## Lint + format-check + testes.
 	uv run ruff check .
 	uv run ruff format --check .
 	uv run pytest
 
-migrate: ## Aplica as migrações do Alembic (schema, papéis ingest/mcp_reader, views).
+migrate: ## Aplica as migrações do Alembic (schema, papéis, views).
 	uv run alembic upgrade head
 
-ingest: ## Snapshot diário das atas de TI vigentes (sem backfill).
-	uv run python -m pncp_ti.ingest.cli --diario
+ingest: ## Ainda não implementado — chega na R1 (SIGA RJ), ADR 0016.
+	@echo "make ingest: o snapshot PNCP /v1/atas foi removido (ADR 0016). A ingestão SIGA RJ chega na R1."
 
 backup: ## pg_dump do Postgres local para backups/ (fora do Git).
 	./scripts/backup_postgres.sh
@@ -28,8 +28,8 @@ restore: ## Restaura em banco NOVO: make restore DUMP=backups/arquivo.dump DATAB
 	@test -n "$(DUMP)" -a -n "$(DATABASE)" || (echo "Informe DUMP e DATABASE." && exit 1)
 	./scripts/restore_postgres.sh "$(DUMP)" --database "$(DATABASE)"
 
-amostra: ## Gera insumos/amostra_rotulada.csv de atas candidatas e descartadas (Fase 2A).
+amostra: ## Gera insumos/amostra_rotulada.csv (será adaptado às novas fontes na R1).
 	uv run python -m pncp_ti.classificar.amostra
 
-eval: ## Ainda não implementado — chega na Fase 2B, depois do Lucas rotular a amostra.
+eval: ## Ainda não implementado — depende da amostra rotulada das novas fontes (R1+).
 	@echo "make eval: nada a fazer ainda. Depende do Lucas rotular insumos/amostra_rotulada.csv."

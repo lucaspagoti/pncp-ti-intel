@@ -4,7 +4,30 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
-## Estado vigente — F2A mergeada; preparação da Fase 3 — 13/10/2026
+## Estado vigente: mudança de arquitetura (R0), 13/10/2026 (Claude/Opus 5.5)
+
+**Este bloco substitui tudo o que vem abaixo** sobre F2, F3, MCP e snapshot `/v1/atas`. Leia as ADRs
+0016, 0017 e 0018, `docs/PLANO.md` e `docs/FASES.md`.
+
+- **Fontes (ADR 0016):** SIGA RJ (3 CSVs diários), Dados Abertos Compras.gov.br `modulo-arp` (500
+  por página) e a busca do portal PNCP (`/api/search`, por termos de TI). O snapshot PNCP `/v1/atas`
+  foi abandonado; **não o repita**. O Portal da Transparência da CGU está fora (não tem atas;
+  "Licitações" parou em 2024).
+- **Orquestração (ADR 0017):** systemd timer + `make ingest`. O Airflow fica adiado.
+- **Interface (ADR 0018):** web própria FastAPI + Jinja2 + HTMX, papel `web_reader`. Exposição no
+  domínio só atrás de proxy TLS + autenticação (D7). O MCP saiu do caminho crítico: `.mcp.json` e
+  os testes do servidor `compras-mcp` foram removidos. O pacote `compras-mcp==0.4.0` continua como
+  biblioteca (`DadosAbertosClient`).
+- **R0 na branch `refactor/fontes-atas`** (criada a partir de `feat/f2b-itens-atas`, para manter o
+  retry `a1fc870`). Foram removidos `ingest/atas.py`, `cli.py`, `mapeadores.py`, `client.py` e os
+  testes correspondentes. Ficaram `ingest/executar.py`, `windows.py`, `log.py` e `rate_limit.py`,
+  que serão generalizados na R2. `classificar/amostra.py` ainda lê as tabelas da 0004 e é adaptado
+  na R1.
+- **Banco local:** migração 0004 aplicada, sem atas carregadas. A R1 traz a migração 0005, que
+  substitui essas tabelas (com `make backup` verificado antes).
+- **Próximo passo:** o Lucas aprova a R0 (PR) → plano da R1 (SIGA RJ) em modo plan.
+
+## Estado anterior: F2A mergeada; preparação da Fase 3 (13/10/2026, histórico)
 
 **Escopo: somente atas de TI vigentes; backfill histórico cancelado (ADR 0015).** Os registros
 abaixo desta seção são histórico de sessões e podem conter instruções já superadas.
@@ -21,17 +44,24 @@ dos testes do fuso/ordem de execução. A versão anterior continua visível dur
 ativação e remoção do snapshot anterior são transacionais. CLI e view usam `America/Sao_Paulo`.
 
 A migração 0004 foi aplicada no banco local após um backup ser restaurado com sucesso em um banco
-temporário (schema 0003, sem alterar o banco principal). A primeira execução do snapshot nacional de
-12/10/2026 falhou na página 628 por erro HTTP genérico e limpou o staging. O retry foi ampliado para
-respostas 400/403/408/425 no commit `a1fc870`; a segunda execução está em staging, limitada a 0,5
-req/s (snapshot `51bd1062-3516-49cf-b13e-620d40e427e3`). Só será publicada se terminar completa. A
-F2 ainda não passou o aceite: rotulagem, D6/G2 e F2B (itens/preços) seguem pendentes. A migração
-0003 permanece na cadeia por compatibilidade com o schema anterior.
+temporário (schema 0003, sem alterar o banco principal). Duas tentativas de snapshot nacional foram
+interrompidas/fracassaram e limparam o staging. A segunda foi cancelada por decisão de escopo: não é
+necessário varrer cerca de 484 mil atas (9.682 páginas no limite observado de 50 por página) para
+avançar a F2. Nenhuma versão parcial foi publicada; não há atas TI carregadas. Não repetir a varredura
+nacional. O retry de respostas transitórias permanece no commit `a1fc870`, mas isso não torna o
+snapshot nacional necessário. A F2 ainda não passou o aceite: rotulagem, D6/G2 e F2B (itens/preços)
+seguem pendentes. A migração 0003 permanece na cadeia por compatibilidade com o schema anterior.
 
 Na preparação da F2B, o manual PNCP confirma `/itens` e `/itens/{numeroItem}/resultados` e define
 `valorUnitarioHomologado` como preço do resultado. Porém, o retorno documentado não traz identificador
 da ATA; contém `ordemClassificacaoSrp`. Não propagar preço para cada ATA da compra sem validar a
 correspondência real; fallback honesto é manter o resultado no nível da compra.
+
+Piloto direcionado da F2B: três compras-pai referenciadas por atas responderam 200 em
+`/api/consulta/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}`; a rota `/itens` no mesmo host respondeu
+404 para as três. Isso não demonstra ausência de itens na contratação: indica que host/rota precisam
+ser confirmados contra o manual antes de implementar ingestão. Não iniciar varredura ou backfill para
+investigar isso; usar uma compra conhecida e uma chamada de fumaça depois de identificar o host correto.
 
 O log por página das atas TI tem retenção de 30 dias, aplicada no início de cada snapshot e limitada
 à entidade `atas_ti_snapshot`; o índice da migração 0004 dá suporte à limpeza. Permanecem melhorias

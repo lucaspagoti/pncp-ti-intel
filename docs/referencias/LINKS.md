@@ -2,6 +2,21 @@
 
 Rode `scripts/baixar_referencias.ps1` para salvar cópias locais das marcadas com (script).
 
+## Fontes de dados (ADR 0016)
+
+- SIGA RJ, CSVs regenerados diariamente:
+  - https://www.compras.rj.gov.br/siga/imagens/ATA_REGISTRO_PRECO.CSV
+  - https://www.compras.rj.gov.br/siga/imagens/ITENS_ATAS_REGISTRO_PRECO.CSV
+  - https://www.compras.rj.gov.br/siga/imagens/PARTICIPANTES_ATAS_REGISTRO_PRECO.CSV
+  - Origem dos links: Plano de Dados Abertos do RJ (SEI-120001/001511/2025):
+    https://www.rj.gov.br/planejamento/sites/default/files/arquivos_paginas/SEI_102030139_Plano_de_Dados_Abertos___PDA_0.pdf
+- Dados Abertos Compras.gov.br, módulo ARP: https://dadosabertos.compras.gov.br/swagger-ui/index.html
+  (`/modulo-arp/1_consultarARP`, `1.2_consultarARP_FimVigencia`, `2_consultarARPItem`)
+- Busca do portal PNCP (não documentada; é a usada pelo frontend):
+  `https://pncp.gov.br/api/search/?q=<termo>&tipos_documento=ata&status=vigente&tam_pagina=500&pagina=1`
+- Avaliado e descartado: Portal da Transparência (CGU), https://portaldatransparencia.gov.br/download-de-dados
+  (não tem atas; "Licitações" até 04/2024).
+
 ## API do PNCP
 
 - Swagger da API de Consulta: https://pncp.gov.br/api/consulta/swagger-ui/index.html

@@ -1,6 +1,7 @@
 # 0002 — Consulta ao vivo via compras-mcp local
 
 - Status: aceita (12/10/2026)
+- **Alterada pela ADR 0016/0018 (13/10/2026):** o servidor não roda mais no projeto; o pacote fica só como biblioteca de clientes HTTP.
 
 ## Contexto
 

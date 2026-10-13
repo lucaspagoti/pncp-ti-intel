@@ -794,7 +794,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "fastmcp" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -813,7 +812,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "fastmcp", specifier = ">=2.14,<3" },
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
