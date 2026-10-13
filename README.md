@@ -1,8 +1,7 @@
-# pncp-ti-intel — pacote inicial
+# pncp-ti-intel
 
-Projeto pessoal: base de inteligência de contratações públicas de TI, alimentada pelo PNCP (escopo
-nacional) e consultada via MCP.
-Este pacote contém só documentos e configurações de partida. Nenhum código ainda: o código nasce na Fase 0, com o Claude Code.
+Projeto pessoal: base local de atas de registro de preços de TI vigentes, alimentada pelo PNCP
+(escopo nacional) e consultada via MCP.
 
 Plano completo (versão viva, editável): https://claude.ai/code/artifact/b89bd04f-c28e-4fbc-9bd9-f46c9c95aea4
 Cópia estática do plano: `docs/PLANO.md`.
@@ -13,7 +12,7 @@ Cópia estática do plano: `docs/PLANO.md`.
 | --- | --- | --- |
 | `CLAUDE.md` | Regras e contexto que o Claude Code lê em toda sessão | Claude Code |
 | `docs/PLANO.md` | Plano completo: escopo, arquitetura, segurança, roadmap | Você e o Claude Code |
-| `docs/adr/` | As 9 decisões de arquitetura já tomadas | Claude Code |
+| `docs/adr/` | Decisões de arquitetura | Claude Code |
 | `docs/FASES.md` | Entregas, critérios de aceite e prompt de abertura de cada fase | Você |
 | `docs/GLOSSARIO.md` | Termos de contratação pública usados no código | Claude Code |
 | `docs/referencias/LINKS.md` | Fontes oficiais e de terceiros | Ambos |
@@ -21,16 +20,19 @@ Cópia estática do plano: `docs/PLANO.md`.
 | `insumos/` | Modelos de planilha que **só você** pode preencher | Você |
 | `.mcp.json` | Registra o compras-mcp local (stdio, versão fixada) | Claude Code |
 | `.env.example`, `.gitignore` | Base de configuração segura | Claude Code |
-| `src/pncp_ti/` | Código da ingestão (Fase 1) — schema, upsert, adaptadores por entidade, CLI | Claude Code |
+| `src/pncp_ti/` | Snapshot diário de atas de TI, filtro de entrada e amostra | Claude Code |
 | `db/migrations/` | Migrações Alembic (schema, papéis `ingest`/`mcp_reader`, views) | Claude Code |
 | `scripts/backup_postgres.sh` | `pg_dump` diário do Postgres local | Você (cron no homelab) |
 
 ## Status
 
-**Fase 0 (Fundação) concluída**, tag `f0-fundacao`. **Fase 1 (Base histórica) em andamento**: schema
-(Alembic), papéis `ingest`/`mcp_reader`, ingestão idempotente (diária + backfill) de contratações, atas
-e contratos do PNCP. Ver `LEIA-ME-CODEX.md` para o handoff detalhado e `docs/FASES.md` para os critérios
-de aceite de cada fase.
+**Escopo (ADR 0015, 12/10/2026): só atas de registro de preços de TI vigentes.** Sem contratações, sem
+contratos, sem histórico. **F0** concluída (tag `f0-fundacao`). **F1** redefinida como infraestrutura de
+ingestão (motor idempotente, papéis, privacidade, backup/restore), mergeada no PR #2. O backfill
+nacional foi cancelado. **F2A** está implementada e em revisão para PR na branch `feat/f2-atas-vigentes-ti`: snapshot
+diário das atas vigentes com filtro de TI na entrada. A migração 0004 é destrutiva e ainda não foi
+aplicada ao banco local; nenhum snapshot nacional foi executado. F2B (itens e preços dessas atas)
+vem depois. Ver `docs/FASES.md` e `LEIA-ME-CODEX.md`.
 
 D1 (GitHub privado pessoal) e D2 (servidor Linux via SSH, sem WSL2) resolvidas — ver `docs/adr/` e
 `LEIA-ME-CODEX.md`.
@@ -53,39 +55,43 @@ ficam isolados por contrato, pois não comprovam identidade global. CNPJ públic
 Guarde a chave com o backup cifrado de configuração; alterá-la requer plano de migração/reingestão.
 
 A migração `0002` preserva registros legados, limpa CPF dos textos/JSON e remove vínculos ambíguos
-com fornecedores PF. Reingerir contratos preenche a identidade correta; máscara antiga não permite
-reconstruir CPF nem desfazer uma fusão anterior. A migração não apaga o banco.
+com fornecedores PF. Ela permanece na cadeia histórica de migrações; a migração 0004 remove essas
+tabelas no novo escopo de atas. Máscaras antigas não permitem reconstruir CPF ou desfazer fusões.
 Campos/textos com sequências isoladas de 11 dígitos são mascarados conservadoramente (podem incluir
 telefones/códigos); valores numéricos de preços permanecem numéricos. Erros de itens preservam os
 itens válidos, mas fazem o job retornar código não zero. Logs não incluem payloads/tracebacks.
 
-## Ingestão (Fase 1)
+## Snapshot diário de atas de TI vigentes (ADR 0015)
 
+O backfill nacional foi cancelado. `make ingest` consulta `/v1/atas` para a data corrente de
+Brasília (`America/Sao_Paulo`), filtra objetos com sinais de TI e publica um snapshot completo somente quando todas as páginas
+terminam. Uma falha mantém a última versão completa disponível. Resposta vazia no meio da
+paginação e snapshot nacional sem registros são tratados como falha, preservando a carga anterior. A amostra aleatória das atas
+vigentes descartadas permite revisar falsos negativos com `make amostra`.
+
+O PNCP devolve até 50 atas por página; ~9.700 páginas têm piso teórico de 80 minutos a 2 req/s.
+Latência e retries aumentam esse tempo, que ainda precisa ser medido na carga nacional. O processo registra andamento por página em `log_execucao_ingestao`. Não há
+comando de backfill ou ingestão de contratos/contratações/itens nesta fase.
+
+`v_atas_ti_vigentes` expõe ao papel `mcp_reader` apenas atas não canceladas dentro do período de
+vigência. A migração 0004 substitui o schema histórico e remove os dados locais de contratações,
+contratos, itens, atas antigas, fornecedores e órgãos, conforme a ADR 0015. Antes de aplicá-la a
+um banco existente, gere e confira
+um backup. Esta migração ainda não foi aplicada nesta sessão.
+
+`make amostra` gera uma amostra de até 100 atas candidatas e até 100 atas vigentes rejeitadas.
+O CSV registra o tamanho de cada população para que a avaliação considere a taxa de amostragem.
+Textos externos que poderiam ser interpretados como fórmulas são exportados como texto literal.
+O comando recusa sobrescrever o arquivo existente; use `--saida` e `--seed` para uma nova amostra.
+
+Comandos:
+
+```sh
+make ingest
+make amostra
+# Se já existir um CSV, preserve-o e escolha outro nome:
+uv run python -m pncp_ti.classificar.amostra --saida insumos/amostra_rotulada_atas.csv --seed 42
 ```
-make ingest             # diário: janela de ontem até hoje, todas as entidades
-make ingest-backfill    # histórico: desde INGEST_BACKFILL_START (.env) até hoje — job longo
-make backup             # pg_dump para backups/ (fora do Git)
-```
-
-`make ingest-backfill` cobre contratações, atas e contratos nacionalmente desde 01/04/2023 (início da
-obrigatoriedade do PNCP para a Lei 14.133/2021) — é um job de horas, não minutos: só contratos teve mais
-de 1,6 milhão de registros em 9 meses de 2026, nacionalmente. É seguro interromper (Ctrl-C) e rodar de
-novo: as janelas são reprocessadas desde a primeira página e os upserts evitam duplicações.
-Não pulamos offsets antigos porque a fonte é mutável. `log_execucao_ingestao` registra resultados
-por página e permite acompanhar erros (ADR 0005 e 0013). No diário, contratações também
-consultam o endpoint de atualizações, cobrindo mudanças de publicações antigas. Para acompanhar o progresso enquanto
-roda:
-
-```sql
-SELECT entidade, status, count(*), max(concluido_em)
-FROM log_execucao_ingestao
-GROUP BY entidade, status
-ORDER BY entidade, status;
-```
-
-Para rodar só uma entidade: `uv run python -m pncp_ti.ingest.cli --backfill --entidades contratacoes`.
-Itens de contratação (preço por unidade) não entram na Fase 1 de propósito — só a Fase 2, e só para as
-contratações que o classificador de TI marcar como relevantes (ver `docs/FASES.md`).
 
 ### Backup diário e restauração segura
 

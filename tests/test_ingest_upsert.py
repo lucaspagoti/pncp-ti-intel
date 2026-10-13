@@ -1,260 +1,319 @@
-"""Idempotência da ingestão (ADR 0005): mesma janela processada duas vezes deve
-gerar as mesmas contagens — critério de aceite da Fase 1. Usa um cliente PNCP
-falso (sem rede) contra um Postgres de teste real (sem mockar o banco).
-"""
+"""Snapshot idempotente e publicação atômica das atas de TI."""
 
-from __future__ import annotations
+from dataclasses import replace
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from datetime import date
-from typing import Any
-
+import psycopg
 import pytest
 from compras_mcp.errors import ComprasHTTPError
+from psycopg.rows import dict_row
 
-from pncp_ti.ingest.executar import FalhasIngestao, _validar_pagina, ingerir_janela
-from pncp_ti.ingest.mapeadores import extrair_orgao, mapear_contratacao
+from pncp_ti.config import get_settings, ingest_dsn
+from pncp_ti.ingest.atas import ingerir_snapshot
+from pncp_ti.ingest.executar import FalhasIngestao
 from pncp_ti.ingest.rate_limit import LimitadorTaxa
-from pncp_ti.ingest.windows import Janela
 
-CONTRATACAO_1: dict[str, Any] = {
-    "numeroControlePNCP": "01612441000107-1-000156/2026",
-    "orgaoEntidade": {
-        "cnpj": "01612441000107",
-        "razaoSocial": "MUNICIPIO DE BELA VISTA DO CAROBA",
-        "poderId": "N",
-        "esferaId": "M",
-    },
-    "unidadeOrgao": {
-        "ufSigla": "PR",
-        "municipioNome": "Bela Vista da Caroba",
-        "codigoUnidade": "1",
-        "nomeUnidade": "Prefeitura Municipal de Bela Vista da Caroba",
-        "codigoIbge": "4102752",
-    },
-    "anoCompra": 2026,
-    "srp": False,
-    "sequencialCompra": 156,
-    "numeroCompra": "PR66",
-    "processo": "PR66/2026",
-    "objetoCompra": "Aquisição de materiais elétricos.",
-    "modalidadeId": 6,
-    "modalidadeNome": "Pregão - Eletrônico",
-    "situacaoCompraId": 1,
-    "situacaoCompraNome": "Divulgada no PNCP",
-    "valorTotalEstimado": 20901.1,
-    "valorTotalHomologado": None,
-    "dataPublicacaoPncp": "2026-10-01T00:01:07",
-    "dataInclusao": "2026-10-01T00:01:07",
-    "dataAtualizacao": "2026-10-01T00:01:07",
-    "dataAtualizacaoGlobal": "2026-10-01T00:01:24",
-    "dataAberturaProposta": "2026-09-28T08:00:01",
-    "dataEncerramentoProposta": "2026-10-08T08:00:01",
-    "linkSistemaOrigem": None,
-    "linkProcessoEletronico": None,
+REFERENCIA = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+
+ATA_TI = {
+    "numeroControlePNCPAta": "ata-sintetica-ti",
+    "numeroControlePNCPCompra": "compra-sintetica-ti",
+    "objetoContratacao": "Aquisição de computadores",
+    "cancelado": False,
+    "vigenciaInicio": REFERENCIA.isoformat(),
+    "vigenciaFim": REFERENCIA.isoformat(),
 }
-
-CONTRATACAO_2: dict[str, Any] = {
-    **CONTRATACAO_1,
-    "numeroControlePNCP": "01612441000107-1-000157/2026",
+ATA_DESCARTADA = {
+    "numeroControlePNCPAta": "ata-sintetica-geral",
+    "numeroControlePNCPCompra": "compra-sintetica-geral",
+    "objetoContratacao": "Aquisição de mobiliário escolar",
+    "cancelado": False,
+    "vigenciaInicio": REFERENCIA.isoformat(),
+    "vigenciaFim": REFERENCIA.isoformat(),
 }
 
 
-class ClientePNCPFalso:
-    """Paginação fixa, sem rede — não dá pra usar o `PNCPClient` real num teste
-    de idempotência determinístico (a API muda a cada chamada)."""
+class ClienteFalso:
+    def __init__(self, registros=None, erro=None):
+        self.registros = registros or []
+        self.erro = erro
 
-    def __init__(self, paginas: dict[int, dict[str, Any]], total_paginas: int = 1) -> None:
-        self._paginas = paginas
-        self._total_paginas = total_paginas
-
-    async def list_resource(self, path: str, *, pagina: int, **_kwargs: Any) -> dict[str, Any]:
-        if pagina in self._paginas:
-            return {"data": self._paginas[pagina], "totalPaginas": self._total_paginas}
-        return {"data": [], "totalPaginas": self._total_paginas}
+    async def list_resource(self, _path, *, pagina, **_kwargs):
+        if self.erro:
+            raise self.erro
+        return {"data": self.registros if pagina == 1 else [], "totalPaginas": 1}
 
 
-async def test_mesma_janela_processada_duas_vezes_mesma_contagem(conn_ingest):
-    cliente = ClientePNCPFalso({1: [CONTRATACAO_1, CONTRATACAO_2]})
-    limitador = LimitadorTaxa(1000)
-    janela = Janela(inicio=date(2026, 10, 1), fim=date(2026, 10, 10))
+async def test_snapshot_publica_candidatas_e_amostra_de_rejeitadas(conn_ingest, conn_reader):
+    cliente = ClienteFalso([ATA_TI, ATA_DESCARTADA])
+    for _ in range(2):
+        await ingerir_snapshot(conn_ingest, cliente, LimitadorTaxa(10_000), REFERENCIA)
 
-    chaves = [CONTRATACAO_1["numeroControlePNCP"], CONTRATACAO_2["numeroControlePNCP"]]
+    atual = await (
+        await conn_ingest.execute(
+            "SELECT id, registros_lidos, candidatas_ti, descartadas, amostra_descartadas "
+            "FROM snapshots_atas_ti WHERE ativo AND status = 'concluido'"
+        )
+    ).fetchone()
+    candidatas = await (
+        await conn_reader.execute("SELECT numero_controle_pncp_ata FROM v_atas_ti_vigentes")
+    ).fetchall()
+    rejeitadas = await (
+        await conn_ingest.execute(
+            "SELECT numero_controle_pncp_ata FROM amostra_atas_descartadas WHERE snapshot_id = %s",
+            (atual["id"],),
+        )
+    ).fetchall()
+    historico = await (
+        await conn_ingest.execute("SELECT count(*) AS n FROM snapshots_atas_ti")
+    ).fetchone()
 
-    async def contar() -> int:
-        # O banco de teste é compartilhado pela sessão (ver `conftest.py`) — conta
-        # só as chaves desta fixture, não a tabela inteira, pra não se misturar
-        # com linhas de outros testes (ex.: a fumaça com rede real).
-        row = await (
+    assert (atual["registros_lidos"], atual["candidatas_ti"], atual["descartadas"]) == (2, 1, 1)
+    assert atual["amostra_descartadas"] == 1
+    assert [row["numero_controle_pncp_ata"] for row in candidatas] == [
+        ATA_TI["numeroControlePNCPAta"]
+    ]
+    assert [row["numero_controle_pncp_ata"] for row in rejeitadas] == [
+        ATA_DESCARTADA["numeroControlePNCPAta"]
+    ]
+    assert historico["n"] == 1
+
+
+async def test_snapshot_deduplica_ata_repetida_entre_paginas(conn_ingest):
+    cliente = ClientePaginas(
+        [
+            {"data": [ATA_TI, ATA_DESCARTADA], "totalPaginas": 2},
+            {"data": [ATA_TI, ATA_DESCARTADA], "totalPaginas": 2},
+        ]
+    )
+    await ingerir_snapshot(conn_ingest, cliente, LimitadorTaxa(10_000), REFERENCIA)
+
+    snapshot = await (
+        await conn_ingest.execute(
+            "SELECT registros_lidos, candidatas_ti, descartadas, amostra_descartadas "
+            "FROM snapshots_atas_ti WHERE ativo"
+        )
+    ).fetchone()
+    amostra = await (
+        await conn_ingest.execute("SELECT count(*) AS n FROM amostra_atas_descartadas")
+    ).fetchone()
+
+    assert (snapshot["registros_lidos"], snapshot["candidatas_ti"], snapshot["descartadas"]) == (
+        2,
+        1,
+        1,
+    )
+    assert snapshot["amostra_descartadas"] == amostra["n"] == 1
+
+
+async def test_falha_nao_substitui_o_ultimo_snapshot_concluido(conn_ingest, conn_reader):
+    await ingerir_snapshot(
+        conn_ingest,
+        ClienteFalso([ATA_TI]),
+        LimitadorTaxa(10_000),
+        REFERENCIA,
+    )
+    with pytest.raises(ValueError):
+        await ingerir_snapshot(
+            conn_ingest,
+            ClienteFalso(erro=ValueError("fonte indisponível")),
+            LimitadorTaxa(10_000),
+            REFERENCIA,
+        )
+
+    linha = await (
+        await conn_reader.execute("SELECT numero_controle_pncp_ata FROM v_atas_ti_vigentes")
+    ).fetchone()
+    status = await (
+        await conn_ingest.execute(
+            "SELECT count(*) AS n FROM snapshots_atas_ti WHERE status = 'falhou'"
+        )
+    ).fetchone()
+    assert linha["numero_controle_pncp_ata"] == ATA_TI["numeroControlePNCPAta"]
+    assert status["n"] == 1
+
+
+class ClientePaginas:
+    def __init__(self, paginas):
+        self.paginas = paginas
+
+    async def list_resource(self, _path, *, pagina, **_kwargs):
+        resposta = self.paginas[pagina - 1]
+        if isinstance(resposta, Exception):
+            raise resposta
+        return resposta
+
+
+async def test_204_no_meio_da_carga_nao_publica_snapshot_parcial(conn_ingest, conn_reader):
+    await ingerir_snapshot(conn_ingest, ClienteFalso([ATA_TI]), LimitadorTaxa(10_000), REFERENCIA)
+    nova = {**ATA_TI, "numeroControlePNCPAta": "ata-parcial"}
+    cliente = ClientePaginas(
+        [
+            {"data": [nova], "totalPaginas": 3},
+            ComprasHTTPError("Resposta nao-JSON de pncp/v1/atas: "),
+        ]
+    )
+    with pytest.raises(ValueError):
+        await ingerir_snapshot(conn_ingest, cliente, LimitadorTaxa(10_000), REFERENCIA)
+    linhas = await (
+        await conn_reader.execute("SELECT numero_controle_pncp_ata FROM v_atas_ti_vigentes")
+    ).fetchall()
+    assert [row["numero_controle_pncp_ata"] for row in linhas] == [ATA_TI["numeroControlePNCPAta"]]
+
+
+async def test_erro_sql_na_amostra_limpa_staging_e_libera_lock(conn_ingest, conn_reader):
+    from dataclasses import replace
+
+    await ingerir_snapshot(conn_ingest, ClienteFalso([ATA_TI]), LimitadorTaxa(10_000), REFERENCIA)
+    descartada_invalida = {**ATA_DESCARTADA, "cnpjOrgao": "1" * 15}
+    with pytest.raises(psycopg.errors.StringDataRightTruncation):
+        await ingerir_snapshot(
+            conn_ingest,
+            ClienteFalso([ATA_TI, descartada_invalida]),
+            LimitadorTaxa(10_000),
+            REFERENCIA,
+        )
+    falhou = await (
+        await conn_ingest.execute("SELECT id FROM snapshots_atas_ti WHERE status = 'falhou'")
+    ).fetchone()
+    assert falhou is not None
+    assert (
+        await (
             await conn_ingest.execute(
-                "SELECT count(*) AS n FROM contratacoes WHERE numero_controle_pncp = ANY(%s)",
-                (chaves,),
+                "SELECT count(*) AS n FROM atas WHERE snapshot_id = %s", (falhou["id"],)
             )
         ).fetchone()
-        return row["n"]
+    )["n"] == 0
+    assert (
+        await (await conn_reader.execute("SELECT count(*) AS n FROM v_atas_ti_vigentes")).fetchone()
+    )["n"] == 1
+    settings = replace(get_settings(), postgres_db=conn_ingest.info.dbname)
+    async with await psycopg.AsyncConnection.connect(
+        ingest_dsn(settings), row_factory=dict_row
+    ) as outra:
+        await ingerir_snapshot(outra, ClienteFalso([ATA_TI]), LimitadorTaxa(10_000), REFERENCIA)
 
-    async def rodar() -> None:
-        await ingerir_janela(
-            conn_ingest,
-            cliente,
-            limitador,
-            entidade="contratacoes_teste",
-            tabela="contratacoes",
-            chave="numero_controle_pncp",
-            path="/v1/contratacoes/publicacao",
-            janela=janela,
-            filtros={"codigoModalidadeContratacao": 6},
-            mapear=mapear_contratacao,
-            modalidade_id=6,
-            extrair_orgao=extrair_orgao,
+
+async def test_publicacao_atomica_e_exclusao_mutua(conn_ingest, conn_reader):
+    await ingerir_snapshot(conn_ingest, ClienteFalso([ATA_TI]), LimitadorTaxa(10_000), REFERENCIA)
+    novas = [{**ATA_TI, "numeroControlePNCPAta": f"ata-nova-{i}"} for i in (1, 2)]
+    settings = replace(get_settings(), postgres_db=conn_ingest.info.dbname)
+    # A consulta permanece correta mesmo numa sessão com outro fuso.
+    await conn_reader.execute("SET TIME ZONE 'Pacific/Kiritimati'")
+
+    class ClienteObservado:
+        async def list_resource(self, _path, *, pagina, **_kwargs):
+            if pagina == 2:
+                visiveis = await (
+                    await conn_reader.execute(
+                        "SELECT numero_controle_pncp_ata FROM v_atas_ti_vigentes"
+                    )
+                ).fetchall()
+                assert [r["numero_controle_pncp_ata"] for r in visiveis] == [
+                    ATA_TI["numeroControlePNCPAta"]
+                ]
+                staging = await (
+                    await conn_ingest.execute(
+                        "SELECT count(*) AS n FROM atas a JOIN snapshots_atas_ti s "
+                        "ON s.id = a.snapshot_id WHERE s.status = 'em_andamento'"
+                    )
+                ).fetchone()
+                assert staging["n"] == 1
+                async with await psycopg.AsyncConnection.connect(
+                    ingest_dsn(settings), row_factory=dict_row
+                ) as outra:
+                    with pytest.raises(RuntimeError, match="já existe"):
+                        await ingerir_snapshot(
+                            outra, ClienteFalso([ATA_TI]), LimitadorTaxa(10_000), REFERENCIA
+                        )
+            return {"data": [novas[pagina - 1]], "totalPaginas": 2}
+
+    await ingerir_snapshot(conn_ingest, ClienteObservado(), LimitadorTaxa(10_000), REFERENCIA)
+    visiveis = await (
+        await conn_reader.execute(
+            "SELECT numero_controle_pncp_ata FROM v_atas_ti_vigentes ORDER BY 1"
         )
+    ).fetchall()
+    assert [r["numero_controle_pncp_ata"] for r in visiveis] == [
+        r["numeroControlePNCPAta"] for r in novas
+    ]
 
-    await rodar()
-    primeira_contagem = await contar()
-    assert primeira_contagem == 2
 
-    await rodar()
-    cliente._paginas[1][0] = {**CONTRATACAO_1, "objetoCompra": "Objeto atualizado"}
-    await rodar()
-    row = await (
-        await conn_ingest.execute(
-            "SELECT objeto_compra FROM contratacoes WHERE numero_controle_pncp = %s",
-            (CONTRATACAO_1["numeroControlePNCP"],),
+@pytest.mark.parametrize("registros", [[], [{"objetoContratacao": "sem identificador"}]])
+async def test_carga_vazia_ou_malformada_preserva_anterior(conn_ingest, conn_reader, registros):
+    await ingerir_snapshot(conn_ingest, ClienteFalso([ATA_TI]), LimitadorTaxa(10_000), REFERENCIA)
+    with pytest.raises((ValueError, FalhasIngestao)):
+        await ingerir_snapshot(
+            conn_ingest, ClienteFalso(registros), LimitadorTaxa(10_000), REFERENCIA
         )
-    ).fetchone()
-    assert row["objeto_compra"] == "Objeto atualizado"
-    segunda_contagem = await contar()
-    assert segunda_contagem == primeira_contagem
+    assert (
+        await (await conn_reader.execute("SELECT count(*) AS n FROM v_atas_ti_vigentes")).fetchone()
+    )["n"] == 1
 
-    log_rows = await (
-        await conn_ingest.execute(
-            "SELECT count(*) AS n FROM log_execucao_ingestao "
-            "WHERE entidade = 'contratacoes_teste' AND status = 'ok'"
-        )
-    ).fetchone()
-    assert log_rows["n"] >= 1
 
-    # `--forcar` reprocessa uma janela já marcada `ok` de propósito (ex.: depois
-    # de corrigir um mapeador) — não pode bater em UniqueViolation no log.
-    await ingerir_janela(
-        conn_ingest,
-        cliente,
-        limitador,
-        entidade="contratacoes_teste",
-        tabela="contratacoes",
-        chave="numero_controle_pncp",
-        path="/v1/contratacoes/publicacao",
-        janela=janela,
-        filtros={"codigoModalidadeContratacao": 6},
-        mapear=mapear_contratacao,
-        modalidade_id=6,
-        extrair_orgao=extrair_orgao,
-        forcar=True,
+async def test_vigencia_cancelamento_e_reclassificacao(conn_ingest, conn_reader):
+    await ingerir_snapshot(conn_ingest, ClienteFalso([ATA_TI]), LimitadorTaxa(10_000), REFERENCIA)
+    registros = [
+        {**ATA_TI, "objetoContratacao": "Objeto corrigido: mobiliário"},
+        {**ATA_TI, "numeroControlePNCPAta": "cancelada", "cancelado": True},
+        {
+            **ATA_TI,
+            "numeroControlePNCPAta": "vencida",
+            "vigenciaFim": (REFERENCIA - timedelta(days=1)).isoformat(),
+        },
+        {
+            **ATA_TI,
+            "numeroControlePNCPAta": "futura",
+            "vigenciaInicio": (REFERENCIA + timedelta(days=1)).isoformat(),
+        },
+    ]
+    await ingerir_snapshot(conn_ingest, ClienteFalso(registros), LimitadorTaxa(10_000), REFERENCIA)
+    assert (
+        await (await conn_reader.execute("SELECT count(*) AS n FROM v_atas_ti_vigentes")).fetchone()
+    )["n"] == 0
+    descartadas = await (
+        await conn_ingest.execute("SELECT numero_controle_pncp_ata FROM amostra_atas_descartadas")
+    ).fetchall()
+    assert [r["numero_controle_pncp_ata"] for r in descartadas] == [ATA_TI["numeroControlePNCPAta"]]
+
+
+async def test_total_reduzido_nao_encerra_carga_antes_da_pagina_prometida(conn_ingest):
+    novas = [{**ATA_TI, "numeroControlePNCPAta": f"ata-total-{i}"} for i in (1, 2, 3)]
+    cliente = ClientePaginas(
+        [
+            {"data": [novas[0]], "totalPaginas": 3},
+            {"data": [novas[1]], "totalPaginas": 2},
+            {"data": [novas[2]], "totalPaginas": 3},
+        ]
     )
-    assert await contar() == primeira_contagem
+    await ingerir_snapshot(conn_ingest, cliente, LimitadorTaxa(10_000), REFERENCIA)
+    assert (
+        await (
+            await conn_ingest.execute("SELECT candidatas_ti FROM snapshots_atas_ti WHERE ativo")
+        ).fetchone()
+    )["candidatas_ti"] == 3
 
 
-async def test_item_com_erro_nao_derruba_os_outros_itens_da_pagina(conn_ingest):
-    # Savepoint por item (executar.py): um item sem "numeroControlePNCP" quebra
-    # mapear_contratacao com KeyError, mas isso não pode "envenenar" a conexão
-    # e impedir o upsert do item seguinte na mesma página (bug real: sem
-    # savepoint, o segundo upsert falhava com InFailedSqlTransaction).
-    item_ruim: dict[str, Any] = {"objetoCompra": "sem numeroControlePNCP"}
-    cliente = ClientePNCPFalso({1: [item_ruim, CONTRATACAO_1]})
-    limitador = LimitadorTaxa(1000)
-    janela = Janela(inicio=date(2026, 11, 1), fim=date(2026, 11, 10))
+async def test_erro_durante_troca_do_snapshot_reverte_publicacao(
+    conn_ingest, conn_reader, monkeypatch
+):
+    await ingerir_snapshot(conn_ingest, ClienteFalso([ATA_TI]), LimitadorTaxa(10_000), REFERENCIA)
+    execute = conn_ingest.execute
 
-    with pytest.raises(FalhasIngestao, match="1 falha"):
-        await ingerir_janela(
-            conn_ingest,
-            cliente,
-            limitador,
-            entidade="contratacoes_teste_item_ruim",
-            tabela="contratacoes",
-            chave="numero_controle_pncp",
-            path="/v1/contratacoes/publicacao",
-            janela=janela,
-            filtros={"codigoModalidadeContratacao": 6},
-            mapear=mapear_contratacao,
-            modalidade_id=6,
-            extrair_orgao=extrair_orgao,
-        )
+    async def falha_na_remocao(query, *args, **kwargs):
+        if isinstance(query, str) and query.startswith("DELETE FROM snapshots_atas_ti"):
+            return await execute("SELECT 1 / 0")
+        return await execute(query, *args, **kwargs)
 
-    linha_boa = await (
-        await conn_ingest.execute(
-            "SELECT 1 FROM contratacoes WHERE numero_controle_pncp = %s",
-            (CONTRATACAO_1["numeroControlePNCP"],),
-        )
-    ).fetchone()
-    assert linha_boa is not None, "o item válido depois do item ruim devia ter sido gravado"
-
-    log_row = await (
-        await conn_ingest.execute(
-            "SELECT status, falhas, registros_gravados FROM log_execucao_ingestao "
-            "WHERE entidade = 'contratacoes_teste_item_ruim'"
-        )
-    ).fetchone()
-    assert log_row["falhas"] == 1
-    assert log_row["registros_gravados"] == 1
-    # Página com falha não pode ficar marcada "ok" — senão o próximo run (sem
-    # --forcar) pula ela pra sempre e o item ruim nunca é revisitado.
-    assert log_row["status"] == "erro"
-
-
-class ClientePNCP204Falso:
-    """Simula o quirk real do PNCP: combinação sem resultado responde 204 com
-    corpo vazio, e o `BaseAsyncClient` reusado levanta `ComprasHTTPError` ao
-    tentar decodificar JSON (confirmado por chamada real nesta sessão)."""
-
-    async def list_resource(self, path: str, *, pagina: int, **_kwargs: Any) -> dict[str, Any]:
-        raise ComprasHTTPError(f"Resposta nao-JSON de pncp{path}: ")
-
-
-async def test_janela_sem_resultado_204_nao_quebra_a_ingestao(conn_ingest):
-    cliente = ClientePNCP204Falso()
-    limitador = LimitadorTaxa(1000)
-    janela = Janela(inicio=date(2026, 10, 1), fim=date(2026, 10, 10))
-
-    await ingerir_janela(
-        conn_ingest,
-        cliente,
-        limitador,
-        entidade="contratacoes_teste_204",
-        tabela="contratacoes",
-        chave="numero_controle_pncp",
-        path="/v1/contratacoes/publicacao",
-        janela=janela,
-        filtros={"codigoModalidadeContratacao": 13},
-        mapear=mapear_contratacao,
-        modalidade_id=13,
-        extrair_orgao=extrair_orgao,
-    )
-
-    log_row = await (
-        await conn_ingest.execute(
-            "SELECT status, registros_lidos FROM log_execucao_ingestao "
-            "WHERE entidade = 'contratacoes_teste_204'"
-        )
-    ).fetchone()
-    assert log_row["status"] == "ok"
-    assert log_row["registros_lidos"] == 0
-
-
-@pytest.mark.parametrize(
-    "resp",
-    [
-        None,
-        {},
-        {"data": None, "totalPaginas": 1},
-        {"data": {}, "totalPaginas": 1},
-        {"data": [1], "totalPaginas": 1},
-        {"data": [], "totalPaginas": "1"},
-        {"data": [], "totalPaginas": True},
-        {"data": [], "totalPaginas": -1},
-        {"data": [{}], "totalPaginas": 0},
-        {"data": [], "totalPaginas": 1},
-        {"data": [{}], "totalPaginas": 1, "numeroPagina": 2},
-    ],
-)
-def test_envelope_malformado_rejeitado(resp):
-    with pytest.raises(ValueError):
-        _validar_pagina(resp)
+    monkeypatch.setattr(conn_ingest, "execute", falha_na_remocao)
+    nova = {**ATA_TI, "numeroControlePNCPAta": "ata-ainda-nao-publicada"}
+    with pytest.raises(psycopg.errors.DivisionByZero):
+        await ingerir_snapshot(conn_ingest, ClienteFalso([nova]), LimitadorTaxa(10_000), REFERENCIA)
+    linhas = await (
+        await conn_reader.execute("SELECT numero_controle_pncp_ata FROM v_atas_ti_vigentes")
+    ).fetchall()
+    assert [r["numero_controle_pncp_ata"] for r in linhas] == [ATA_TI["numeroControlePNCPAta"]]
+    assert (await (await conn_ingest.execute("SELECT count(*) AS n FROM atas")).fetchone())[
+        "n"
+    ] == 1

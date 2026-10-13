@@ -5,16 +5,16 @@ Entregas e critérios de aceite por fase: `docs/FASES.md`. Decisões: `docs/adr/
 
 ## Visão e escopo
 
-É um projeto pessoal do Lucas: uma base local e curada de contratações públicas de TI, alimentada diariamente pelo PNCP (escopo nacional) e consultada por agentes via MCP. Responde em segundos o que hoje exige horas de busca manual: que atas vigentes aceitam adesão, quanto outros órgãos pagaram por um item e como especificaram contratações parecidas. Serve a pesquisa e aprendizado pessoal — não está atrelado a nenhum órgão (ADR 0011).
+É um projeto pessoal do Lucas: uma base local e curada das **atas de registro de preços de TI vigentes** no país, atualizada diariamente pelo PNCP e consultada por agentes via MCP (ADR 0015). Responde em segundos o que hoje exige horas de busca manual: que atas de TI aceitam adesão agora, quanto foi registrado por item e como os órgãos especificaram. Não guarda contratações, contratos nem histórico de atas vencidas. Para consulta pontual fora desse recorte existe o `compras-mcp` ao vivo. Serve a pesquisa e aprendizado pessoal e não está atrelado a nenhum órgão (ADR 0011).
 
 **Estratégia: compor, não construir.** O MCP Compras.gov.br (`compras-mcp`, MIT) já entrega consulta ao vivo ao PNCP, pesquisa de preços no padrão IN 65/2021, atas para adesão e links de TR/ETP. Ele entra no dia 1, rodando localmente. O projeto constrói só o que ele não faz.
 
 **Usos prioritários**
 
-1. Pesquisa de preços para ETP e TR (contratações similares de até 1 ano, art. 23, §1º, II da Lei 14.133).
-2. Localizar atas de registro de preços vigentes para adesão.
-3. Referenciar especificações, SLAs e modelos de TR/ETP de outros órgãos.
-4. Digest diário de novas contratações de TI.
+1. Localizar atas de registro de preços de TI vigentes para adesão.
+2. Pesquisa de preços a partir dos valores registrados nos itens dessas atas.
+3. Referenciar especificações, SLAs e modelos de TR/ETP das compras dessas atas.
+4. Digest diário de novas atas de TI.
 
 **Fora de escopo:** sistemas internos próprios de órgãos (ex: portais estaduais de licitação), contratos sob a Lei 8.666, estatais (Lei 13.303), geração automática de documentos licitatórios e qualquer escrita em sistemas oficiais. Nenhuma saída substitui análise humana antes de qualquer uso formal.
 
@@ -29,11 +29,12 @@ Entregas e critérios de aceite por fase: `docs/FASES.md`. Decisões: `docs/adr/
 | Links de Edital, TR e ETP | `compras-mcp`: `pncp_contratacao_arquivos` | Download, extração de ZIP aninhado e indexação |
 | Cliente da API do PNCP | `pypncp`, `pncp-cli`, cliente do `compras-mcp` | Escolher e envolver |
 | Exploração da API no Claude Code | Skill do `pncp-cli` | Instalar |
-| Histórico além de 365 dias | Não | **Lacuna 1:** banco local persistente |
-| Recorte curado de TI | Não | **Lacuna 2:** filtro por catálogo + classificador |
-| Preço por unidade comparável | Não | **Lacuna 3:** normalização |
-| Busca no texto dos anexos | Não | **Lacuna 4:** RAG híbrido |
-| Aviso diário de novas contratações | Não | **Lacuna 5:** digest no Hermes |
+| Recorte curado de atas de TI vigentes | Não | **Lacuna 1:** snapshot diário + filtro de TI (ADR 0015) |
+| Preço registrado por item, comparável | Não | **Lacuna 2:** itens das atas de TI + normalização |
+| Busca no texto dos anexos | Não | **Lacuna 3:** RAG híbrido (só atas de TI) |
+| Aviso diário de novas atas de TI | Não | **Lacuna 4:** digest no Hermes |
+
+Histórico além da vigência saiu do escopo de propósito (ADR 0015).
 
 ## Arquitetura
 
@@ -92,7 +93,7 @@ Riscos reais: injeção de instruções no texto dos anexos, componente de terce
 **Transporte e rede**
 - Servidores MCP via stdio (recomendação da especificação MCP para servidores locais).
 - Modo HTTP do `compras-mcp` sobe em `0.0.0.0` sem autenticação: não usar assim.
-- Portas só em `127.0.0.1`. Ingestão só sai para `pncp.gov.br`. Leitor de anexos sem rede.
+- Portas só em `127.0.0.1`. Ingestão sai só para `pncp.gov.br` (ADR 0015). Leitor de anexos sem rede.
 - **Exposição pública (ADR 0012, Fase "Exposição pública autenticada"):** hoje nada está exposto. Quando
   essa fase acontecer, acesso remoto só via reverse proxy próprio com TLS e autenticação na frente de
   tudo — nenhum serviço interno (Postgres, MCPs) sai de loopback diretamente. Mecanismo de autenticação é
@@ -122,8 +123,8 @@ Riscos reais: injeção de instruções no texto dos anexos, componente de terce
 | --- | --- | --- |
 | API do PNCP muda contrato sem versionar | Ingestão quebra em silêncio | Teste diário contra a API; `compras_healthcheck`; alerta no Hermes |
 | `compras-mcp` abandonado ou alterado | Perde a camada ao vivo | Versão fixada; fork possível (MIT); snapshot |
-| Cobertura do RJ no PNCP incompleta | Base enviesada | Reconciliação na Fase 1 (G1) |
-| Catálogo próprio do RJ derruba o filtro | TI fica de fora | Classificador + amostra rotulada |
+| Filtro de TI por palavra-chave perde ata de TI (objeto genérico) | Ata fica fora da base | Palavras-chave generosas; amostra das descartadas medida na rotulagem; classificador só se D6 não for atingido |
+| Snapshot diário (~80 min) falha no meio | Base do dia incompleta | Upsert idempotente; reexecutar a carga; view filtra por vigência |
 | Anexos escaneados ou ZIP aninhado | Lacunas no RAG | Extração recursiva; OCR só se a eval pedir |
 | Bloqueio pelo WAF | Ingestão interrompida | Limite de taxa, backoff, User-Agent, janelas |
 | Máquina desligada | Digest atrasa | Ingestão retomável; já roda no homelab desde a Fase 0 |
@@ -134,7 +135,8 @@ Riscos reais: injeção de instruções no texto dos anexos, componente de terce
 - [x] **D1. Repositório:** GitHub privado pessoal. https://github.com/lucaspagoti/pncp-ti-intel (12/10/2026).
 - [x] **D2. Ambiente local:** servidor Linux (homelab) via SSH, Docker nativo — sem Windows/WSL2 (12/10/2026).
 - [ ] **D3. Índice vetorial:** pgvector no Postgres (recomendado) ou Qdrant.
-- [ ] **D4. Modelos locais:** classificador e embeddings na GPU local (recomendado) ou via API.
+- [ ] **D4. Modelos locais:** embeddings (RAG, F4) na GPU local (recomendado) ou via API. O classificador
+  só entra se a rotulagem pedir (ADR 0015).
 - [x] **D5. Norma de pesquisa de preços:** não é mais decisão bloqueante — projeto pessoal, sem processo
   formal de órgão a instruir. A tool do `compras-mcp` segue a IN SEGES/ME 65/2021 (federal); se um dia o
   resultado for usado pra alguma decisão formal, conferir a norma aplicável a esse órgão antes de usar.

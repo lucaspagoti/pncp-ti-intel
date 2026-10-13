@@ -1,6 +1,8 @@
 # 0006 — Filtro de TI em duas camadas
 
-- Status: aceita (12/10/2026); generalizada em 13/10/2026 (ADR 0011 — escopo nacional, sem vínculo institucional)
+- Status: aceita (12/10/2026); generalizada em 13/10/2026 (ADR 0011 — escopo nacional, sem vínculo institucional);
+  alterada pela ADR 0015 (12/10/2026): a camada 2 (classificador local) vira contingência, só se a
+  rotulagem mostrar que a camada 1 não atinge as metas D6.
 
 ## Contexto
 
@@ -16,5 +18,5 @@ do país, não só um estado específico.
 
 ## Consequências
 
-- Avaliação contra amostra rotulada manualmente (`insumos/amostra_rotulada.csv`, gerada na Fase 3).
+- Avaliação contra amostra rotulada manualmente (`insumos/amostra_rotulada.csv`, gerada na Fase 2A).
 - Metas de precisão e recall definidas pelo Lucas após a primeira amostra (decisão D6).

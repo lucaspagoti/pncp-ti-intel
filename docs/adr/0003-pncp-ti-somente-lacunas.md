@@ -1,6 +1,7 @@
 # 0003 — O servidor pncp-ti expõe só o que o compras-mcp não faz
 
-- Status: aceita (12/10/2026)
+- Status: aceita (12/10/2026); alterada pela ADR 0015 (12/10/2026): sai "histórico local".
+  A base guarda só atas vigentes de TI.
 
 ## Contexto
 
@@ -9,7 +10,7 @@ Duplicar tools gera confusão para o modelo (duas tools parecidas) e manutençã
 ## Decisão
 
 O `pncp-ti` é um segundo servidor MCP, ao lado do `compras-mcp` no mesmo cliente. Ele cobre apenas:
-histórico local, recorte de TI, preços normalizados, busca em anexos e digest. Sem fork do `compras-mcp`.
+snapshot local de atas vigentes candidatas a TI, preços normalizados, busca em anexos e digest. Sem fork do `compras-mcp`.
 
 ## Consequências
 
