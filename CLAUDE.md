@@ -62,7 +62,8 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo. Sem Windows/W
 - `make down` — derruba os containers do projeto.
 - `make test` — lint (`ruff check`), format-check (`ruff format --check`) e testes (`pytest`).
 - `make migrate` — aplica as migrações do Alembic (schema, papéis, views).
-- `make ingest` — ainda não implementado (o SIGA RJ chega na R1; depois `FONTE=siga|arp|pncp_busca`).
+- `make ingest` — ainda não implementado; retorna erro para não sinalizar carga concluída
+  (o SIGA RJ chega na R1; depois `FONTE=siga|arp|pncp_busca`).
 - `make backup` — `pg_dump` do container para `backups/` (fora do Git).
 - `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.
 - `make amostra` — amostra para rotulagem (será adaptada às novas fontes na R1).

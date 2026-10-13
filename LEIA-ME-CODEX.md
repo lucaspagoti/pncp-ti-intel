@@ -4,6 +4,56 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
+## Continuação vigente — ajustes da revisão R0, Codex, 13/10/2026
+
+Lucas autorizou os ajustes da revisão e o registro para o Claude continuar. Este bloco
+complementa o estado R0 abaixo; os registros F2/F3 anteriores permanecem históricos.
+Branch: `refactor/fontes-atas`; base revisada: `042c21b`.
+
+**Feito nesta sessão:**
+- ADR 0004 atualizada para distinguir o wrapper PNCP removido (histórico) do reuso de
+  `DadosAbertosClient` previsto na R2 e dos clientes finos autorizados na ADR 0016.
+- ADR 0016 e PLANO deixam a sobreposição SIGA/PNCP a confirmar: a busca notebook/RJ
+  não demonstra ausência universal. Sem fusão automática por semelhança de objeto.
+- A duração da carga é estimativa a medir nos pilotos, incluindo itens ARP e retries.
+- FASES explicita idempotência com os mesmos três CSVs e a mesma data de referência,
+  teste do caminho sha256 inalterado, avaliação de cobertura com referências fora dos
+  resultados da lista de termos e preservação de `primeira_vez_vista` entre snapshots.
+- `make ingest` agora retorna erro enquanto for placeholder, evitando falso sucesso
+  para futuros agendadores. CLAUDE e README acompanham esse comportamento.
+
+**Validação:** `PYTEST_ADDOPTS='--tb=no' make test` passou: lint e formatação verdes,
+79 testes aprovados em 10,00 s, incluindo as duas migrações em bancos temporários.
+`--tb=no` apenas suprime tracebacks; não omite testes. `git diff --check` passou.
+`make ingest` foi exercitado e recusou executar, com retorno não zero esperado.
+A revisão inicial teve 77 aprovados e duas falhas de conexão ao Postgres; o ambiente
+subsequente sem sandbox permitiu concluir a suíte. A tentativa intermediária de conceder
+escrita a um arquivo individual produziu erro de montagem bubblewrap (arquivo tratado
+como diretório). Não houve alteração de configuração global do Codex: a correção prática
+foi a atualização das permissões pelo ambiente desta conversa. Em futuras sessões,
+conceder acesso à pasta do projeto, evitando esse alvo de arquivo individual.
+
+Revisão independente do diff pelo subagente concluída: ajustes aprovados, sem novo
+achado bloqueante.
+
+**Parecer:** ajustes resolvem os achados da revisão; R0 tecnicamente validada localmente.
+Aprovação do Lucas, CI remoto, PR/merge e tag permanecem separados. Não afirmar que R1,
+novas fontes, web ou operação estão implementadas. Os testes não demonstram cobertura
+nacional, ausência de sobreposição SIGA/PNCP ou tempo real das futuras cargas.
+
+**Para o Claude continuar:** revisar o diff não commitado e fechar R0 conforme o fluxo
+aprovado pelo Lucas; depois propor o plano R1 antes de codar. Na R1, validar consistência
+do conjunto dos três CSVs, preservar chaves para futuras fontes e conferir backup por
+restauração antes da migração 0005. Na R2, medir custo total atas + itens. Na R3, definir
+com Lucas D6 e a amostra de cobertura externa à busca. Na R6, testar que recargas não
+reenviam atas conhecidas como novas.
+
+Melhoria adicional para o plano R1: detectar arquivos de gerações diferentes entre os
+três downloads, sem publicar um conjunto incoerente. O motor ainda grava por página;
+qualquer reuso deve escrever em staging e publicar somente após concluir a fonte.
+Nenhuma ingestão real, migração do banco principal, alteração de serviços, commit,
+push, PR ou merge foi feita nesta sessão.
+
 ## Estado vigente: mudança de arquitetura (R0), 13/10/2026 (Claude/Opus 5.5)
 
 **Este bloco substitui tudo o que vem abaixo** sobre F2, F3, MCP e snapshot `/v1/atas`. Leia as ADRs

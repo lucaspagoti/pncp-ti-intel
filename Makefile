@@ -19,7 +19,8 @@ migrate: ## Aplica as migrações do Alembic (schema, papéis, views).
 	uv run alembic upgrade head
 
 ingest: ## Ainda não implementado — chega na R1 (SIGA RJ), ADR 0016.
-	@echo "make ingest: o snapshot PNCP /v1/atas foi removido (ADR 0016). A ingestão SIGA RJ chega na R1."
+	@echo "make ingest: o snapshot PNCP /v1/atas foi removido (ADR 0016). A ingestão SIGA RJ chega na R1." >&2
+	@exit 1
 
 backup: ## pg_dump do Postgres local para backups/ (fora do Git).
 	./scripts/backup_postgres.sh

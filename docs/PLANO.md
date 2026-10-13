@@ -29,7 +29,7 @@ documentos licitatórios. Nenhuma saída substitui a análise humana antes de um
 
 | Fonte | Cobre | Como | Volume (13/10/2026) |
 |---|---|---|---|
-| SIGA RJ | Estado do RJ (não aparece no PNCP) | 3 CSVs completos, regenerados por volta de 04:53: atas, itens (valor unitário, fornecedor) e participantes (qtd demandada × consumida) | 13.090 atas, 1.923 válidas |
+| SIGA RJ | Estado do RJ (cobertura no PNCP a confirmar) | 3 CSVs completos, regenerados por volta de 04:53: atas, itens (valor unitário, fornecedor) e participantes (qtd demandada × consumida) | 13.090 atas, 1.923 válidas |
 | Dados Abertos Compras.gov.br, `modulo-arp` | União e entes no Compras.gov.br | API JSON, 500 por página, janela de 365 dias; itens em `2_consultarARPItem` | ~135 mil atas/ano, ~271 páginas |
 | Busca do portal PNCP | Todas as esferas (estados e municípios fora do Compras.gov.br) | `api/search` com `q=<termo TI>`, `status=vigente`, 500 por página | dezenas de consultas por dia |
 
@@ -102,7 +102,7 @@ pncp-ti-intel/
 |---|---|---|
 | A busca PNCP (não documentada) muda ou bloqueia | Somem as atas de estados e municípios | Teste de contrato diário, retry/backoff, taxa baixa; SIGA e ARP seguem independentes |
 | SIGA muda o cabeçalho, a codificação ou trunca o arquivo | Carga errada | Validação estrita; menos de 50% das linhas da carga anterior conta como anomalia e não publica |
-| A lista de termos TI perde atas | Recall baixo na busca PNCP | Lista revisada pelo Lucas, amostra rotulada (D6), comparação com o ARP na sobreposição |
+| A lista de termos TI perde atas | Recall baixo na busca PNCP | Lista revisada pelo Lucas, amostra rotulada (D6) e referências fora dos resultados; comparação com o ARP na sobreposição |
 | Dados Abertos limita a taxa | Carga ARP lenta | Fila reprocessável, limite de taxa, itens só das atas de TI |
 | Exposição web mal configurada | Acesso não autorizado | D7 resolvida antes de sair de loopback, só leitura, revisão OWASP |
 | Máquina desligada | Base desatualizada | `cargas` registra o frescor; alerta de dado velho |

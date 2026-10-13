@@ -62,7 +62,10 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 - `make ingest FONTE=siga`.
 
 **Critério de aceite**
-- Duas cargas seguidas geram as mesmas contagens em `cargas`.
+- Reprocessar o mesmo conjunto dos três CSVs, com a mesma data de referência, mantém
+  contagens e registros publicados, sem duplicação. Cada execução fica registrada em `cargas`;
+  o caminho de sha256 inalterado também deve ser exercitado. Arquivos de dias diferentes
+  podem alterar legitimamente as contagens.
 - `v_atas_ti_vigentes` lista as atas de TI válidas do RJ com itens e preço unitário, conferidas por
   amostragem contra o CSV.
 - Link de origem: processo SEI e CSV. Verificar se o SIGA tem URL pública por ata.
@@ -89,6 +92,8 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 
 **Critério de aceite**
 - A busca de um termo conhecido bate com o portal; nenhuma duplicata com o ARP na view.
+- Avaliar cobertura com referências independentes dos resultados da lista de termos (D6);
+  registrar limites da amostra sem alegar recall nacional não demonstrado.
 
 ## R4 · Web local
 
@@ -120,7 +125,9 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 - systemd timer + `OnFailure`; backup diário.
 - Alerta de frescor por fonte (SIGA parado há mais de 48h, termo estável da busca PNCP com 0
   resultados, carga ARP falhando).
-- Digest de novas atas de TI (`primeira_vez_vista = hoje`) no Hermes.
+- Digest de novas atas de TI (`primeira_vez_vista = hoje`, em `America/Sao_Paulo`) no Hermes.
+  Preservar essa data entre trocas de snapshot por chave lógica; uma recarga não transforma
+  atas conhecidas em novas. Testar publicação, falha e reprocessamento.
 
 **Critério de aceite**
 - Uma semana sem intervenção manual.
