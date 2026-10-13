@@ -49,26 +49,34 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 
 ## R1 · Ingestão SIGA RJ
 
-**Entregas**
-- `fontes/siga.py`: download dos 3 CSVs com timeout, limite de tamanho, sha256 e `Last-Modified`
-  (pula a carga se nada mudou).
-- Parse estrito: `latin1`, `;`, decimal com vírgula, datas `dd/mm/aaaa`, `trim`; cabeçalho
-  diferente do esperado é falha.
-- Migração `0005`: `cargas`, staging do SIGA, `atas`, `ata_itens`, `ata_participantes`, `tsvector`
-  com índices GIN/trigram e views `v_atas_ti_vigentes`, `v_ata_itens_ti`, `v_ata_saldo_item`.
-  Remove as tabelas da 0004, depois de `make backup` verificado.
-- Classificação de TI no banco (`classificar/regra.py`). `make amostra` adaptado ao novo schema.
-- Arquivo vazio, ou com menos de 50% das linhas da carga anterior, é anomalia e não publica.
-- `make ingest FONTE=siga`.
+**Entregas** (ADR 0019)
+- `fontes/siga.py` + `fontes/siga_csv.py`: download dos 3 CSVs (timeout, limite de 200 MB,
+  sha256, `Last-Modified`, retry), validação estrita, colapso de processos, dedupe por conteúdo,
+  carga numa transação e troca atômica. `make ingest FONTE=siga`.
+- Migração `0005`: `cargas`, `atas`, `ata_itens`, `ata_participantes`, `atas_vistas` e as views
+  `v_atas_ti_vigentes`, `v_ata_itens_ti`, `v_ata_consumo_item`. Aplicada ao banco local depois de
+  backup restaurado em banco temporário.
+- `classificar/in05.py`: regra de TI pelo Anexo Único da IN PRODERJ/PRE 05/2024.
+- `make amostra` (censo das atas vigentes para rotular) e `make eval ROT=...` (precisão/recall
+  contra o rótulo final, em `evals/`).
 
 **Critério de aceite**
-- Reprocessar o mesmo conjunto dos três CSVs, com a mesma data de referência, mantém
-  contagens e registros publicados, sem duplicação. Cada execução fica registrada em `cargas`;
-  o caminho de sha256 inalterado também deve ser exercitado. Arquivos de dias diferentes
-  podem alterar legitimamente as contagens.
-- `v_atas_ti_vigentes` lista as atas de TI válidas do RJ com itens e preço unitário, conferidas por
-  amostragem contra o CSV.
-- Link de origem: processo SEI e CSV. Verificar se o SIGA tem URL pública por ata.
+- Reprocessar os mesmos 3 CSVs mantém contagens e registros, sem duplicação. ✅ (teste e carga
+  real: a segunda execução registrou `sem_mudanca`)
+- Falha de validação, de download ou de gravação preserva a carga anterior e fica em `cargas`. ✅
+  (testes) Itens ou participantes abaixo de 70% da carga ativa não publicam. ✅ (teste)
+- Revisão independente concluída e achados tratados (ADR 0019, seção "Revisão independente"). ✅
+- Conferência manual de 10 atas contra o CSV bruto. ✅ (10 de 10, 13/10/2026)
+- `v_atas_ti_vigentes` lista as atas de TI vigentes do RJ com itens e preço unitário. ✅ (24 atas
+  em 13/10/2026) Conferência manual de 10 atas contra o CSV bruto: ✅ 10 de 10.
+- Precisão e recall medidos contra o rótulo final (D6; meta: recall ≥ 95%, precisão ≥ 85%). ✅
+  100% e 100% sobre o censo de 1.574 atas (`evals/siga_20261013.md`). **Ressalva:** o rótulo foi
+  aplicado pelo Claude, por instrução do Lucas, seguindo o anexo da IN 05 literalmente; regra e
+  rótulo usam o mesmo anexo, então não é um recall independente. Decidido em 13/10/2026: seguir o
+  anexo, inclusive telefonia, pontos de rede e videomonitoramento.
+- Link de origem: processo SEI + CSV de origem. O SIGA não tem URL pública por ata conhecida.
+
+**Status:** implementada e medida na branch `feat/r1-siga-rj` (PR #5); falta o merge.
 
 ## R2 · Ingestão Dados Abertos ARP
 

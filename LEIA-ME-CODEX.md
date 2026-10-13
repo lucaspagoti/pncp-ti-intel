@@ -4,6 +4,40 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
+## Estado vigente: R1 (SIGA RJ) implementada, aceite pendente — 13/10/2026 (Claude/Sonnet 5.5)
+
+**Este bloco substitui os abaixo.** R0 foi mergeada (PR #4). Branch da R1: `feat/r1-siga-rj`.
+Leia a ADR 0019 e `docs/FASES.md` (R1).
+
+- **Feito:** migração `0005`; `fontes/siga.py` + `fontes/siga_csv.py` (download, validação, carga
+  atômica); `classificar/in05.py` (regra pelo Anexo Único da IN PRODERJ/PRE 05/2024, PDF em
+  `insumos/normas/`); `classificar/amostra.py` (censo) e `classificar/avaliar.py`; testes
+  (`make test`: 181). Migração aplicada ao banco local **depois** de backup restaurado em banco
+  temporário (removido). Carga real feita duas vezes (a segunda, `sem_mudanca`).
+- **Descobertas que mudaram o desenho** (detalhe na ADR 0019): `ID Ata` repete por processo SEI;
+  linhas idênticas em itens/participantes; arquivos são **cp1252**, não latin-1; CPF no nome de
+  fornecedor; consumo > demanda em 4.155 linhas (por isso `v_ata_consumo_item`, não "saldo").
+- **Revisão independente feita** (subagente, commit `bee69ba`). Bloqueante: a chave de item/
+  participante era o hash da linha **bruta com CPF completo**; corrigido (hash do texto mascarado)
+  e recarregado. Também: pisos de itens/participantes, falha de download em `cargas`, data futura,
+  versão da regra em `cargas.geracao` (mudar a regra reclassifica sozinho), `make eval` confere o
+  CSV contra a carga ativa, guarda na migração. Detalhe: ADR 0019, "Revisão independente".
+  **Atenção:** `data/siga/` guarda os CSVs brutos **com CPF** (0600); não versionar nem copiar.
+- **Decidido pelo Lucas (13/10/2026):** seguir o Anexo Único da IN 05, inclusive telefonia/voz/
+  internet, pontos de rede lógicos e videomonitoramento/CFTV (a resposta anterior excluía isso).
+  Nobreak e drone continuam fora (não constam do anexo). Resultado: 24 atas de TI vigentes.
+- **Rotulagem e eval (13/10/2026):** por instrução do Lucas ("seguir o que temos na IN 05"), o
+  Claude aplicou o anexo literalmente às 1.574 atas e gravou em `rotulo_lucas` (24 TI, 1.550
+  não-TI). `make eval` deu precisão 100% e recall 100% (`evals/siga_20261013.md`). **Não é recall
+  independente**: regra e rótulo usam o mesmo anexo e o mesmo leitor. Itens que o anexo não lista
+  (nobreak, drone, televisor, retroprojetor) ficaram `NAO_TI`.
+- **Pendente:** merge do PR #5 e a R2 (ARP). Se o Lucas quiser rótulo humano de verdade, o
+  caminho é revisar o CSV; reclassificar depois é só `make ingest` (a versão da regra dispara).
+- **Não fazer:** mudar `CATEGORIAS_FORA_DE_ESCOPO` sem o Lucas; afirmar recall antes da rotulagem;
+  estender o critério do anexo (norma do RJ) às fontes federal/municipal sem decisão.
+- **Próximo:** fechar a R1 (rótulos + eval + conferência de 10 atas), depois R2 (ARP). A R2 precisa
+  generalizar `ingest/executar.py`, ainda acoplado ao `PNCPClient`, e que grava por página.
+
 ## Continuação vigente — ajustes da revisão R0, Codex, 13/10/2026
 
 Lucas autorizou os ajustes da revisão e o registro para o Claude continuar. Este bloco

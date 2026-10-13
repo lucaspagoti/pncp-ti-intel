@@ -1,0 +1,115 @@
+"""Regra de TI do SIGA, baseada no Anexo Único da IN PRODERJ/PRE nº 05/2024."""
+
+import pytest
+
+from pncp_ti.classificar import in05
+from pncp_ti.classificar.in05 import CATEGORIAS_FORA_DE_ESCOPO, classificar_ata, nome_de_catalogo
+
+
+@pytest.mark.parametrize(
+    ("objeto", "nomes", "categoria"),
+    [
+        ("OUTSOURCING DE IMPRESSÃO", [], "III-computadores"),
+        ("Aquisição de notebooks", [], "III-computadores"),
+        ("FIREWALL AQUISIÇÃO", [], "I-seguranca"),
+        ("HIPERCONVERGÊNCIA DELL VMWARE", [], "II-infra"),
+        ("SOFTWARE DE BACKUP", [], "II-software-infra"),
+        ("LICENCIAMENTO ORCLE", ["SERVICOS DE LICENCAS DE SOFTWARES"], "VI-software"),
+        ("PLATAFORMA WEB", ["OUTROS SERVICOS INFRAESTRUTURA EM TECNOLOGIA DA INFORMACAO"], "geral"),
+        ("SOLUÇÃO EM NUVEM", [], "IV-nuvem"),
+        ("SERVIÇO DE VIDEOCONFERÊNCIA", [], "VII-video"),
+        ("X", ["MONITOR"], "III-computadores"),
+        ("X", ["MONITOR DE VIDEO"], "III-computadores"),
+    ],
+)
+def test_exemplos_do_anexo_sao_ti(objeto, nomes, categoria):
+    decisao = classificar_ata(objeto, nomes)
+    assert decisao.is_ti, decisao.motivo
+    assert decisao.motivo.startswith(categoria + ":")
+
+
+@pytest.mark.parametrize(
+    ("objeto", "nomes"),
+    [
+        ("MEDICAMENTO", ["DIPIRONA"]),
+        ("AQUISIÇÃO DE MONITOR BIS", ["MONITOR NIVEL DE CONSCIENCIA"]),
+        ("MONITOR MULTIPARAMETRICO", ["MONITOR MULTIPARAMETRICO"]),
+        ("AQUISIÇÃO DE EQUIPAMENTOS LABORATORIAIS", ["TURBIDIMETRO"]),
+        ("TOMOGRAFIA", ["TOMOGRAFO"]),
+        ("LICENCIAMENTO AMBIENTAL", []),
+        ("", []),
+    ],
+)
+def test_nao_ti(objeto, nomes):
+    decisao = classificar_ata(objeto, nomes)
+    assert not decisao.is_ti
+    assert decisao.motivo == "sem_sinal"
+
+
+def test_menção_incidental_na_especificacao_do_item_nao_conta():
+    # `nome_de_catalogo` corta no " - ": a especificação (com "SOFTWARE") nunca é lida.
+    nome = nome_de_catalogo("TURBIDIMETRO - FAIXA: 0-1000, SOFTWARE: INCLUSO")
+    assert nome == "TURBIDIMETRO"
+    assert not classificar_ata("EQUIPAMENTOS LABORATORIAIS", [nome]).is_ti
+
+
+@pytest.mark.parametrize(
+    ("objeto", "nomes", "categoria"),
+    [
+        ("VOIP", ["SERVICOS DE TELEFONIA"], "I-telecom"),
+        ("PONTOS LÓGICOS E ELÉTRICOS", ["CERTIFICACAO CABEAMENTO OTICO"], "VIII-rede-fisica"),
+        ("SISTEMA DE VIDEOMONITORAMENTO", [], "VII-videomonitoramento"),
+        ("RECONHECIMENTO FACIAL", [], "VII-videomonitoramento"),
+        ("CATRACA - CFTV", [], "VII-videomonitoramento"),
+    ],
+)
+def test_categorias_do_anexo_citadas_como_tic_sao_ti(objeto, nomes, categoria):
+    """Decisão do Lucas (13/10/2026): seguir o anexo da IN 05, inclusive estas categorias."""
+    decisao = classificar_ata(objeto, nomes)
+    assert decisao.is_ti, decisao.motivo
+    assert decisao.motivo.startswith(categoria + ":")
+
+
+def test_nenhuma_categoria_do_anexo_esta_excluida():
+    assert CATEGORIAS_FORA_DE_ESCOPO == frozenset()
+
+
+@pytest.mark.parametrize("objeto", ["Aquisição de Nobreaks", "RP de Drones"])
+def test_termos_fora_do_anexo_excluem_mesmo_com_item_de_ti(objeto):
+    decisao = classificar_ata(objeto, ["SERVICOS DE LICENCAS DE SOFTWARES"])
+    assert not decisao.is_ti
+    assert decisao.motivo.startswith("excluido:fora_do_anexo:")
+
+
+def test_categoria_excluida_por_configuracao_continua_funcionando(monkeypatch):
+    """O mecanismo é mantido para uma futura exclusão pontual."""
+    monkeypatch.setattr(in05, "CATEGORIAS_FORA_DE_ESCOPO", frozenset({"I-telecom"}))
+    decisao = classificar_ata("VOIP", ["SERVICOS DE TELEFONIA"])
+    assert not decisao.is_ti
+    assert decisao.motivo.startswith("excluido:fora_de_escopo:I-telecom")
+
+
+def test_toda_categoria_fora_de_escopo_existe():
+    assert CATEGORIAS_FORA_DE_ESCOPO <= set(in05.CATEGORIAS)
+
+
+def test_insumo_de_impressora_unitarizadora_nao_e_impressao_de_ti():
+    """Falso positivo achado na rotulagem do censo (ata 11949, FUNESBOM)."""
+    nome = "FILME IMPRESSAO TERMICA IMPRESSORA UNITARIZADORA"
+    assert not classificar_ata("Aquisição de Insumos DGS", [nome]).is_ti
+    assert classificar_ata("AQUISIÇÃO DE IMPRESSORAS", []).is_ti
+    assert classificar_ata("X", ["IMPRESSORA TERMICA"]).is_ti
+
+
+def test_objeto_com_ti_e_nobreak_continua_sendo_ti():
+    """M8 da revisão: nobreak no objeto só exclui quando não há sinal de TI no próprio objeto."""
+    decisao = classificar_ata("Aquisição de microcomputadores e nobreaks", [])
+    assert decisao.is_ti
+    assert decisao.motivo.startswith("III-computadores:")
+
+
+def test_versao_da_regra_muda_com_a_configuracao(monkeypatch):
+    antes = in05.versao_regra()
+    assert antes == in05.versao_regra()
+    monkeypatch.setattr(in05, "CATEGORIAS_FORA_DE_ESCOPO", frozenset({"I-telecom"}))
+    assert in05.versao_regra() != antes

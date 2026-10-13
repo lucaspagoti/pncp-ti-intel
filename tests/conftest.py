@@ -57,8 +57,8 @@ async def conn_ingest(nome_banco_teste: str):
     dsn = ingest_dsn(replace(settings, postgres_db=nome_banco_teste))
     conn = await psycopg.AsyncConnection.connect(dsn, row_factory=dict_row)
     # Cada teste começa isolado; este DSN sempre aponta para o banco UUID efêmero.
-    await conn.execute("DELETE FROM snapshots_atas_ti")
-    await conn.execute("DELETE FROM orgaos")
+    await conn.execute("DELETE FROM cargas")  # cascata: atas, itens e participantes
+    await conn.execute("DELETE FROM atas_vistas")
     await conn.commit()
     yield conn
     await conn.close()
