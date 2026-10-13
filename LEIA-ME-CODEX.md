@@ -4,6 +4,33 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
+## Nova revisão das correções R1 — Codex, 13/10/2026
+
+Head revisado: `2839b50` (código `84b9059`), também publicado na branch remota
+`feat/r1-siga-rj`. **Os cinco achados anteriores foram resolvidos**, com regressões.
+`PYTEST_ADDOPTS='--tb=no' make test`: 192 testes aprovados em 24,17 s, lint e
+formatação verdes. `git diff --check` aprovado; revisão independente confirmou.
+
+**Ainda corrigir antes de considerar a entrega fechada:**
+- P2: `siga.py:52` restringe a retenção ao novo formato timestamp-sufixo. As pastas
+  antigas timestamp sem sufixo, criadas pelo código anterior e contendo CSV bruto,
+  não são mais podadas. Reprodução só em diretório temporário: uma pasta antiga +
+  quatro novas deixou quatro pastas após retenção de três. Aceitar ambos os formatos
+  de nome com regra restrita e testar retenção mista, sem apagar outras pastas.
+- O PR #5 foi mergeado em 13/10/2026 às 16:19:03 -03 com head `cb0cc1d`, merge
+  `e63a700`. O `master` remoto ainda aponta para esse merge. As correções `84b9059`
+  e `2839b50` estão na branch remota, mas não no master. O CI listado no PR #5 é
+  do código antigo (181 testes), não comprova os 192 testes/correções. Abrir PR
+  corretivo para master após resolver retenção, executar CI e pedir revisão.
+
+Melhoria posterior: proteger a retenção contra pastas ainda em uso por execuções
+`--validar`; elas não usam a trava de sessão. Não foi demonstrada corrida real.
+Preservar ressalva: métricas 100% não constituem recall independente.
+`docs/plano-r2.md` já estava não versionado e não foi alterado.
+Somente registro de revisão escrito: nenhum ajuste de código, carga real, mudança
+no banco principal, serviço, comentário GitHub, commit, push ou merge nesta sessão.
+Relatório: `/home/lucas/Documents/Codex/2026-10-13/fizemos-umas-mudan-as-no-projeto/outputs/revisao-pr-5-correcoes.md`.
+
 ## Correções da revisão do Codex no PR #5 — Claude, 13/10/2026
 
 Os cinco achados procediam e foram corrigidos, cada um com regressão (`make test`: 192):
