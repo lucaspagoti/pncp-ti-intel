@@ -2,6 +2,7 @@
 
 Revisão da implementação do Luna, solicitada por Lucas com autorização para corrigir e abrir PR.
 Escopo: ADR 0015, somente atas vigentes candidatas a TI; sem backfill histórico.
+PR: https://github.com/lucaspagoti/pncp-ti-intel/pull/3.
 
 ## Veredito
 
@@ -41,6 +42,8 @@ continuam pendentes. A F1 já foi mergeada (PR #2); o PR desta entrega parte de 
   populacionais corretas; CSV existente preservado.
 - Fumaça real de uma página de atas e consulta via `compras-mcp`. Sem snapshot nacional ou mudança
   no banco de desenvolvimento.
+
+- `git diff --check` e varredura local Gitleaks aprovados.
 
 ## Limites e melhorias posteriores
 

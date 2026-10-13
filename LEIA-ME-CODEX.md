@@ -10,7 +10,8 @@ e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reco
 abaixo desta seção são histórico de sessões e podem conter instruções já superadas.
 
 A F1 foi mergeada no PR #2, confirmado no GitHub. A F2A está na branch
-`feat/f2-atas-vigentes-ti`. Lucas pediu ao Codex a revisão da implementação do Luna e autorizou
+`feat/f2-atas-vigentes-ti`, publicada no [PR #3](https://github.com/lucaspagoti/pncp-ti-intel/pull/3)
+contra `master` (commit de implementação `6d7bd23`). Lucas pediu ao Codex a revisão da implementação do Luna e autorizou
 abrir PR caso aprovada. Essa revisão foi realizada diretamente pelo Codex, sem subagentes.
 
 O desenho foi aprovado após corrigir: publicação indevida de carga parcial após 204 intermediário,
@@ -770,3 +771,7 @@ sem aplicação no banco de desenvolvimento; nenhum backfill ou snapshot naciona
 
 Melhorias registradas: retenção do log por página, medição do custo real da carga e amostra com
 intervalos de confiança antes de declarar atingidas as metas D6/G2.
+
+PR aberto: https://github.com/lucaspagoti/pncp-ti-intel/pull/3. Commit de implementação `6d7bd23`.
+Varredura local `pre-commit run gitleaks --all-files` aprovada; CI remoto iniciado no PR.
+Não houve merge, migração de desenvolvimento ou carga nacional nesta revisão.
