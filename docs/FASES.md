@@ -50,7 +50,7 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 ## R1 · Ingestão SIGA RJ
 
 **Entregas** (ADR 0019)
-- `fontes/siga.py` + `fontes/siga_csv.py`: download dos 3 CSVs (timeout, limite de 200 MB,
+- `fontes/siga.py` + `fontes/siga_csv.py`: download dos 3 CSVs (timeout, limite de 100 MB,
   sha256, `Last-Modified`, retry), validação estrita, colapso de processos, dedupe por conteúdo,
   carga numa transação e troca atômica. `make ingest FONTE=siga`.
 - Migração `0005`: `cargas`, `atas`, `ata_itens`, `ata_participantes`, `atas_vistas` e as views

@@ -369,12 +369,34 @@ async def test_erro_do_driver_grava_so_classe_e_sqlstate(conn_ingest, tmp_path, 
 
 
 def test_retencao_so_apaga_pastas_de_carga_com_timestamp(tmp_path):
-    for nome in ("20260101T000000", "20260102T000000", "20260103T000000", "20260104T000000"):
+    for nome in (
+        "20260101T000000-aaaaaaaa",
+        "20260102T000000-bbbbbbbb",
+        "20260103T000000-cccccccc",
+        "20260104T000000-dddddddd",
+    ):
         (tmp_path / nome).mkdir()
     (tmp_path / "minha_pasta_de_trabalho").mkdir()
     siga._reter_ultimas(tmp_path, manter=2)
     assert sorted(p.name for p in tmp_path.iterdir()) == [
-        "20260103T000000", "20260104T000000", "minha_pasta_de_trabalho",
+        "20260103T000000-cccccccc", "20260104T000000-dddddddd", "minha_pasta_de_trabalho",
+    ]  # fmt: skip
+
+
+def test_retencao_poda_pastas_no_formato_antigo_e_no_novo(tmp_path):
+    for nome in (
+        "20260101T000000",
+        "20260102T000000-aaaaaaaa",
+        "20260103T000000-bbbbbbbb",
+        "20260104T000000-cccccccc",
+        "20260105T000000-ZZZZZZZZ",
+        "20260106",
+    ):
+        (tmp_path / nome).mkdir()
+    siga._reter_ultimas(tmp_path, manter=2)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "20260103T000000-bbbbbbbb", "20260104T000000-cccccccc",
+        "20260105T000000-ZZZZZZZZ", "20260106",
     ]  # fmt: skip
 
 
@@ -387,3 +409,30 @@ async def test_arquivo_baixado_fica_com_permissao_restrita(tmp_path):
     async with _cliente(handler) as client:
         baixados = await siga.baixar(tmp_path / "dl", client)
     assert baixados["atas"].caminho.stat().st_mode & 0o777 == 0o600
+
+
+async def test_destino_do_download_e_exclusivo(tmp_path):
+    """P2 do Codex: duas execuções não podem compartilhar a pasta de download."""
+
+    def handler(req):
+        return httpx.Response(200, content=b"x")
+
+    destino = tmp_path / "mesmo"
+    async with _cliente(handler) as client:
+        await siga.baixar(destino, client)
+        with pytest.raises(FileExistsError):
+            await siga.baixar(destino, client)
+
+
+async def test_trava_de_sessao_impede_segunda_execucao_simultanea(conn_ingest, nome_banco_teste):
+    from pncp_ti.config import get_settings, ingest_dsn
+
+    dsn = ingest_dsn(replace(get_settings(), postgres_db=nome_banco_teste))
+    outra = await psycopg.AsyncConnection.connect(dsn, row_factory=dict_row)
+    try:
+        assert await siga.tentar_trava_sessao(conn_ingest) is True
+        assert await siga.tentar_trava_sessao(outra) is False
+        await conn_ingest.close()  # fecha a sessão: a trava é liberada
+        assert await siga.tentar_trava_sessao(outra) is True
+    finally:
+        await outra.close()

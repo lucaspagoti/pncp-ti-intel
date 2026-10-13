@@ -8,6 +8,7 @@ import siga_dados as d
 
 from pncp_ti.classificar.amostra import CABECALHO, escrever_csv, gerar_censo
 from pncp_ti.classificar.avaliar import (
+    CensoInvalido,
     CsvDefasado,
     RotuloInvalido,
     avaliar,
@@ -106,3 +107,15 @@ def test_csv_defasado_em_relacao_a_carga_ativa_e_recusado():
         conferir_com_carga(linhas, {"1": True, "2": True})
     with pytest.raises(CsvDefasado, match="ids divergem"):
         conferir_com_carga(linhas, {"1": True, "3": False})
+
+
+def test_censo_com_id_duplicado_e_recusado_mesmo_sem_banco():
+    """P2 do Codex: 100 cópias de um TP e 1 FP davam precisão de 99%."""
+    linhas = [_linha(id_ata="1", filtro_sistema="TI", rotulo_lucas="TI") for _ in range(100)]
+    linhas.append(_linha(id_ata="2", filtro_sistema="TI", rotulo_lucas="NAO_TI"))
+    with pytest.raises(CensoInvalido, match="repetidos"):
+        avaliar(linhas)
+    with pytest.raises(CensoInvalido):
+        conferir_com_carga(linhas, {"1": True, "2": True})
+    with pytest.raises(CensoInvalido, match="sem id_ata"):
+        avaliar([_linha(id_ata="", filtro_sistema="TI", rotulo_lucas="TI")])

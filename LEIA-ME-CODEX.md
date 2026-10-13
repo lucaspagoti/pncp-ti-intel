@@ -4,6 +4,79 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
+## Nova revisão das correções R1 — Codex, 13/10/2026
+
+Head revisado: `2839b50` (código `84b9059`), também publicado na branch remota
+`feat/r1-siga-rj`. **Os cinco achados anteriores foram resolvidos**, com regressões.
+`PYTEST_ADDOPTS='--tb=no' make test`: 192 testes aprovados em 24,17 s, lint e
+formatação verdes. `git diff --check` aprovado; revisão independente confirmou.
+
+**Ainda corrigir antes de considerar a entrega fechada:**
+- P2: `siga.py:52` restringe a retenção ao novo formato timestamp-sufixo. As pastas
+  antigas timestamp sem sufixo, criadas pelo código anterior e contendo CSV bruto,
+  não são mais podadas. Reprodução só em diretório temporário: uma pasta antiga +
+  quatro novas deixou quatro pastas após retenção de três. Aceitar ambos os formatos
+  de nome com regra restrita e testar retenção mista, sem apagar outras pastas.
+- O PR #5 foi mergeado em 13/10/2026 às 16:19:03 -03 com head `cb0cc1d`, merge
+  `e63a700`. O `master` remoto ainda aponta para esse merge. As correções `84b9059`
+  e `2839b50` estão na branch remota, mas não no master. O CI listado no PR #5 é
+  do código antigo (181 testes), não comprova os 192 testes/correções. Abrir PR
+  corretivo para master após resolver retenção, executar CI e pedir revisão.
+
+Melhoria posterior: proteger a retenção contra pastas ainda em uso por execuções
+`--validar`; elas não usam a trava de sessão. Não foi demonstrada corrida real.
+Preservar ressalva: métricas 100% não constituem recall independente.
+`docs/plano-r2.md` já estava não versionado e não foi alterado.
+Somente registro de revisão escrito: nenhum ajuste de código, carga real, mudança
+no banco principal, serviço, comentário GitHub, commit, push ou merge nesta sessão.
+Relatório: `/home/lucas/Documents/Codex/2026-10-13/fizemos-umas-mudan-as-no-projeto/outputs/revisao-pr-5-correcoes.md`.
+
+## Correções da revisão do Codex no PR #5 — Claude, 13/10/2026
+
+Os cinco achados procediam e foram corrigidos, cada um com regressão (`make test`: 192):
+- P1 `processos` sem máscara: toda célula de texto passa por `sanitizar` na leitura
+  (`_ler_tabela`); só colunas numéricas e `data_extracao` ficam como vieram.
+- P2 data inválida virava vigente: data preenchida e inválida coloca a ata em **quarentena**
+  (não gravada; itens e participantes descartados e contados).
+- P2 CSV frouxo: `csv.reader(strict=True)`, inclusive no cabeçalho.
+- P2 métricas infláveis: `avaliar` e `conferir_com_carga` rejeitam `id_ata` repetido ou vazio.
+- P2 concorrência no download: diretório exclusivo (`timestamp-<hex>`) e trava de sessão antes
+  do download.
+- Docs alinhadas: item sem preço permanece na view com `NULL`; limite de 100 MB; corpo do PR.
+Pedido: nova revisão do head atualizado do PR #5. A ressalva do eval (rótulo feito pelo Claude,
+não é recall independente) foi preservada.
+
+## Revisão vigente do PR #5 — Codex, 13/10/2026
+
+Lucas pediu revisão, sem correção nesta etapa. Head revisado: `cb0cc1d`.
+**Parecer: corrigir antes do merge.** O PR #5 está aberto e não está marcado como draft.
+`make test` passou (181 testes, lint e formatação; 24,93 s), e os três checks CI
+passaram. Revisão independente confirmou os achados principais.
+
+Achados para o Claude corrigir, com regressões:
+- P1: `siga_csv.py:273` preserva texto de processos sem `sanitizar`; CPF fictício
+  atravessou o parser e seria exposto pela view. Mascarar processos e revisar demais
+  textos copiados diretamente. Não foi observado CPF real em processo.
+- P2: início inválido abaixo do limiar de 1% vira NULL e é aceito como vigente.
+  Reproduzido 31/02/2026 em 101 atas; distinguir vazio de inválido.
+- P2: `csv.reader` sem `strict=True` aceita aspas malformadas com colunas corretas.
+  Reproduzidos aspas abertas e texto após fechamento, somente em memória.
+- P2: `conferir_com_carga` aceita IDs duplicados; 100 cópias de TP + 1 FP inflaram
+  precisão para 99,01% em vez de 50%. Rejeitar duplicatas inclusive sem banco.
+- P2: diretório de download com precisão de segundos e arquivos .part fixos podem
+  ser compartilhados por duas execuções; trava DB só protege publicação. Tornar
+  diretório exclusivo e ajustar retenção/testes. Achado por inspeção, sem corrida real.
+
+Alinhar ADR sobre itens sem preço (view mantém linha com NULL), FASES sobre limite
+100 MB (diz 200 MB) e corpo do PR com estado atual. Preservar ressalva de que 100% de
+precisão/recall não é avaliação independente: rótulos foram feitos pelo Claude.
+Os testes verdes atuais não cobrem os cenários reproduzidos acima.
+
+Relatório completo: `/home/lucas/Documents/Codex/2026-10-13/fizemos-umas-mudan-as-no-projeto/outputs/revisao-pr-5.md`.
+Código não alterado; nenhuma carga real, migração principal, serviço, comentário
+GitHub, commit, push ou merge. Só relatório e este handoff. Próximo: Claude corrige,
+adiciona regressões, roda make test e solicita nova revisão do head atualizado.
+
 ## Estado vigente: R1 (SIGA RJ) implementada, aceite pendente — 13/10/2026 (Claude/Sonnet 5.5)
 
 **Este bloco substitui os abaixo.** R0 foi mergeada (PR #4). Branch da R1: `feat/r1-siga-rj`.
@@ -12,7 +85,7 @@ Leia a ADR 0019 e `docs/FASES.md` (R1).
 - **Feito:** migração `0005`; `fontes/siga.py` + `fontes/siga_csv.py` (download, validação, carga
   atômica); `classificar/in05.py` (regra pelo Anexo Único da IN PRODERJ/PRE 05/2024, PDF em
   `insumos/normas/`); `classificar/amostra.py` (censo) e `classificar/avaliar.py`; testes
-  (`make test`: 181). Migração aplicada ao banco local **depois** de backup restaurado em banco
+  (`make test`: 192). Migração aplicada ao banco local **depois** de backup restaurado em banco
   temporário (removido). Carga real feita duas vezes (a segunda, `sem_mudanca`).
 - **Descobertas que mudaram o desenho** (detalhe na ADR 0019): `ID Ata` repete por processo SEI;
   linhas idênticas em itens/participantes; arquivos são **cp1252**, não latin-1; CPF no nome de

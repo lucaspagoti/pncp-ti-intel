@@ -29,8 +29,9 @@ O perfil dos 3 CSVs do SIGA de 13/10/2026 mostrou que o modelo "uma linha por at
    `atas_vistas`. Falha em qualquer ponto faz rollback e a carga anterior continua visível; a
    falha, inclusive a de **download**, fica em `cargas` (`falhou`, tipo e mensagem curta). Para
    exceções do driver grava só a classe e o SQLSTATE, porque a mensagem do Postgres pode trazer
-   a linha inteira; mensagens de validação passam por `sanitizar`. Uma trava consultiva impede
-   duas cargas simultâneas.
+   a linha inteira; mensagens de validação passam por `sanitizar`. Uma trava consultiva
+   **de sessão**, tomada antes do download e mantida até fechar a conexão, impede duas execuções
+   simultâneas; a de transação continua como segunda proteção na publicação.
 3. **Chaves.** Ata: `ID Ata` (as linhas por processo são colapsadas; todos os processos ficam em
    `processos[]`). Item e participante: hash do conteúdo da linha sem `data_extracao`, **calculado
    sobre o texto já mascarado** (a primeira versão hasheava a linha bruta com o CPF completo, o
@@ -42,24 +43,30 @@ O perfil dos 3 CSVs do SIGA de 13/10/2026 mostrou que o modelo "uma linha por at
    `cargas` com `sem_mudanca` e a defasagem em dias; acima de 3 dias, avisa no log. Mudar a regra
    reclassifica na carga seguinte sem `--forcar`.
 5. **Validação estrita (falha alto, nada é publicado):** cabeçalho exato (após `strip`) e número
-   de colunas; CSV malformado (`csv.Error`); os 3 `data_extracao` iguais, não futuros (mais de
+   de colunas; **CSV estrito** (`strict=True`: aspas abertas ou texto depois do fechamento
+   falham, mesmo com o número certo de colunas); os 3 `data_extracao` iguais, não futuros (mais de
    1 dia à frente de hoje) e não anteriores à da carga ativa; `Last-Modified` dentro de 15 min;
    cp1252 estrito sem indício de UTF-8; arquivo vazio; **pisos contra a carga ativa: 50% das
    atas e 70% dos itens e dos participantes**; mais de 5% das atas `Válida` sem nenhum item;
-   órfãos, conflitos, datas ou números não parseáveis acima de 1%. Números só aceitam `12`,
+   órfãos, conflitos, datas ou números não parseáveis acima de 1%. **Data de vigência
+   preenchida e inválida (ex.: 31/02) coloca a ata em quarentena** (não é gravada, e seus itens e
+   participantes são descartados e contados): vazio é "não informado", inválido nunca vira
+   vigente por omissão. Números só aceitam `12`,
    `12,50`, `,45`, `4.500,00` (com `-` opcional); `1.234` é inválido, por ser ambíguo.
 6. **Vigente** = `status_origem = 'Válida'` **e** `inicio <= hoje <= fim` em `America/Sao_Paulo`
-   (início vazio é aceito). `Interrompida`, `Suspensa` e `Aguardando Vigência` ficam fora, mesmo
+   (início **vazio** é aceito; início inválido, não). `Interrompida`, `Suspensa` e `Aguardando Vigência` ficam fora, mesmo
    com datas que cobrem hoje.
-7. **Preço:** valor vazio ou ≤ 0 vira `NULL` com `valor_valido = false` e nunca entra em
-   `v_ata_itens_ti`. A view de consumo se chama `v_ata_consumo_item` e expõe demandado e consumido
+7. **Preço:** valor vazio ou ≤ 0 vira `NULL` com `valor_valido = false`. A linha do item
+   **permanece** em `v_ata_itens_ti` (a ata continua tendo aquele item), mas com `valor_unitario`
+   `NULL`: nunca há preço inválido na coluna de preço. A view de consumo se chama `v_ata_consumo_item` e expõe demandado e consumido
    por unidade participante, **sem** afirmar saldo (há consumo maior que a demanda na origem).
 8. **`primeira_vez_vista`** fica em `atas_vistas`, fora do snapshot: a troca de carga não "renova"
    atas conhecidas. Na primeira carga, todas recebem a mesma data; o digest (R6) deve tratá-la
    como carga inicial.
-9. **Privacidade:** todo texto de terceiros passa por `privacy.sanitizar` (CPF mascarado) antes
-   de ser gravado ou usado na chave.
-10. **Arquivos brutos** ficam em `data/siga/<timestamp>/` (fora do Git, pasta `0700`, arquivos
+9. **Privacidade:** toda célula de texto passa por `privacy.sanitizar` (CPF mascarado) já na
+   leitura (`_ler_tabela`), inclusive ids e `processos`, que a view expõe; só as colunas numéricas
+   e `data_extracao` ficam como vieram. O mascaramento vale também para a chave.
+10. **Arquivos brutos** ficam em `data/siga/<timestamp>-<sufixo aleatório>/` (diretório exclusivo por execução) (fora do Git, pasta `0700`, arquivos
     `0600`), com as 3 últimas cargas; a poda roda também em falha e só toca pastas com nome de
     timestamp. **Os CSVs brutos contêm CPF completo** (8 itens e 1 participante em 13/10/2026):
     é o único lugar onde ele existe, e `identificar_fornecedor` ("CPF só em memória") não vale
@@ -116,6 +123,14 @@ decisão separada.
   federais e municipais podem gerar falso positivo; reavaliar com amostra antes de reutilizar.
 - Nobreak/drone no **objeto** só excluem quando o próprio objeto não cita TI
   ("microcomputadores e nobreaks" segue TI).
+
+## Revisão do Codex no PR #5 (13/10/2026)
+
+Três correções de substância depois da primeira revisão: `processos` e demais textos copiados
+passam por `sanitizar`; data inválida deixa de ser promovida a "início não informado"; o CSV é
+lido em modo estrito. Também: `avaliar` rejeita `id_ata` repetido (as métricas eram infláveis) e o
+download usa diretório exclusivo mais trava de sessão. A ressalva do `evals/` permanece: os rótulos
+foram aplicados pelo Claude, então 100% não é uma avaliação independente.
 
 ## Revisão independente (13/10/2026)
 
