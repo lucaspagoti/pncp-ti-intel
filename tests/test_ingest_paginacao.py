@@ -60,3 +60,27 @@ async def test_retry_preserva_pagina_e_filtros(monkeypatch):
     )
     assert cliente.list_resource.await_args_list[0] == cliente.list_resource.await_args_list[1]
     pausa.assert_awaited_once_with(executar.BACKOFF_INICIAL_SEGUNDOS)
+
+
+async def test_retry_cobre_http_generico_transitorio_sem_repetir_404(monkeypatch):
+    pausa = AsyncMock()
+    monkeypatch.setattr(executar.asyncio, "sleep", pausa)
+    cliente = AsyncMock()
+    resposta = {"data": [{"id": "sintetico"}], "totalPaginas": 1}
+    cliente.list_resource.side_effect = [
+        ComprasHTTPError("pncp/v1/atas respondeu 403: gateway"),
+        resposta,
+    ]
+    janela = Janela(date(2026, 1, 1), date(2026, 1, 1))
+
+    assert (
+        await executar._buscar_pagina(cliente, "/v1/atas", pagina=1, janela=janela, filtros={})
+        == resposta
+    )
+    pausa.assert_awaited_once_with(executar.BACKOFF_INICIAL_SEGUNDOS)
+
+    cliente.list_resource.reset_mock()
+    cliente.list_resource.side_effect = ComprasHTTPError("pncp/v1/atas respondeu 404: ausente")
+    with pytest.raises(ComprasHTTPError):
+        await executar._buscar_pagina(cliente, "/v1/atas", pagina=1, janela=janela, filtros={})
+    cliente.list_resource.assert_awaited_once()

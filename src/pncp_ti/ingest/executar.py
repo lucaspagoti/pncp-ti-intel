@@ -5,6 +5,7 @@ de execução (ADR 0005). O snapshot de atas usa o filtro de inclusão antes do 
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -94,6 +95,20 @@ def _e_corpo_vazio(exc: ComprasHTTPError) -> bool:
     return corpo.strip() == ""
 
 
+def _e_http_transitorio(exc: ComprasHTTPError) -> bool:
+    """Detecta respostas HTTP pontuais que podem desaparecer no retry.
+
+    O cliente compartilhado classifica 429/5xx/timeout, mas outros status
+    (por exemplo, uma resposta transitória do gateway) chegam como
+    `ComprasHTTPError` genérico. Não repetir erro de JSON ou 404 permanente.
+    """
+    correspondencia = re.search(r"respondeu (\d{3}):", str(exc))
+    if not correspondencia:
+        return False
+    status = int(correspondencia.group(1))
+    return status in {400, 403, 408, 425} or 500 <= status < 600
+
+
 async def _buscar_pagina(
     cliente: PNCPClient,
     path: str,
@@ -128,10 +143,10 @@ async def _buscar_pagina(
             if _e_corpo_vazio(exc):
                 # A chave do envelope precisa casar com `_validar_pagina`.
                 return {chave_dados: [], "totalPaginas": 0}
-            if (
-                isinstance(exc, (ComprasRateLimitError, ComprasServerError, ComprasTimeoutError))
-                and tentativa < MAX_TENTATIVAS_PAGINA
-            ):
+            retentavel = isinstance(
+                exc, (ComprasRateLimitError, ComprasServerError, ComprasTimeoutError)
+            ) or _e_http_transitorio(exc)
+            if retentavel and tentativa < MAX_TENTATIVAS_PAGINA:
                 log.warning(
                     "ingest.retry_apos_erro_transiente",
                     path=path,
