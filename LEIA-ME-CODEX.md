@@ -12,7 +12,8 @@ abaixo desta seção são histórico de sessões e podem conter instruções já
 A F1 foi mergeada no PR #2. A F2A foi mergeada no [PR #3](https://github.com/lucaspagoti/pncp-ti-intel/pull/3)
 em 13/10/2026 (merge commit `df301c3`; head `dfda755` inclui retenção de 30 dias dos logs por página).
 O CI do head passou. A branch local de trabalho é `feat/f2b-itens-atas`, criada sobre `master` já
-atualizado (`df301c3`); as alterações desta etapa ainda não foram commitadas.
+atualizado (`df301c3`); há commits locais de documentação (`9dcc596`) e de retry HTTP (`a1fc870`), sem
+push ou PR desta etapa.
 
 O desenho foi aprovado após corrigir: publicação indevida de carga parcial após 204 intermediário,
 recuperação de erro SQL na amostra, ausência de proteção contra snapshot nacional vazio e dependência
@@ -20,10 +21,12 @@ dos testes do fuso/ordem de execução. A versão anterior continua visível dur
 ativação e remoção do snapshot anterior são transacionais. CLI e view usam `America/Sao_Paulo`.
 
 A migração 0004 foi aplicada no banco local após um backup ser restaurado com sucesso em um banco
-temporário (schema 0003, sem alterar o banco principal). O primeiro snapshot nacional de 12/10/2026
-está em staging, com taxa temporária de 0,5 req/s após 429 nas taxas maiores; só será publicado se
-terminar completo. A F2 ainda não passou o aceite: rotulagem, D6/G2 e F2B (itens/preços) seguem
-pendentes. A migração 0003 permanece na cadeia por compatibilidade com o schema anterior.
+temporário (schema 0003, sem alterar o banco principal). A primeira execução do snapshot nacional de
+12/10/2026 falhou na página 628 por erro HTTP genérico e limpou o staging. O retry foi ampliado para
+respostas 400/403/408/425 no commit `a1fc870`; a segunda execução está em staging, limitada a 0,5
+req/s (snapshot `51bd1062-3516-49cf-b13e-620d40e427e3`). Só será publicada se terminar completa. A
+F2 ainda não passou o aceite: rotulagem, D6/G2 e F2B (itens/preços) seguem pendentes. A migração
+0003 permanece na cadeia por compatibilidade com o schema anterior.
 
 Na preparação da F2B, o manual PNCP confirma `/itens` e `/itens/{numeroItem}/resultados` e define
 `valorUnitarioHomologado` como preço do resultado. Porém, o retorno documentado não traz identificador
