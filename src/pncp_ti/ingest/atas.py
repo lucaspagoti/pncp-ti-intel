@@ -87,8 +87,7 @@ async def _iniciar_snapshot(
         # O resumo da execução fica em snapshots_atas_ti; os registros por
         # página são úteis para diagnóstico, mas não precisam crescer sem fim.
         await conn.execute(
-            "DELETE FROM log_execucao_ingestao "
-            "WHERE entidade = %s AND janela_fim < %s",
+            "DELETE FROM log_execucao_ingestao WHERE entidade = %s AND janela_fim < %s",
             (ENTIDADE, referencia - timedelta(days=RETENCAO_LOG_PAGINAS_DIAS)),
         )
         await conn.execute(
