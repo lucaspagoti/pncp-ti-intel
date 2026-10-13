@@ -11,11 +11,11 @@ vale como nome de catálogo "monitor" ou "monitor de vídeo", para não casar
 primeiro " - ") e o objeto da ata são lidos; a especificação do item não, porque
 é onde aparecem menções incidentais ("... SOFTWARE: ...").
 
-Escopo decidido pelo Lucas em 13/10/2026 ("nenhum dos acima"): telefonia/voz/
-internet, cabeamento/pontos lógicos e videomonitoramento/CFTV **não** são TI para
-este projeto, embora o anexo os cite (I-a, VIII-a, VII-a). Nobreak, drone e
-catraca não constam do anexo e também ficam fora. A decisão está isolada em
-`CATEGORIAS_FORA_DE_ESCOPO` e `TERMOS_FORA_DO_ANEXO` para ser revertida num lugar só.
+Decisão do Lucas (13/10/2026, depois de ver o conflito): **seguir o anexo**. Telefonia/voz/
+internet (I-a), pontos de rede lógicos e elétricos (VIII-a) e videomonitoramento/reconhecimento
+facial/LPR (VII-a) são TI. `CATEGORIAS_FORA_DE_ESCOPO` fica vazio e o mecanismo é mantido para
+uma futura exclusão pontual. Nobreak e drone não constam do anexo e seguem excluídos pelo objeto
+(`TERMOS_FORA_DO_ANEXO`); o que o anexo não lista nem equivale a algo listado fica `sem_sinal`.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ CATEGORIAS: dict[str, tuple[str, ...]] = {
         r"\binternet das coisas\b",
         r"\biot\b",
     ),
-    # I-a: serviço de comunicação de dados, voz, telefonia, internet (FORA DO ESCOPO)
+    # I-a: serviço de comunicação de dados, voz, telefonia, internet
     "I-telecom": (
         r"telefonia",
         r"\bvoip\b",
@@ -163,7 +163,7 @@ CATEGORIAS: dict[str, tuple[str, ...]] = {
         r"sala inteligente",
         r"telepresenca",
     ),
-    # VII-a: videomonitoramento, reconhecimento facial, LPR (FORA DO ESCOPO)
+    # VII-a: videomonitoramento, reconhecimento facial, LPR
     "VII-videomonitoramento": (
         r"videomonitoramento",
         r"\bcftv\b",
@@ -179,7 +179,7 @@ CATEGORIAS: dict[str, tuple[str, ...]] = {
         r"central de servicos de (tic|ti)",
         r"atendimento a requisicoes de suporte",
     ),
-    # VIII-a: pontos de rede lógicos e elétricos, infraestrutura de rede (FORA DO ESCOPO)
+    # VIII-a: pontos de rede lógicos e elétricos, infraestrutura de rede
     "VIII-rede-fisica": (
         r"pontos? (logicos?|de rede)",
         r"cabeamento",
@@ -199,14 +199,14 @@ CATEGORIAS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-CATEGORIAS_FORA_DE_ESCOPO = frozenset({"I-telecom", "VII-videomonitoramento", "VIII-rede-fisica"})
+# Categorias do anexo que o projeto exclui por decisão própria. Vazio: segue o anexo (ADR 0019).
+CATEGORIAS_FORA_DE_ESCOPO: frozenset[str] = frozenset()
 
-# Não constam do anexo; o Lucas os excluiu em 13/10/2026. Valem só para o OBJETO da ata
-# (um catálogo de itens de TI dentro de uma ata de catraca não torna a ata de TI).
+# Não constam do anexo; excluídos pelo Lucas. Valem só para o OBJETO da ata (itens de software
+# dentro de uma ata de drones ou nobreaks não tornam a ata de TI).
 TERMOS_FORA_DO_ANEXO: tuple[str, ...] = (
     r"\bno-?breaks?\b",
     r"\bdrones?\b",
-    r"\bcatracas?\b",
 )
 
 _COMPILADOS = {

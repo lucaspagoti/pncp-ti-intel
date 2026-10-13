@@ -54,34 +54,39 @@ def test_menção_incidental_na_especificacao_do_item_nao_conta():
 
 
 @pytest.mark.parametrize(
-    ("objeto", "nomes", "fragmento"),
+    ("objeto", "nomes", "categoria"),
     [
         ("VOIP", ["SERVICOS DE TELEFONIA"], "I-telecom"),
         ("PONTOS LÓGICOS E ELÉTRICOS", ["CERTIFICACAO CABEAMENTO OTICO"], "VIII-rede-fisica"),
         ("SISTEMA DE VIDEOMONITORAMENTO", [], "VII-videomonitoramento"),
+        ("RECONHECIMENTO FACIAL", [], "VII-videomonitoramento"),
+        ("CATRACA - CFTV", [], "VII-videomonitoramento"),
     ],
 )
-def test_categorias_do_anexo_excluidas_por_decisao_do_lucas(objeto, nomes, fragmento):
-    assert fragmento in CATEGORIAS_FORA_DE_ESCOPO
+def test_categorias_do_anexo_citadas_como_tic_sao_ti(objeto, nomes, categoria):
+    """Decisão do Lucas (13/10/2026): seguir o anexo da IN 05, inclusive estas categorias."""
     decisao = classificar_ata(objeto, nomes)
-    assert not decisao.is_ti
-    assert decisao.motivo.startswith(f"excluido:fora_de_escopo:{fragmento}")
+    assert decisao.is_ti, decisao.motivo
+    assert decisao.motivo.startswith(categoria + ":")
 
 
-@pytest.mark.parametrize("objeto", ["Aquisição de Nobreaks", "RP de Drones", "CATRACA - CFTV"])
+def test_nenhuma_categoria_do_anexo_esta_excluida():
+    assert CATEGORIAS_FORA_DE_ESCOPO == frozenset()
+
+
+@pytest.mark.parametrize("objeto", ["Aquisição de Nobreaks", "RP de Drones"])
 def test_termos_fora_do_anexo_excluem_mesmo_com_item_de_ti(objeto):
     decisao = classificar_ata(objeto, ["SERVICOS DE LICENCAS DE SOFTWARES"])
     assert not decisao.is_ti
     assert decisao.motivo.startswith("excluido:fora_do_anexo:")
 
 
-def test_item_de_ti_dentro_do_escopo_prevalece_sobre_objeto_de_categoria_excluida():
-    # Caso real do PRODERJ: objeto de reconhecimento facial, item de suporte em TI.
-    # A decisão fica aberta para o Lucas na rotulagem; a regra segue a ordem documentada.
-    decisao = classificar_ata(
-        "RECONHECIMENTO FACIAL", ["SERVICOS SUPORTE EM TECNOLOGIA DA INFORMACAO"]
-    )
-    assert decisao.is_ti and decisao.motivo.endswith("@item")
+def test_categoria_excluida_por_configuracao_continua_funcionando(monkeypatch):
+    """O mecanismo é mantido para uma futura exclusão pontual."""
+    monkeypatch.setattr(in05, "CATEGORIAS_FORA_DE_ESCOPO", frozenset({"I-telecom"}))
+    decisao = classificar_ata("VOIP", ["SERVICOS DE TELEFONIA"])
+    assert not decisao.is_ti
+    assert decisao.motivo.startswith("excluido:fora_de_escopo:I-telecom")
 
 
 def test_toda_categoria_fora_de_escopo_existe():

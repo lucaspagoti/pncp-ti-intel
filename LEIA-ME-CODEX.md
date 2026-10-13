@@ -17,10 +17,12 @@ Leia a ADR 0019 e `docs/FASES.md` (R1).
 - **Descobertas que mudaram o desenho** (detalhe na ADR 0019): `ID Ata` repete por processo SEI;
   linhas idênticas em itens/participantes; arquivos são **cp1252**, não latin-1; CPF no nome de
   fornecedor; consumo > demanda em 4.155 linhas (por isso `v_ata_consumo_item`, não "saldo").
-- **Pendente (do Lucas):** (1) decidir as 3 categorias que o anexo cita e a regra exclui
-  (telefonia/voz/internet, pontos de rede lógicos, videomonitoramento/CFTV); (2) rotular
-  `insumos/rotulagem_siga.csv` (1.574 atas; não versionado ainda); (3) `make eval ROT=...` e ajuste
-  da regra até a meta D6 (proposta: recall ≥ 95%, precisão ≥ 85%).
+- **Decidido pelo Lucas (13/10/2026):** seguir o Anexo Único da IN 05, inclusive telefonia/voz/
+  internet, pontos de rede lógicos e videomonitoramento/CFTV (a resposta anterior excluía isso).
+  Nobreak e drone continuam fora (não constam do anexo). Resultado: 25 atas de TI vigentes.
+- **Pendente:** (1) rotular `insumos/rotulagem_siga.csv` (1.574 atas; não versionado ainda);
+  (2) `make eval ROT=...` e ajuste da regra até a meta D6 (proposta: recall ≥ 95%, precisão ≥ 85%);
+  (3) reclassificar com `make ingest ARGS=--forcar` depois de mudar a regra.
 - **Não fazer:** mudar `CATEGORIAS_FORA_DE_ESCOPO` sem o Lucas; afirmar recall antes da rotulagem;
   estender o critério do anexo (norma do RJ) às fontes federal/municipal sem decisão.
 - **Próximo:** fechar a R1 (rótulos + eval + conferência de 10 atas), depois R2 (ARP). A R2 precisa

@@ -7,6 +7,8 @@ uma única transação. Falha em qualquer etapa deixa a carga anterior visível.
     python -m pncp_ti.fontes.siga                    # baixa e carrega
     python -m pncp_ti.fontes.siga --validar          # baixa e valida, sem gravar
     python -m pncp_ti.fontes.siga --de-diretorio D   # reprocessa arquivos locais
+    python -m pncp_ti.fontes.siga --forcar           # republica mesmo sem mudança nos arquivos
+                                                     # (reclassifica após mudar a regra de TI)
 """
 
 from __future__ import annotations
@@ -213,6 +215,7 @@ async def _publicar(
     decisoes: Mapping[str, tuple[bool, str]],
     geracao: dict[str, dict[str, object]],
     carga_id: UUID,
+    forcar: bool = False,
 ) -> ResultadoCarga:
     async with conn.transaction():
         bloqueio = await (
@@ -231,8 +234,12 @@ async def _publicar(
             )
         ).fetchone()
 
-        if ativa and all(
-            ativa["geracao"].get(n, {}).get("sha256") == g["sha256"] for n, g in geracao.items()
+        if (
+            ativa
+            and not forcar
+            and all(
+                ativa["geracao"].get(n, {}).get("sha256") == g["sha256"] for n, g in geracao.items()
+            )
         ):
             await conn.execute(
                 "INSERT INTO cargas (id, fonte, data_referencia, status, concluido_em, geracao, "
@@ -366,13 +373,13 @@ async def _registrar_falha(
 
 
 async def carregar(
-    conn: psycopg.AsyncConnection, arquivos: Mapping[str, ArquivoBaixado]
+    conn: psycopg.AsyncConnection, arquivos: Mapping[str, ArquivoBaixado], *, forcar: bool = False
 ) -> ResultadoCarga:
     carga_id = uuid4()
     geracao = _geracao(arquivos)
     try:
         conjunto, decisoes = preparar(arquivos)
-        return await _publicar(conn, conjunto, decisoes, geracao, carga_id)
+        return await _publicar(conn, conjunto, decisoes, geracao, carga_id, forcar)
     except Exception as exc:
         await _registrar_falha(conn, carga_id, exc, geracao)
         raise
@@ -405,7 +412,7 @@ async def principal(argumentos: argparse.Namespace) -> int:
             return 0
         conn = await conectar(get_settings())
         try:
-            resultado = await carregar(conn, arquivos)
+            resultado = await carregar(conn, arquivos, forcar=argumentos.forcar)
         finally:
             await conn.close()
         log.info(
@@ -426,6 +433,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Carga do SIGA RJ (atas, itens, participantes).")
     parser.add_argument("--de-diretorio", type=Path, help="reprocessa os 3 CSVs de uma pasta")
     parser.add_argument("--validar", action="store_true", help="valida sem gravar no banco")
+    parser.add_argument(
+        "--forcar",
+        action="store_true",
+        help="republica mesmo com os mesmos arquivos (reclassificar)",
+    )
     raise SystemExit(asyncio.run(principal(parser.parse_args())))
 
 

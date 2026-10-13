@@ -48,7 +48,7 @@ async def test_censo_lista_todas_as_validas_vigentes_com_a_decisao_do_sistema(
     assert set(por_id) == {"1", "2", "4", "6", "7"}
     assert por_id["1"]["filtro_sistema"] == "TI"
     assert por_id["2"]["filtro_sistema"] == "NAO_TI"
-    assert por_id["6"]["filtro_sistema"] == "NAO_TI"
+    assert por_id["6"]["filtro_sistema"] == "TI"
     assert "IMPRESSORA" not in por_id["1"]["nomes_catalogo"]  # só o nome de catálogo
     assert por_id["1"]["nomes_catalogo"].startswith("SERVICO DE LOCACAO")
     assert all(linha["rotulo_lucas"] == "" for linha in censo)

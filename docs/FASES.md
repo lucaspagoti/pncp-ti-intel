@@ -64,11 +64,11 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 - Reprocessar os mesmos 3 CSVs mantém contagens e registros, sem duplicação. ✅ (teste e carga
   real: a segunda execução registrou `sem_mudanca`)
 - Falha de validação ou de gravação preserva a carga anterior. ✅ (testes)
-- `v_atas_ti_vigentes` lista as atas de TI vigentes do RJ com itens e preço unitário. ✅ (21 atas
+- `v_atas_ti_vigentes` lista as atas de TI vigentes do RJ com itens e preço unitário. ✅ (25 atas
   em 13/10/2026) Conferência manual de 10 atas contra o CSV: **pendente**.
 - Precisão e recall medidos contra o rótulo final (D6; meta proposta: recall ≥ 95% e precisão
-  ≥ 85%). **Pendente:** decisão sobre as 3 categorias em conflito com o anexo (ADR 0019) e
-  rotulagem do censo (`insumos/rotulagem_siga.csv`, 1.574 atas).
+  ≥ 85%). **Pendente:** rotulagem do censo (`insumos/rotulagem_siga.csv`, 1.574 atas). Decidido
+  em 13/10/2026: seguir o anexo da IN 05, inclusive telefonia, pontos de rede e videomonitoramento.
 - Link de origem: processo SEI + CSV de origem. O SIGA não tem URL pública por ata conhecida.
 
 **Status:** implementada na branch `feat/r1-siga-rj`; aceite depende da rotulagem.

@@ -36,8 +36,9 @@ antes de propor qualquer fase.
   não publica carga parcial.
 - Toda fonte nova tem teste de parse com fixture e, se a API não for documentada, teste de contrato.
 - Critério de TI do SIGA = Anexo Único da IN PRODERJ/PRE 05/2024 (`insumos/normas/`, ADR 0019).
-  A regra lê objeto e nome de catálogo, nunca a especificação do item. Categorias excluídas por
-  decisão do Lucas ficam em `CATEGORIAS_FORA_DE_ESCOPO`; não mudar sem ele.
+  A regra lê objeto e nome de catálogo, nunca a especificação do item. O Lucas decidiu seguir o
+  anexo (inclui telefonia, pontos de rede e videomonitoramento); nobreak e drone ficam fora.
+  Exclusões pontuais ficam em `CATEGORIAS_FORA_DE_ESCOPO`; não mudar sem ele.
 - CPFs sempre mascarados. Nada de documentos internos de terceiros.
 - Segredos só no `.env` (fora do Git).
 - Se um MCP voltar (backlog): stdio, SQL fixo e nunca a instância hospedada pública do

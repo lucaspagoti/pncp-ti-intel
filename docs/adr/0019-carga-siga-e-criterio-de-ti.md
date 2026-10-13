@@ -1,7 +1,7 @@
 # 0019 — Carga do SIGA RJ e critério de TI (IN PRODERJ 05/2024)
 
-- Status: aceita (13/10/2026). A decisão sobre as três categorias do anexo marcadas abaixo como
-  "em conflito" está **aberta** e volta para o Lucas.
+- Status: aceita (13/10/2026). Decisão do Lucas: **seguir o Anexo Único da IN 05**, inclusive nas
+  três categorias que contrariavam a resposta anterior dele (ver "Decisão — critério de TI").
 - Detalha: ADR 0016 (fontes). Respeita ADR 0005 (ingestão idempotente) e ADR 0013 (privacidade).
 
 ## Contexto
@@ -60,21 +60,22 @@ primeiro " - "), nunca a especificação do item, onde há menções incidentais
 (`monitor`, `servidor`, `rack`) são ancorados. Cada decisão guarda um motivo auditável
 (`categoria:termo@objeto|item`, ou `excluido:...`).
 
-O Lucas decidiu (13/10/2026) que **nobreak/energia, cabeamento/pontos lógicos, telefonia/VoIP/
-internet e CFTV/catracas/drones não são TI** neste projeto. Três dessas categorias **constam do
-anexo**:
+O Lucas havia dito que nobreak/energia, cabeamento/pontos lógicos, telefonia/VoIP/internet e
+CFTV/catracas/drones não eram TI. Três dessas categorias **constam do anexo**; ao ver o conflito,
+decidiu em 13/10/2026: **seguir o que diz a IN 05**.
 
-| Categoria do anexo | Onde | Estado na regra |
+| Categoria | No anexo | Regra |
 |---|---|---|
-| Comunicação de dados, voz, telefonia, internet | I-a | **Em conflito.** Excluída (`I-telecom`) |
-| Pontos de rede lógicos e elétricos, infraestrutura da rede | VIII-a | **Em conflito.** Excluída (`VIII-rede-fisica`) |
-| Videomonitoramento, reconhecimento facial, LPR | VII-a | **Em conflito.** Excluída (`VII-videomonitoramento`) |
-| Nobreak, drone, catraca | — (não constam) | Excluídos pelo termo, só no objeto |
+| Comunicação de dados, voz, telefonia, internet | I-a | **TI** (`I-telecom`) |
+| Pontos de rede lógicos e elétricos, infraestrutura da rede | VIII-a | **TI** (`VIII-rede-fisica`) |
+| Videomonitoramento, reconhecimento facial, LPR (inclui CFTV) | VII-a | **TI** (`VII-videomonitoramento`) |
+| Nobreak, drone | não constam | Excluídos pelo termo, só no objeto (`TERMOS_FORA_DO_ANEXO`) |
+| Catraca | não consta | Sem exclusão própria; "CATRACA - CFTV" é TI pelo CFTV |
 
-A exclusão está em `CATEGORIAS_FORA_DE_ESCOPO` e `TERMOS_FORA_DO_ANEXO`, um lugar só. Se o Lucas
-decidir seguir o anexo, remove-se a categoria do conjunto e recarrega-se. Enquanto isso, um item
-de TI dentro do escopo (ex.: "SERVICOS SUPORTE EM TECNOLOGIA DA INFORMACAO") prevalece sobre um
-objeto de categoria excluída (caso real: "RECONHECIMENTO FACIAL").
+`CATEGORIAS_FORA_DE_ESCOPO` está vazio; o mecanismo fica para uma exclusão pontual futura. Itens
+que o anexo não lista nem equivalem a algo listado ficam `sem_sinal` e são revisados na rotulagem.
+Nobreak e drone seguem excluídos porque o Lucas os excluiu e o anexo não os cita; se a rotulagem
+mostrar que o rol exemplificativo (art. 1º, §1º) os alcança, a decisão volta para ele.
 
 O anexo é de uma norma **estadual do RJ**. Aplicá-lo às atas federais e municipais (R2 e R3) é
 decisão separada.
@@ -82,9 +83,9 @@ decisão separada.
 ## Consequências
 
 - Resultado em 13/10/2026: 11.662 atas, 52.013 itens, 138.254 participantes; 1.574 atas
-  `Válida` vigentes, 21 delas classificadas como TI (a regra anterior marcava 27, com
-  falsos positivos médicos e de laboratório). Carga completa em cerca de 36 s.
-- O resultado do SIGA é pequeno (~1,3% das válidas); o valor do produto vem de somar as fontes.
+  `Válida` vigentes, 25 delas classificadas como TI (a regra anterior marcava 27, com falsos
+  positivos médicos e de laboratório). Carga completa em cerca de 36 s.
+- O resultado do SIGA é pequeno (~1,6% das válidas); o valor do produto vem de somar as fontes.
 - O recall da regra só é conhecido depois da rotulagem do censo (D6). A regra v1 não foi
   ajustada contra rótulos.
 - A migração 0005 é destrutiva para o schema do snapshot `/v1/atas` (vazio) e não tem downgrade.

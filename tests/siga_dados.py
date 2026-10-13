@@ -73,7 +73,7 @@ def participante(
 
 
 def conjunto_basico(geracao: str = GERACAO) -> tuple[bytes, bytes, bytes]:
-    """7 atas (1 com 2 processos): só as atas 1 e 4 são TI + Válida + vigentes."""
+    """7 atas (1 com 2 processos). TI + Válida + vigentes: 1, 4, 6 (CFTV) e 7 (VOIP)."""
     atas = [
         ata("1", "OUTSOURCING DE IMPRESSÃO", geracao=geracao),
         ata("1", "OUTSOURCING DE IMPRESSÃO", processo="E-01/901/2026", geracao=geracao),

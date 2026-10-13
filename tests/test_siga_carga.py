@@ -42,8 +42,8 @@ async def test_carga_completa_publica_so_atas_ti_validas_e_vigentes(conn_ingest,
     por_id = {row["id_origem"]: row for row in await cur.fetchall()}
     assert por_id["1"]["is_ti"] and por_id["4"]["is_ti"]
     assert not por_id["2"]["is_ti"]
-    assert por_id["6"]["motivo_ti"].startswith("excluido:fora_do_anexo")
-    assert por_id["7"]["motivo_ti"].startswith("excluido:fora_de_escopo")
+    assert por_id["6"]["motivo_ti"].startswith("VII-videomonitoramento:")  # catraca com CFTV
+    assert por_id["7"]["motivo_ti"].startswith("I-telecom:")  # VOIP
     await conn_ingest.commit()
 
 
@@ -55,8 +55,9 @@ async def test_views_listam_so_atas_ti_vigentes_com_preco_valido(
         "SELECT id_ata, fonte, primeira_vez_vista FROM v_atas_ti_vigentes"
     )
     atas = await cur.fetchall()
-    # 1 = TI válida; 4 = TI sem início; 3 interrompida, 5 vencida, 6/7 fora do escopo
-    assert {a["id_ata"] for a in atas} == {"1", "4"}
+    # 1 = TI válida; 4 = TI sem início; 6 = CFTV e 7 = VOIP (citados no anexo);
+    # 3 interrompida e 5 vencida ficam fora
+    assert {a["id_ata"] for a in atas} == {"1", "4", "6", "7"}
     assert {a["fonte"] for a in atas} == {"siga_rj"}
     assert all(a["primeira_vez_vista"] is not None for a in atas)
 
@@ -64,7 +65,7 @@ async def test_views_listam_so_atas_ti_vigentes_com_preco_valido(
         "SELECT id_ata, id_item, valor_unitario, valor_valido FROM v_ata_itens_ti"
     )
     itens = await cur.fetchall()
-    assert {i["id_ata"] for i in itens} == {"1", "4"}
+    assert {i["id_ata"] for i in itens} == {"1", "4", "6"}
     assert [i for i in itens if i["id_item"] in ("12", "14")] and all(
         i["valor_unitario"] is None for i in itens if i["id_item"] in ("12", "14")
     )
@@ -173,7 +174,7 @@ async def test_leitor_nao_acessa_tabelas_nem_escreve(conn_ingest, tmp_path, nome
     await _carga(conn_ingest, tmp_path, d.conjunto_basico())
     dsn = reader_dsn(replace(get_settings(), postgres_db=nome_banco_teste))
     with psycopg.connect(dsn, row_factory=dict_row) as leitor:
-        assert leitor.execute("SELECT count(*) n FROM v_atas_ti_vigentes").fetchone()["n"] == 2
+        assert leitor.execute("SELECT count(*) n FROM v_atas_ti_vigentes").fetchone()["n"] == 4
         for tabela in ("atas", "ata_itens", "ata_participantes", "cargas", "atas_vistas"):
             with pytest.raises(InsufficientPrivilege):
                 leitor.execute(f"SELECT 1 FROM {tabela} LIMIT 1")
@@ -276,3 +277,26 @@ async def test_arquivo_acima_do_limite_e_recusado(tmp_path, monkeypatch):
         with pytest.raises(ErroValidacao) as exc:
             await siga.baixar(tmp_path / "dl", client)
     assert exc.value.tipo == "tamanho"
+
+
+async def test_forcar_republica_com_os_mesmos_arquivos_e_reclassifica(
+    conn_ingest, tmp_path, monkeypatch
+):
+    primeira = await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    pasta = tmp_path / "c0"
+    arquivos = arquivos_de_diretorio(pasta)
+    sem = await carregar(conn_ingest, arquivos)
+    assert sem.status == "sem_mudanca"
+
+    from pncp_ti.classificar import in05
+
+    monkeypatch.setattr(in05, "CATEGORIAS_FORA_DE_ESCOPO", frozenset({"I-telecom"}))
+    forcada = await carregar(conn_ingest, arquivos, forcar=True)
+
+    assert forcada.status == "concluida"
+    assert forcada.carga_id not in (primeira.carga_id, sem.carga_id)
+    assert await _um(conn_ingest, "SELECT count(*) n FROM atas") == 7
+    voip = await (
+        await conn_ingest.execute("SELECT is_ti FROM atas WHERE id_origem = '7'")
+    ).fetchone()
+    assert voip["is_ti"] is False
