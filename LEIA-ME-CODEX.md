@@ -4,6 +4,21 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
+## Correções da revisão do Codex no PR #5 — Claude, 13/10/2026
+
+Os cinco achados procediam e foram corrigidos, cada um com regressão (`make test`: 192):
+- P1 `processos` sem máscara: toda célula de texto passa por `sanitizar` na leitura
+  (`_ler_tabela`); só colunas numéricas e `data_extracao` ficam como vieram.
+- P2 data inválida virava vigente: data preenchida e inválida coloca a ata em **quarentena**
+  (não gravada; itens e participantes descartados e contados).
+- P2 CSV frouxo: `csv.reader(strict=True)`, inclusive no cabeçalho.
+- P2 métricas infláveis: `avaliar` e `conferir_com_carga` rejeitam `id_ata` repetido ou vazio.
+- P2 concorrência no download: diretório exclusivo (`timestamp-<hex>`) e trava de sessão antes
+  do download.
+- Docs alinhadas: item sem preço permanece na view com `NULL`; limite de 100 MB; corpo do PR.
+Pedido: nova revisão do head atualizado do PR #5. A ressalva do eval (rótulo feito pelo Claude,
+não é recall independente) foi preservada.
+
 ## Revisão vigente do PR #5 — Codex, 13/10/2026
 
 Lucas pediu revisão, sem correção nesta etapa. Head revisado: `cb0cc1d`.
@@ -43,7 +58,7 @@ Leia a ADR 0019 e `docs/FASES.md` (R1).
 - **Feito:** migração `0005`; `fontes/siga.py` + `fontes/siga_csv.py` (download, validação, carga
   atômica); `classificar/in05.py` (regra pelo Anexo Único da IN PRODERJ/PRE 05/2024, PDF em
   `insumos/normas/`); `classificar/amostra.py` (censo) e `classificar/avaliar.py`; testes
-  (`make test`: 181). Migração aplicada ao banco local **depois** de backup restaurado em banco
+  (`make test`: 192). Migração aplicada ao banco local **depois** de backup restaurado em banco
   temporário (removido). Carga real feita duas vezes (a segunda, `sem_mudanca`).
 - **Descobertas que mudaram o desenho** (detalhe na ADR 0019): `ID Ata` repete por processo SEI;
   linhas idênticas em itens/participantes; arquivos são **cp1252**, não latin-1; CPF no nome de
