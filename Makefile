@@ -18,9 +18,11 @@ test: ## Lint + format-check + testes.
 migrate: ## Aplica as migrações do Alembic (schema, papéis, views).
 	uv run alembic upgrade head
 
-ingest: ## Ainda não implementado — chega na R1 (SIGA RJ), ADR 0016.
-	@echo "make ingest: o snapshot PNCP /v1/atas foi removido (ADR 0016). A ingestão SIGA RJ chega na R1." >&2
-	@exit 1
+FONTE ?= siga
+
+ingest: ## Carga de uma fonte: make ingest FONTE=siga (arp: R2; pncp_busca: R3).
+	@test "$(FONTE)" = "siga" || (echo "FONTE=$(FONTE) ainda não implementada (arp: R2, pncp_busca: R3)." >&2 && exit 1)
+	uv run python -m pncp_ti.fontes.siga
 
 backup: ## pg_dump do Postgres local para backups/ (fora do Git).
 	./scripts/backup_postgres.sh
@@ -29,8 +31,9 @@ restore: ## Restaura em banco NOVO: make restore DUMP=backups/arquivo.dump DATAB
 	@test -n "$(DUMP)" -a -n "$(DATABASE)" || (echo "Informe DUMP e DATABASE." && exit 1)
 	./scripts/restore_postgres.sh "$(DUMP)" --database "$(DATABASE)"
 
-amostra: ## Gera insumos/amostra_rotulada.csv (será adaptado às novas fontes na R1).
+amostra: ## Exporta insumos/rotulagem_siga.csv (censo das atas vigentes) para rotular TI.
 	uv run python -m pncp_ti.classificar.amostra
 
-eval: ## Ainda não implementado — depende da amostra rotulada das novas fontes (R1+).
-	@echo "make eval: nada a fazer ainda. Depende do Lucas rotular insumos/amostra_rotulada.csv."
+eval: ## Precisão/recall do filtro de TI: make eval ROT=insumos/rotulagem_siga.csv
+	@test -n "$(ROT)" || (echo "Informe ROT=<csv rotulado>." >&2 && exit 1)
+	uv run python -m pncp_ti.classificar.avaliar $(ROT)

@@ -30,12 +30,12 @@ publicada. O projeto passou a usar três fontes em lote e uma web própria. **R0
 remoção do adaptador antigo) está em andamento na branch `refactor/fontes-atas`. **R1** (ingestão do
 SIGA RJ) é a próxima. Ver `docs/FASES.md` e `LEIA-ME-CODEX.md`.
 
-Revisão R0 e ajustes locais validados em 13/10/2026: lint, formatação e 79 testes
-aprovados. Aprovação/PR/merge seguem pendentes. `make ingest` ainda não implementa
-coleta e retorna erro até a R1, para não sinalizar uma carga concluída.
+**R1 (ingestão do SIGA RJ) implementada** na branch `feat/r1-siga-rj` (ADR 0019): carga de 36 s,
+11.662 atas, 52.013 itens e 138.254 participantes; 21 atas de TI vigentes em 13/10/2026. O aceite
+depende da rotulagem do censo (`make amostra`) e da decisão sobre três categorias do anexo da
+IN PRODERJ 05/2024 que a regra hoje exclui. `make ingest FONTE=siga` roda a carga.
 
-O banco local ainda está no schema da migração 0004, sem atas carregadas. A R1 traz a migração que
-substitui essas tabelas (com backup verificado antes).
+O banco local está no schema da migração 0005 (aplicada após backup restaurado em banco temporário).
 
 ## Como rodar
 

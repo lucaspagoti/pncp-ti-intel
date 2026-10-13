@@ -11,7 +11,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# Dados locais
+# Dados locais (inclui data/siga/: CSVs brutos das últimas cargas)
 data/
 backups/
 logs/

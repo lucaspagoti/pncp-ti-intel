@@ -6,3 +6,10 @@ preços do `compras-mcp` segue a IN SEGES/ME 65/2021 (federal); se um dia você 
 decisão formal de algum órgão, confira a norma aplicável a esse órgão antes.
 
 Só normas publicadas. Nada de minutas ou documentos internos.
+
+## Normas presentes
+
+- `IN_PRODERJ-PRE_05_2024.pdf`: Instrução Normativa PRODERJ/PRE nº 05, de 20/03/2024, que
+  regulamenta contratações de soluções de TIC no Estado do RJ. O **Anexo Único** é o critério de
+  "o que é TI" usado pela regra do SIGA (`src/pncp_ti/classificar/in05.py`, ADR 0019). O anexo é
+  rol exemplificativo (art. 1º, §1º).

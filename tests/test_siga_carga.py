@@ -1,0 +1,278 @@
+"""Carga do SIGA RJ no Postgres: troca atômica, idempotência, falhas e permissões."""
+
+from dataclasses import replace
+from datetime import date
+
+import httpx
+import psycopg
+import pytest
+import siga_dados as d
+from psycopg.errors import InsufficientPrivilege
+from psycopg.rows import dict_row
+
+from pncp_ti.config import get_settings, reader_dsn
+from pncp_ti.fontes import siga
+from pncp_ti.fontes.siga import arquivos_de_diretorio, carregar
+from pncp_ti.fontes.siga_csv import ErroValidacao
+
+
+async def _carga(conn, tmp_path, conjunto):
+    pasta = tmp_path / f"c{len(list(tmp_path.iterdir()))}"
+    pasta.mkdir()
+    d.escrever(pasta, conjunto)
+    return await carregar(conn, arquivos_de_diretorio(pasta))
+
+
+async def _um(conn, sql, *params):
+    cur = await conn.execute(sql, params)
+    return (await cur.fetchone())["n"]
+
+
+async def test_carga_completa_publica_so_atas_ti_validas_e_vigentes(conn_ingest, tmp_path):
+    r = await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    assert r.status == "concluida"
+    assert await _um(conn_ingest, "SELECT count(*) n FROM atas") == 7
+    ativa = await _um(
+        conn_ingest, "SELECT count(*) n FROM cargas WHERE ativa AND status='concluida'"
+    )
+    assert ativa == 1
+    cur = await conn_ingest.execute(
+        "SELECT is_ti, motivo_ti, id_origem FROM atas ORDER BY id_origem"
+    )
+    por_id = {row["id_origem"]: row for row in await cur.fetchall()}
+    assert por_id["1"]["is_ti"] and por_id["4"]["is_ti"]
+    assert not por_id["2"]["is_ti"]
+    assert por_id["6"]["motivo_ti"].startswith("excluido:fora_do_anexo")
+    assert por_id["7"]["motivo_ti"].startswith("excluido:fora_de_escopo")
+    await conn_ingest.commit()
+
+
+async def test_views_listam_so_atas_ti_vigentes_com_preco_valido(
+    conn_ingest, conn_reader, tmp_path
+):
+    await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    cur = await conn_reader.execute(
+        "SELECT id_ata, fonte, primeira_vez_vista FROM v_atas_ti_vigentes"
+    )
+    atas = await cur.fetchall()
+    # 1 = TI válida; 4 = TI sem início; 3 interrompida, 5 vencida, 6/7 fora do escopo
+    assert {a["id_ata"] for a in atas} == {"1", "4"}
+    assert {a["fonte"] for a in atas} == {"siga_rj"}
+    assert all(a["primeira_vez_vista"] is not None for a in atas)
+
+    cur = await conn_reader.execute(
+        "SELECT id_ata, id_item, valor_unitario, valor_valido FROM v_ata_itens_ti"
+    )
+    itens = await cur.fetchall()
+    assert {i["id_ata"] for i in itens} == {"1", "4"}
+    assert [i for i in itens if i["id_item"] in ("12", "14")] and all(
+        i["valor_unitario"] is None for i in itens if i["id_item"] in ("12", "14")
+    )
+    cur = await conn_reader.execute("SELECT count(*) n FROM v_ata_consumo_item")
+    assert (await cur.fetchone())["n"] == 3  # 3 linhas distintas após dedupe (ata 1: 2; ata 4: 1)
+
+
+async def test_reprocessar_mesmos_arquivos_nao_duplica_e_registra_sem_mudanca(
+    conn_ingest, tmp_path
+):
+    primeira = await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    segunda = await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    assert (primeira.status, segunda.status) == ("concluida", "sem_mudanca")
+    assert await _um(conn_ingest, "SELECT count(*) n FROM atas") == 7
+    assert await _um(conn_ingest, "SELECT count(*) n FROM ata_itens") == 7
+    assert await _um(conn_ingest, "SELECT count(*) n FROM cargas WHERE status='sem_mudanca'") == 1
+    ativa = await (await conn_ingest.execute("SELECT id FROM cargas WHERE ativa")).fetchone()
+    assert ativa["id"] == primeira.carga_id
+
+
+async def test_nova_geracao_substitui_a_anterior_e_preserva_primeira_vez_vista(
+    conn_ingest, tmp_path
+):
+    primeira = await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    await conn_ingest.execute(
+        "UPDATE atas_vistas SET primeira_vez_vista = '2026-01-02' WHERE id_origem = '1'"
+    )
+    await conn_ingest.commit()
+
+    atas, itens, part = d.conjunto_basico()
+    alterado = (atas.replace(b"MEDICAMENTO", b"MEDICAMENTOS"), itens, part)
+    segunda = await _carga(conn_ingest, tmp_path, alterado)
+
+    assert segunda.status == "concluida"
+    assert await _um(conn_ingest, "SELECT count(*) n FROM atas") == 7
+    assert (
+        await _um(conn_ingest, "SELECT count(*) n FROM atas WHERE carga_id=%s", primeira.carga_id)
+        == 0
+    )
+    antiga = await (
+        await conn_ingest.execute(
+            "SELECT ativa, status FROM cargas WHERE id=%s", (primeira.carga_id,)
+        )
+    ).fetchone()
+    assert (antiga["ativa"], antiga["status"]) == (False, "substituida")
+    vista = await (
+        await conn_ingest.execute("SELECT primeira_vez_vista FROM atas_vistas WHERE id_origem='1'")
+    ).fetchone()
+    assert vista["primeira_vez_vista"] == date(2026, 1, 2)
+
+
+async def test_falha_de_validacao_mantem_a_carga_anterior_e_registra_o_erro(conn_ingest, tmp_path):
+    await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    atas, itens, part = d.conjunto_basico()
+    with pytest.raises(ErroValidacao):
+        await _carga(conn_ingest, tmp_path, (atas.replace(b"Status da Ata", b"X"), itens, part))
+    assert await _um(conn_ingest, "SELECT count(*) n FROM atas") == 7
+    falha = await (
+        await conn_ingest.execute(
+            "SELECT status, erro_tipo, ativa FROM cargas WHERE status='falhou'"
+        )
+    ).fetchone()
+    assert (falha["status"], falha["erro_tipo"], falha["ativa"]) == ("falhou", "cabecalho", False)
+    assert await _um(conn_ingest, "SELECT count(*) n FROM cargas WHERE ativa") == 1
+
+
+async def test_falha_no_meio_da_gravacao_faz_rollback_total(conn_ingest, tmp_path, monkeypatch):
+    primeira = await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    original = siga.preparar
+
+    def quebrado(arquivos):
+        conjunto, decisoes = original(arquivos)
+        decisoes["2"] = (None, "x")  # viola NOT NULL já durante o COPY
+        return conjunto, decisoes
+
+    monkeypatch.setattr(siga, "preparar", quebrado)
+    atas, itens, part = d.conjunto_basico()
+    with pytest.raises(psycopg.errors.NotNullViolation):
+        await _carga(
+            conn_ingest, tmp_path, (atas.replace(b"MEDICAMENTO", b"MEDICAMENTOS"), itens, part)
+        )
+
+    ativa = await (await conn_ingest.execute("SELECT id FROM cargas WHERE ativa")).fetchone()
+    assert ativa["id"] == primeira.carga_id
+    assert await _um(conn_ingest, "SELECT count(*) n FROM atas") == 7
+    assert await _um(conn_ingest, "SELECT count(*) n FROM cargas WHERE status='em_andamento'") == 0
+    assert await _um(conn_ingest, "SELECT count(*) n FROM cargas WHERE status='falhou'") == 1
+
+
+async def test_queda_brusca_de_volume_nao_substitui_a_carga_ativa(conn_ingest, tmp_path):
+    await _carga(conn_ingest, tmp_path, d.conjunto_grande(100))
+    with pytest.raises(ErroValidacao) as exc:
+        await _carga(conn_ingest, tmp_path, d.conjunto_grande(40))
+    assert exc.value.tipo == "queda_volume"
+    assert await _um(conn_ingest, "SELECT count(*) n FROM atas") == 100
+
+
+async def test_arquivo_de_geracao_anterior_nao_substitui_a_ativa(conn_ingest, tmp_path):
+    await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    with pytest.raises(ErroValidacao) as exc:
+        await _carga(conn_ingest, tmp_path, d.conjunto_basico(geracao="12/10/2026"))
+    assert exc.value.tipo == "geracao_antiga"
+
+
+async def test_leitor_nao_acessa_tabelas_nem_escreve(conn_ingest, tmp_path, nome_banco_teste):
+    await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    dsn = reader_dsn(replace(get_settings(), postgres_db=nome_banco_teste))
+    with psycopg.connect(dsn, row_factory=dict_row) as leitor:
+        assert leitor.execute("SELECT count(*) n FROM v_atas_ti_vigentes").fetchone()["n"] == 2
+        for tabela in ("atas", "ata_itens", "ata_participantes", "cargas", "atas_vistas"):
+            with pytest.raises(InsufficientPrivilege):
+                leitor.execute(f"SELECT 1 FROM {tabela} LIMIT 1")
+            leitor.rollback()
+        with pytest.raises(InsufficientPrivilege):
+            leitor.execute(
+                "INSERT INTO cargas (id, fonte, data_referencia, status) "
+                "VALUES (gen_random_uuid(), 'x', now(), 'falhou')"
+            )
+        leitor.rollback()
+        # A view agrega várias tabelas, então nem é atualizável; de qualquer forma não escreve.
+        with pytest.raises((InsufficientPrivilege, psycopg.errors.ObjectNotInPrerequisiteState)):
+            leitor.execute("DELETE FROM v_atas_ti_vigentes")
+
+
+# --- download ---
+
+
+def _cliente(handler):
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+@pytest.fixture
+def sem_espera(monkeypatch):
+    async def _nada(_):
+        return None
+
+    monkeypatch.setattr(siga.asyncio, "sleep", _nada)
+
+
+async def test_download_grava_arquivos_com_sha256_e_last_modified(tmp_path):
+    atas, itens, part = d.conjunto_basico()
+    corpos = {siga.ARQUIVOS["atas"]: atas, siga.ARQUIVOS["itens"]: itens,
+              siga.ARQUIVOS["participantes"]: part}  # fmt: skip
+
+    def handler(req):
+        return httpx.Response(
+            200,
+            content=corpos[req.url.path.rsplit("/", 1)[1]],
+            headers={"last-modified": "Tue, 13 Oct 2026 04:53:06 GMT"},
+        )
+
+    async with _cliente(handler) as client:
+        baixados = await siga.baixar(tmp_path / "dl", client)
+    assert set(baixados) == {"atas", "itens", "participantes"}
+    assert baixados["atas"].caminho.read_bytes() == atas
+    assert baixados["atas"].sha256 == siga._sha256(baixados["atas"].caminho)
+    assert baixados["itens"].last_modified.year == 2026
+
+
+async def test_download_truncado_e_tentado_de_novo_e_depois_falha(tmp_path, sem_espera):
+    chamadas = []
+
+    def handler(req):
+        chamadas.append(req.url.path)
+        return httpx.Response(200, content=b"abc", headers={"content-length": "10"})
+
+    async with _cliente(handler) as client:
+        with pytest.raises(ErroValidacao) as exc:
+            await siga.baixar(tmp_path / "dl", client)
+    assert exc.value.tipo == "rede"
+    assert len(chamadas) == siga.TENTATIVAS
+    assert not list((tmp_path / "dl").glob("*.part"))
+
+
+async def test_http_404_nao_e_repetido(tmp_path, sem_espera):
+    chamadas = []
+
+    def handler(req):
+        chamadas.append(1)
+        return httpx.Response(404)
+
+    async with _cliente(handler) as client:
+        with pytest.raises(ErroValidacao) as exc:
+            await siga.baixar(tmp_path / "dl", client)
+    assert (exc.value.tipo, len(chamadas)) == ("http", 1)
+
+
+async def test_last_modified_distante_indica_geracoes_diferentes(tmp_path):
+    horas = iter(["04:53:06", "04:53:09", "07:10:00"])
+
+    def handler(req):
+        return httpx.Response(
+            200, content=b"x", headers={"last-modified": f"Tue, 13 Oct 2026 {next(horas)} GMT"}
+        )
+
+    async with _cliente(handler) as client:
+        with pytest.raises(ErroValidacao) as exc:
+            await siga.baixar(tmp_path / "dl", client)
+    assert exc.value.tipo == "geracao"
+
+
+async def test_arquivo_acima_do_limite_e_recusado(tmp_path, monkeypatch):
+    monkeypatch.setattr(siga, "LIMITE_BYTES", 5)
+
+    def handler(req):
+        return httpx.Response(200, content=b"123456789")
+
+    async with _cliente(handler) as client:
+        with pytest.raises(ErroValidacao) as exc:
+            await siga.baixar(tmp_path / "dl", client)
+    assert exc.value.tipo == "tamanho"

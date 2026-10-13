@@ -29,7 +29,7 @@ documentos licitatórios. Nenhuma saída substitui a análise humana antes de um
 
 | Fonte | Cobre | Como | Volume (13/10/2026) |
 |---|---|---|---|
-| SIGA RJ | Estado do RJ (cobertura no PNCP a confirmar) | 3 CSVs completos, regenerados por volta de 04:53: atas, itens (valor unitário, fornecedor) e participantes (qtd demandada × consumida) | 13.090 atas, 1.923 válidas |
+| SIGA RJ | Estado do RJ (cobertura no PNCP a confirmar) | 3 CSVs completos, regenerados por volta de 04:53: atas, itens (valor unitário, fornecedor) e participantes (qtd demandada × consumida) | 13.090 linhas (11.662 atas únicas), 1.574 válidas únicas |
 | Dados Abertos Compras.gov.br, `modulo-arp` | União e entes no Compras.gov.br | API JSON, 500 por página, janela de 365 dias; itens em `2_consultarARPItem` | ~135 mil atas/ano, ~271 páginas |
 | Busca do portal PNCP | Todas as esferas (estados e municípios fora do Compras.gov.br) | `api/search` com `q=<termo TI>`, `status=vigente`, 500 por página | dezenas de consultas por dia |
 
@@ -46,9 +46,9 @@ documentos licitatórios. Nenhuma saída substitui a análise humana antes de um
 ```
 
 - **Orquestração:** systemd timer + CLI (ADR 0017). O Airflow fica adiado.
-- **Banco:** Postgres + Alembic. Tabelas `cargas`, `atas`, `ata_itens`, `ata_participantes`;
-  views `v_atas_ti_vigentes`, `v_ata_itens_ti`, `v_ata_saldo_item`. Busca full-text
-  (`portuguese` + `unaccent`) + `pg_trgm`.
+- **Banco:** Postgres + Alembic. Tabelas `cargas`, `atas`, `ata_itens`, `ata_participantes`,
+  `atas_vistas`; views `v_atas_ti_vigentes`, `v_ata_itens_ti`, `v_ata_consumo_item` (ADR 0019).
+  Busca full-text (`portuguese` + `unaccent`) + `pg_trgm` entram na R4.
 - **Web:** FastAPI + Jinja2 + HTMX, só leitura (ADR 0018).
 - **Clientes HTTP:** `compras-mcp` usado como biblioteca (`DadosAbertosClient`, ADR 0004) e um
   cliente fino para a busca PNCP e o download do SIGA.
@@ -63,9 +63,9 @@ pncp-ti-intel/
 ├── docs/adr/ · docs/PLANO.md · docs/FASES.md
 ├── db/migrations/
 ├── src/pncp_ti/
-│   ├── fontes/        # siga.py, arp.py, pncp_busca.py (download, parse, staging)
+│   ├── fontes/        # siga.py, siga_csv.py (R1); arp.py, pncp_busca.py (R2, R3)
 │   ├── ingest/        # motor: retry/backoff, limite de taxa, log, troca de snapshot
-│   ├── classificar/   # regra de TI + amostra para rotulagem
+│   ├── classificar/   # in05.py (regra do SIGA), amostra.py (censo), avaliar.py
 │   └── web/           # FastAPI + templates
 ├── insumos/           # termos_ti.txt, amostra rotulada
 └── tests/
@@ -101,7 +101,7 @@ pncp-ti-intel/
 | Risco | Efeito | Mitigação |
 |---|---|---|
 | A busca PNCP (não documentada) muda ou bloqueia | Somem as atas de estados e municípios | Teste de contrato diário, retry/backoff, taxa baixa; SIGA e ARP seguem independentes |
-| SIGA muda o cabeçalho, a codificação ou trunca o arquivo | Carga errada | Validação estrita; menos de 50% das linhas da carga anterior conta como anomalia e não publica |
+| SIGA muda o cabeçalho, a codificação ou trunca o arquivo | Carga errada | Validação estrita (cp1252, cabeçalho, geração dos 3 arquivos); menos de 50% das atas da carga ativa não publica (ADR 0019) |
 | A lista de termos TI perde atas | Recall baixo na busca PNCP | Lista revisada pelo Lucas, amostra rotulada (D6) e referências fora dos resultados; comparação com o ARP na sobreposição |
 | Dados Abertos limita a taxa | Carga ARP lenta | Fila reprocessável, limite de taxa, itens só das atas de TI |
 | Exposição web mal configurada | Acesso não autorizado | D7 resolvida antes de sair de loopback, só leitura, revisão OWASP |

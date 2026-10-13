@@ -35,6 +35,9 @@ antes de propor qualquer fase.
   `(fonte, id_origem)`; deduplicação entre ARP e busca PNCP por `numero_controle_pncp`. Uma falha
   não publica carga parcial.
 - Toda fonte nova tem teste de parse com fixture e, se a API não for documentada, teste de contrato.
+- Critério de TI do SIGA = Anexo Único da IN PRODERJ/PRE 05/2024 (`insumos/normas/`, ADR 0019).
+  A regra lê objeto e nome de catálogo, nunca a especificação do item. Categorias excluídas por
+  decisão do Lucas ficam em `CATEGORIAS_FORA_DE_ESCOPO`; não mudar sem ele.
 - CPFs sempre mascarados. Nada de documentos internos de terceiros.
 - Segredos só no `.env` (fora do Git).
 - Se um MCP voltar (backlog): stdio, SQL fixo e nunca a instância hospedada pública do
@@ -62,12 +65,12 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo. Sem Windows/W
 - `make down` — derruba os containers do projeto.
 - `make test` — lint (`ruff check`), format-check (`ruff format --check`) e testes (`pytest`).
 - `make migrate` — aplica as migrações do Alembic (schema, papéis, views).
-- `make ingest` — ainda não implementado; retorna erro para não sinalizar carga concluída
-  (o SIGA RJ chega na R1; depois `FONTE=siga|arp|pncp_busca`).
+- `make ingest FONTE=siga` — carga do SIGA RJ (R1). `arp` (R2) e `pncp_busca` (R3) ainda retornam
+  erro, para não sinalizar carga concluída.
 - `make backup` — `pg_dump` do container para `backups/` (fora do Git).
 - `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.
-- `make amostra` — amostra para rotulagem (será adaptada às novas fontes na R1).
-- `make eval` — ainda não implementado (depende da amostra rotulada).
+- `make amostra` — exporta `insumos/rotulagem_siga.csv` (censo das atas vigentes) para rotular TI.
+- `make eval ROT=<csv>` — precisão e recall do filtro de TI contra o rótulo final (`evals/`).
 
 ## Insumos fornecidos pelo Lucas
 

@@ -1,4 +1,7 @@
-"""Migração destrutiva 0004 sobre dados sintéticos do schema anterior."""
+"""Migração destrutiva 0004 sobre dados sintéticos do schema anterior.
+
+Histórico: a 0005 a substitui; por isso migra só até a 0004.
+"""
 
 import os
 import subprocess
@@ -74,7 +77,7 @@ def banco_com_schema_0003():
 
 def test_0004_remove_schema_historico_populado_e_cria_view(banco_com_schema_0003):
     nome, env, dsn = banco_com_schema_0003
-    subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, env=env, cwd=REPO_ROOT)
+    subprocess.run(["uv", "run", "alembic", "upgrade", "0004"], check=True, env=env, cwd=REPO_ROOT)
 
     with psycopg.connect(dsn) as conn:
         tabelas_antigas = conn.execute(
