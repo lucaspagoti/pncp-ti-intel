@@ -49,7 +49,8 @@ PISO_RELATIVO = 0.5
 PISO_FILHOS = 0.7  # itens e participantes: arquivo regenerado pela metade não pode publicar
 DEFASAGEM_ALERTA_DIAS = 3
 CHAVE_TRAVA = "carga:siga_rj"
-_PASTA_CARGA = re.compile(r"^\d{8}T\d{6}-[0-9a-f]{8}$")
+# Formato atual (timestamp-sufixo) e o anterior (só timestamp): ambos contêm CSV bruto a podar.
+_PASTA_CARGA = re.compile(r"^\d{8}T\d{6}(-[0-9a-f]{8})?$")
 RETER_CARGAS = 3
 TENTATIVAS = 3
 RAIZ_DADOS = Path(__file__).resolve().parents[3] / "data" / "siga"

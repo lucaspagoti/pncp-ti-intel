@@ -383,6 +383,23 @@ def test_retencao_so_apaga_pastas_de_carga_com_timestamp(tmp_path):
     ]  # fmt: skip
 
 
+def test_retencao_poda_pastas_no_formato_antigo_e_no_novo(tmp_path):
+    for nome in (
+        "20260101T000000",
+        "20260102T000000-aaaaaaaa",
+        "20260103T000000-bbbbbbbb",
+        "20260104T000000-cccccccc",
+        "20260105T000000-ZZZZZZZZ",
+        "20260106",
+    ):
+        (tmp_path / nome).mkdir()
+    siga._reter_ultimas(tmp_path, manter=2)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "20260103T000000-bbbbbbbb", "20260104T000000-cccccccc",
+        "20260105T000000-ZZZZZZZZ", "20260106",
+    ]  # fmt: skip
+
+
 async def test_arquivo_baixado_fica_com_permissao_restrita(tmp_path):
     atas, itens, part = d.conjunto_basico()
 
