@@ -49,34 +49,3 @@ def test_sanitizar_mascara_cpf_e_preserva_precos():
     assert CPF_A not in str(resultado)
     assert CPF_B not in str(resultado)
     assert resultado["valor"] == payload["valor"]
-
-
-async def test_orgao_incompleto_nao_apaga_dados_conhecidos(conn_ingest):
-    from pncp_ti.db import upsert
-    from pncp_ti.ingest.mapeadores import extrair_orgao_de_ata
-
-    await upsert(
-        conn_ingest,
-        "orgaos",
-        "cnpj",
-        {
-            "cnpj": "12345678000190",
-            "razao_social": "Teste",
-            "poder_id": "E",
-            "esfera_id": "M",
-        },
-    )
-    await upsert(
-        conn_ingest,
-        "orgaos",
-        "cnpj",
-        extrair_orgao_de_ata({"cnpjOrgao": "12345678000190", "nomeOrgao": "Atualizado"}),
-    )
-    row = await (
-        await conn_ingest.execute("SELECT * FROM orgaos WHERE cnpj=%s", ("12345678000190",))
-    ).fetchone()
-    assert (row["poder_id"], row["esfera_id"], row["razao_social"]) == (
-        "E",
-        "M",
-        "Atualizado",
-    )

@@ -1,6 +1,7 @@
 # 0011 — Escopo nacional, sem vínculo institucional
 
 - Status: aceita (13/10/2026)
+- **Alterada pela ADR 0016 (13/10/2026):** o escopo continua nacional e passa a incluir o Estado do RJ via SIGA (fonte de dados pública, não vínculo institucional).
 
 ## Contexto
 

@@ -1,13 +1,13 @@
 [project]
 name = "pncp-ti"
 version = "0.1.0"
-description = "Base local de inteligência de contratações de TI (PNCP + MCP), projeto pessoal."
+description = "Base de atas de registro de preços de TI vigentes (SIGA RJ, Compras.gov.br, PNCP), projeto pessoal."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    # Pinado em exatamente 0.4.0 (ADR 0002). Declarado aqui — e não via `uvx
-    # --from` — para entrar no uv.lock com hashes: protege a árvore de
-    # dependências transitiva contra deriva/rug-pull, não só o pacote top-level.
+    # Pinado em exatamente 0.4.0. Usado só como biblioteca (clientes HTTP do
+    # Dados Abertos/PNCP, ADRs 0004 e 0016); o servidor MCP não roda mais.
+    # Fica no uv.lock com hashes contra deriva/rug-pull da árvore transitiva.
     # Atualizar só após ler o changelog e o diff (regra do CLAUDE.md).
     "compras-mcp==0.4.0",
     "alembic>=1.13,<2",
@@ -21,7 +21,6 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
-    "fastmcp>=2.14,<3",
     "ruff>=0.8",
     "pre-commit>=4.0",
 ]

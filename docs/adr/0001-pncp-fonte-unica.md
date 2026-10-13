@@ -1,6 +1,7 @@
 # 0001 — PNCP é a fonte única; nenhum sistema próprio de órgão é integrado
 
 - Status: aceita (12/10/2026); generalizada em 13/10/2026 (ADR 0011 — projeto sem vínculo institucional)
+- **Substituída pela ADR 0016 (13/10/2026):** o SIGA RJ passa a ser fonte, junto com o Dados Abertos ARP e a busca PNCP.
 
 ## Contexto
 

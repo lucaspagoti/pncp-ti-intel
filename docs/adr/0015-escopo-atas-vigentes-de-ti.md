@@ -3,6 +3,7 @@
 - Status: aceita (12/10/2026), decisão do Lucas.
 - Substitui: ADR 0014 (itens via Dados Abertos). Altera: ADR 0003 (sai "histórico local"),
   ADR 0006 (classificador local vira contingência), ADR 0005 (janela = snapshot do dia).
+- **Substituída pela ADR 0016 (13/10/2026):** sai o snapshot `/v1/atas`. Continuam valendo o foco em atas de TI vigentes, a troca atômica de snapshot e a amostra para medir recall.
 
 ## Contexto
 

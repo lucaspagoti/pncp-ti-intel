@@ -2,6 +2,7 @@
 
 - Status: aceita (12/10/2026); alterada pela ADR 0015 (12/10/2026): sai "histórico local".
   A base guarda só atas vigentes de TI.
+- **Alterada pela ADR 0018 (13/10/2026):** a interface principal passa a ser a web própria; o MCP vai para o backlog.
 
 ## Contexto
 

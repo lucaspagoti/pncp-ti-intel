@@ -4,32 +4,127 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
-## Estado vigente — revisão Codex da F2A — 12/10/2026
+## Continuação vigente — ajustes da revisão R0, Codex, 13/10/2026
+
+Lucas autorizou os ajustes da revisão e o registro para o Claude continuar. Este bloco
+complementa o estado R0 abaixo; os registros F2/F3 anteriores permanecem históricos.
+Branch: `refactor/fontes-atas`; base revisada: `042c21b`.
+
+**Feito nesta sessão:**
+- ADR 0004 atualizada para distinguir o wrapper PNCP removido (histórico) do reuso de
+  `DadosAbertosClient` previsto na R2 e dos clientes finos autorizados na ADR 0016.
+- ADR 0016 e PLANO deixam a sobreposição SIGA/PNCP a confirmar: a busca notebook/RJ
+  não demonstra ausência universal. Sem fusão automática por semelhança de objeto.
+- A duração da carga é estimativa a medir nos pilotos, incluindo itens ARP e retries.
+- FASES explicita idempotência com os mesmos três CSVs e a mesma data de referência,
+  teste do caminho sha256 inalterado, avaliação de cobertura com referências fora dos
+  resultados da lista de termos e preservação de `primeira_vez_vista` entre snapshots.
+- `make ingest` agora retorna erro enquanto for placeholder, evitando falso sucesso
+  para futuros agendadores. CLAUDE e README acompanham esse comportamento.
+
+**Validação:** `PYTEST_ADDOPTS='--tb=no' make test` passou: lint e formatação verdes,
+79 testes aprovados em 10,00 s, incluindo as duas migrações em bancos temporários.
+`--tb=no` apenas suprime tracebacks; não omite testes. `git diff --check` passou.
+`make ingest` foi exercitado e recusou executar, com retorno não zero esperado.
+A revisão inicial teve 77 aprovados e duas falhas de conexão ao Postgres; o ambiente
+subsequente sem sandbox permitiu concluir a suíte. A tentativa intermediária de conceder
+escrita a um arquivo individual produziu erro de montagem bubblewrap (arquivo tratado
+como diretório). Não houve alteração de configuração global do Codex: a correção prática
+foi a atualização das permissões pelo ambiente desta conversa. Em futuras sessões,
+conceder acesso à pasta do projeto, evitando esse alvo de arquivo individual.
+
+Revisão independente do diff pelo subagente concluída: ajustes aprovados, sem novo
+achado bloqueante.
+
+**Parecer:** ajustes resolvem os achados da revisão; R0 tecnicamente validada localmente.
+Aprovação do Lucas, CI remoto, PR/merge e tag permanecem separados. Não afirmar que R1,
+novas fontes, web ou operação estão implementadas. Os testes não demonstram cobertura
+nacional, ausência de sobreposição SIGA/PNCP ou tempo real das futuras cargas.
+
+**Para o Claude continuar:** revisar o diff não commitado e fechar R0 conforme o fluxo
+aprovado pelo Lucas; depois propor o plano R1 antes de codar. Na R1, validar consistência
+do conjunto dos três CSVs, preservar chaves para futuras fontes e conferir backup por
+restauração antes da migração 0005. Na R2, medir custo total atas + itens. Na R3, definir
+com Lucas D6 e a amostra de cobertura externa à busca. Na R6, testar que recargas não
+reenviam atas conhecidas como novas.
+
+Melhoria adicional para o plano R1: detectar arquivos de gerações diferentes entre os
+três downloads, sem publicar um conjunto incoerente. O motor ainda grava por página;
+qualquer reuso deve escrever em staging e publicar somente após concluir a fonte.
+Nenhuma ingestão real, migração do banco principal, alteração de serviços, commit,
+push, PR ou merge foi feita nesta sessão.
+
+## Estado vigente: mudança de arquitetura (R0), 13/10/2026 (Claude/Opus 5.5)
+
+**Este bloco substitui tudo o que vem abaixo** sobre F2, F3, MCP e snapshot `/v1/atas`. Leia as ADRs
+0016, 0017 e 0018, `docs/PLANO.md` e `docs/FASES.md`.
+
+- **Fontes (ADR 0016):** SIGA RJ (3 CSVs diários), Dados Abertos Compras.gov.br `modulo-arp` (500
+  por página) e a busca do portal PNCP (`/api/search`, por termos de TI). O snapshot PNCP `/v1/atas`
+  foi abandonado; **não o repita**. O Portal da Transparência da CGU está fora (não tem atas;
+  "Licitações" parou em 2024).
+- **Orquestração (ADR 0017):** systemd timer + `make ingest`. O Airflow fica adiado.
+- **Interface (ADR 0018):** web própria FastAPI + Jinja2 + HTMX, papel `web_reader`. Exposição no
+  domínio só atrás de proxy TLS + autenticação (D7). O MCP saiu do caminho crítico: `.mcp.json` e
+  os testes do servidor `compras-mcp` foram removidos. O pacote `compras-mcp==0.4.0` continua como
+  biblioteca (`DadosAbertosClient`).
+- **R0 na branch `refactor/fontes-atas`** (criada a partir de `feat/f2b-itens-atas`, para manter o
+  retry `a1fc870`). Foram removidos `ingest/atas.py`, `cli.py`, `mapeadores.py`, `client.py` e os
+  testes correspondentes. Ficaram `ingest/executar.py`, `windows.py`, `log.py` e `rate_limit.py`,
+  que serão generalizados na R2. `classificar/amostra.py` ainda lê as tabelas da 0004 e é adaptado
+  na R1.
+- **Banco local:** migração 0004 aplicada, sem atas carregadas. A R1 traz a migração 0005, que
+  substitui essas tabelas (com `make backup` verificado antes).
+- **Próximo passo:** o Lucas aprova a R0 (PR) → plano da R1 (SIGA RJ) em modo plan.
+
+## Estado anterior: F2A mergeada; preparação da Fase 3 (13/10/2026, histórico)
 
 **Escopo: somente atas de TI vigentes; backfill histórico cancelado (ADR 0015).** Os registros
 abaixo desta seção são histórico de sessões e podem conter instruções já superadas.
 
-A F1 foi mergeada no PR #2, confirmado no GitHub. A F2A está na branch
-`feat/f2-atas-vigentes-ti`, publicada no [PR #3](https://github.com/lucaspagoti/pncp-ti-intel/pull/3)
-contra `master` (commit de implementação `6d7bd23`). Lucas pediu ao Codex a revisão da implementação do Luna e autorizou
-abrir PR caso aprovada. Essa revisão foi realizada diretamente pelo Codex, sem subagentes.
+A F1 foi mergeada no PR #2. A F2A foi mergeada no [PR #3](https://github.com/lucaspagoti/pncp-ti-intel/pull/3)
+em 13/10/2026 (merge commit `df301c3`; head `dfda755` inclui retenção de 30 dias dos logs por página).
+O CI do head passou. A branch local de trabalho é `feat/f2b-itens-atas`, criada sobre `master` já
+atualizado (`df301c3`); há commits locais de documentação (`9dcc596`) e de retry HTTP (`a1fc870`), sem
+push ou PR desta etapa.
 
 O desenho foi aprovado após corrigir: publicação indevida de carga parcial após 204 intermediário,
 recuperação de erro SQL na amostra, ausência de proteção contra snapshot nacional vazio e dependência
 dos testes do fuso/ordem de execução. A versão anterior continua visível durante o staging; amostra,
 ativação e remoção do snapshot anterior são transacionais. CLI e view usam `America/Sao_Paulo`.
 
-A migração 0004 **não foi aplicada no banco de desenvolvimento** e nenhum snapshot nacional foi
-executado. A revisão usa bancos UUID efêmeros e consultas reais leves. A migração 0003 é mantida
-por compatibilidade com o schema já aplicado no dev, mesmo que 0004 descarte suas tabelas.
-F2B (itens/preços), rotulagem, avaliação D6/G2 e demonstração operacional continuam pendentes.
-Validação desta revisão: `TZ=UTC make test`, 103 testes aprovados; relatório em `docs/REVISAO-F2A.md`.
+A migração 0004 foi aplicada no banco local após um backup ser restaurado com sucesso em um banco
+temporário (schema 0003, sem alterar o banco principal). Duas tentativas de snapshot nacional foram
+interrompidas/fracassaram e limparam o staging. A segunda foi cancelada por decisão de escopo: não é
+necessário varrer cerca de 484 mil atas (9.682 páginas no limite observado de 50 por página) para
+avançar a F2. Nenhuma versão parcial foi publicada; não há atas TI carregadas. Não repetir a varredura
+nacional. O retry de respostas transitórias permanece no commit `a1fc870`, mas isso não torna o
+snapshot nacional necessário. A F2 ainda não passou o aceite: rotulagem, D6/G2 e F2B (itens/preços)
+seguem pendentes. A migração 0003 permanece na cadeia por compatibilidade com o schema anterior.
+
+Na preparação da F2B, o manual PNCP confirma `/itens` e `/itens/{numeroItem}/resultados` e define
+`valorUnitarioHomologado` como preço do resultado. Porém, o retorno documentado não traz identificador
+da ATA; contém `ordemClassificacaoSrp`. Não propagar preço para cada ATA da compra sem validar a
+correspondência real; fallback honesto é manter o resultado no nível da compra.
+
+Piloto direcionado da F2B: três compras-pai referenciadas por atas responderam 200 em
+`/api/consulta/v1/orgaos/{cnpj}/compras/{ano}/{sequencial}`; a rota `/itens` no mesmo host respondeu
+404 para as três. Isso não demonstra ausência de itens na contratação: indica que host/rota precisam
+ser confirmados contra o manual antes de implementar ingestão. Não iniciar varredura ou backfill para
+investigar isso; usar uma compra conhecida e uma chamada de fumaça depois de identificar o host correto.
 
 O log por página das atas TI tem retenção de 30 dias, aplicada no início de cada snapshot e limitada
 à entidade `atas_ti_snapshot`; o índice da migração 0004 dá suporte à limpeza. Permanecem melhorias
 operacionais medir duração real da carga e dimensionar a amostra de descartadas com intervalos de
 confiança. A amostra inicial não comprova sozinha recall elevado de TI, uma classe rara no universo
 nacional.
+
+**Preparação da Fase 3:** o escopo foi alinhado em `docs/FASES.md`: consultas locais somente pela view
+`v_atas_ti_vigentes`, SQL fixo/parametrizado e papel `mcp_reader`; nenhuma tool aceita SQL livre.
+Preços dependem de F2B e “novas atas” será entendido como atas vigentes por data de publicação, sem
+alegar histórico entre snapshots. `insumos/perguntas_reais.csv` ainda tem seis sugestões antigas e
+precisa ser revisado/completado por Lucas até 20 perguntas reais. O prompt de abertura está pronto em
+`docs/FASES.md`; usar depois do aceite de F2.
 
 ## Seu papel: arquiteto especialista + testador, não só executor de tarefas
 

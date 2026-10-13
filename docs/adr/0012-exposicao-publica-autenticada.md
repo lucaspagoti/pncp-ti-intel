@@ -1,6 +1,7 @@
 # 0012 — Destino final: exposição no domínio pessoal, sempre atrás de autenticação
 
 - Status: aceita (13/10/2026)
+- **Alterada pela ADR 0018 (13/10/2026):** a exposição vem logo depois da web local, e não no fim.
 
 ## Contexto
 
