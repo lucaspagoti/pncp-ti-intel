@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
 import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -24,12 +25,13 @@ from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import httpx
 import psycopg
 import structlog
 
-from pncp_ti.classificar.in05 import classificar_ata
+from pncp_ti.classificar.in05 import classificar_ata, versao_regra
 from pncp_ti.config import get_settings
 from pncp_ti.db import conectar
 from pncp_ti.fontes.siga_csv import ConjuntoSiga, ErroValidacao, montar
@@ -41,9 +43,12 @@ ARQUIVOS = {
     "itens": "ITENS_ATAS_REGISTRO_PRECO.CSV",
     "participantes": "PARTICIPANTES_ATAS_REGISTRO_PRECO.CSV",
 }
-LIMITE_BYTES = 200 * 1024 * 1024
+LIMITE_BYTES = 100 * 1024 * 1024  # o maior arquivo real tem ~50 MB; a leitura usa ~9x em RAM
 JANELA_GERACAO = timedelta(minutes=15)
 PISO_RELATIVO = 0.5
+PISO_FILHOS = 0.7  # itens e participantes: arquivo regenerado pela metade não pode publicar
+DEFASAGEM_ALERTA_DIAS = 3
+_PASTA_CARGA = re.compile(r"^\d{8}T\d{6}$")
 RETER_CARGAS = 3
 TENTATIVAS = 3
 RAIZ_DADOS = Path(__file__).resolve().parents[3] / "data" / "siga"
@@ -92,6 +97,8 @@ async def _baixar_um(client: httpx.AsyncClient, nome: str, destino: Path) -> Arq
                 if resposta.status_code != 200:
                     raise ErroValidacao("http", f"{ARQUIVOS[nome]}: HTTP {resposta.status_code}")
                 esperado = resposta.headers.get("content-length")
+                if esperado is not None and not esperado.isdigit():
+                    raise ErroValidacao("http", f"{ARQUIVOS[nome]}: Content-Length inválido")
                 if esperado and int(esperado) > LIMITE_BYTES:
                     raise ErroValidacao("tamanho", f"{ARQUIVOS[nome]}: {esperado} bytes")
                 with parcial.open("wb") as saida:
@@ -105,6 +112,7 @@ async def _baixar_um(client: httpx.AsyncClient, nome: str, destino: Path) -> Arq
                     raise _Transitorio(f"truncado: {tamanho} de {esperado} bytes")
                 modificado = resposta.headers.get("last-modified")
             parcial.replace(destino)
+            destino.chmod(0o600)  # o CSV bruto tem CPF completo (ADR 0019)
             return ArquivoBaixado(
                 caminho=destino,
                 sha256=resumo.hexdigest(),
@@ -133,7 +141,10 @@ async def baixar(
     if client is None:
         client = httpx.AsyncClient(
             timeout=httpx.Timeout(30.0, read=180.0),
-            headers={"User-Agent": "pncp-ti-intel/0.1 (pesquisa pessoal)"},
+            headers={
+                "User-Agent": "pncp-ti-intel/0.1 (pesquisa pessoal)",
+                "Accept-Encoding": "identity",
+            },
             follow_redirects=False,
         )
     try:
@@ -167,7 +178,7 @@ def arquivos_de_diretorio(diretorio: Path) -> dict[str, ArquivoBaixado]:
 
 
 def _geracao(arquivos: Mapping[str, ArquivoBaixado]) -> dict[str, dict[str, object]]:
-    return {
+    geracao: dict[str, dict[str, object]] = {
         nome: {
             "arquivo": ARQUIVOS[nome],
             "sha256": a.sha256,
@@ -178,6 +189,8 @@ def _geracao(arquivos: Mapping[str, ArquivoBaixado]) -> dict[str, dict[str, obje
         }
         for nome, a in arquivos.items()
     }
+    geracao["_regra"] = {"versao": versao_regra()}
+    return geracao
 
 
 def preparar(
@@ -234,17 +247,34 @@ async def _publicar(
             )
         ).fetchone()
 
-        if (
-            ativa
-            and not forcar
-            and all(
-                ativa["geracao"].get(n, {}).get("sha256") == g["sha256"] for n, g in geracao.items()
+        hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+        if conjunto.data_extracao > hoje + timedelta(days=1):
+            raise ErroValidacao(
+                "geracao_futura", f"data_extracao {conjunto.data_extracao} está no futuro"
             )
-        ):
+
+        # Sem mudança = mesmos 3 arquivos E mesma regra de TI; mudar a regra reclassifica sozinho.
+        mesma_geracao = (
+            ativa is not None
+            and ativa["geracao"].get("_regra") == geracao["_regra"]
+            and all(
+                ativa["geracao"].get(n, {}).get("sha256") == geracao[n]["sha256"] for n in ARQUIVOS
+            )
+        )
+        if ativa and not forcar and mesma_geracao:
+            defasagem = (hoje - conjunto.data_extracao).days
+            if defasagem > DEFASAGEM_ALERTA_DIAS:
+                log.warning("siga_arquivo_defasado", dias=defasagem)
             await conn.execute(
                 "INSERT INTO cargas (id, fonte, data_referencia, status, concluido_em, geracao, "
                 "contagens) VALUES (%s, %s, %s, 'sem_mudanca', now(), %s, %s)",
-                (carga_id, FONTE, conjunto.data_extracao, json.dumps(geracao), json.dumps({})),
+                (
+                    carga_id,
+                    FONTE,
+                    conjunto.data_extracao,
+                    json.dumps(geracao),
+                    json.dumps({"defasagem_dias": defasagem}),
+                ),
             )
             return ResultadoCarga(carga_id, "sem_mudanca", ativa["contagens"])
 
@@ -255,12 +285,16 @@ async def _publicar(
                     f"data_extracao {conjunto.data_extracao} anterior à carga ativa "
                     f"({ativa['data_referencia']})",
                 )
-            anteriores = int(ativa["contagens"].get("atas_unicas", 0))
-            if anteriores and len(conjunto.atas) < PISO_RELATIVO * anteriores:
-                raise ErroValidacao(
-                    "queda_volume",
-                    f"{len(conjunto.atas)} atas contra {anteriores} na carga ativa",
-                )
+            for chave, atual, piso in (
+                ("atas_unicas", len(conjunto.atas), PISO_RELATIVO),
+                ("itens_gravados", len(conjunto.itens), PISO_FILHOS),
+                ("participantes_gravados", len(conjunto.participantes), PISO_FILHOS),
+            ):
+                anteriores = int(ativa["contagens"].get(chave, 0))
+                if anteriores and atual < piso * anteriores:
+                    raise ErroValidacao(
+                        "queda_volume", f"{chave}: {atual} contra {anteriores} na carga ativa"
+                    )
 
         await conn.execute(
             "INSERT INTO cargas (id, fonte, data_referencia, status, geracao) "
@@ -360,14 +394,19 @@ async def _registrar_falha(
     exc: BaseException,
     geracao: dict[str, dict[str, object]],
 ) -> None:
-    tipo = exc.tipo if isinstance(exc, ErroValidacao) else type(exc).__name__
-    # Só tipo e mensagem curta; nunca linhas dos arquivos.
+    # Só tipo e mensagem curta. Exceção do driver pode trazer "Failing row contains (...)",
+    # então fora de ErroValidacao grava apenas a classe e o SQLSTATE.
+    if isinstance(exc, ErroValidacao):
+        tipo, mensagem = exc.tipo, str(exc)
+    else:
+        tipo = type(exc).__name__
+        mensagem = f"{tipo} sqlstate={getattr(exc, 'sqlstate', None)}"
     await conn.rollback()
     await conn.execute(
         "INSERT INTO cargas (id, fonte, data_referencia, status, concluido_em, geracao, "
         "erro_tipo, erro_mensagem) VALUES (%s, %s, (now() AT TIME ZONE "
         "'America/Sao_Paulo')::date, 'falhou', now(), %s, %s, %s)",
-        (carga_id, FONTE, json.dumps(geracao), tipo, str(exc)[:500]),
+        (carga_id, FONTE, json.dumps(geracao), tipo, mensagem[:500]),
     )
     await conn.commit()
 
@@ -388,45 +427,70 @@ async def carregar(
 def _reter_ultimas(raiz: Path, manter: int = RETER_CARGAS) -> None:
     if not raiz.is_dir():
         return
-    pastas = sorted((p for p in raiz.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime)
+    pastas = sorted(
+        (p for p in raiz.iterdir() if p.is_dir() and _PASTA_CARGA.match(p.name)),
+        key=lambda p: p.name,
+    )
     for pasta in pastas[:-manter] if manter else pastas:
         shutil.rmtree(pasta, ignore_errors=True)
 
 
+async def baixar_registrando(
+    conn: psycopg.AsyncConnection, destino: Path, client: httpx.AsyncClient | None = None
+) -> dict[str, ArquivoBaixado]:
+    """Baixa e, se falhar, deixa a falha em `cargas` (distingue "fonte caída" de "sem novidade")."""
+    try:
+        return await baixar(destino, client)
+    except Exception as exc:
+        await _registrar_falha(conn, uuid4(), exc, {})
+        raise
+
+
 async def principal(argumentos: argparse.Namespace) -> int:
+    conn: psycopg.AsyncConnection | None = None
+    baixou = False
     try:
         if argumentos.de_diretorio:
             arquivos = arquivos_de_diretorio(argumentos.de_diretorio)
         else:
+            RAIZ_DADOS.mkdir(parents=True, exist_ok=True)
+            RAIZ_DADOS.chmod(0o700)
             destino = RAIZ_DADOS / datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-            arquivos = await baixar(destino)
-            try:
-                destino.parent.chmod(0o700)
-            except OSError:
-                pass
+            baixou = True
+            if argumentos.validar:
+                arquivos = await baixar(destino)
+            else:
+                conn = await conectar(get_settings())
+                arquivos = await baixar_registrando(conn, destino)
+            destino.chmod(0o700)
         if argumentos.validar:
             conjunto, _ = preparar(arquivos)
             log.info(
                 "siga_validado", data_extracao=str(conjunto.data_extracao), **conjunto.contagens
             )
             return 0
-        conn = await conectar(get_settings())
-        try:
-            resultado = await carregar(conn, arquivos, forcar=argumentos.forcar)
-        finally:
-            await conn.close()
+        if conn is None:
+            conn = await conectar(get_settings())
+        resultado = await carregar(conn, arquivos, forcar=argumentos.forcar)
         log.info(
             "siga_carga",
             carga_id=str(resultado.carga_id),
             status=resultado.status,
             **resultado.contagens,
         )
-        if not argumentos.de_diretorio:
-            _reter_ultimas(RAIZ_DADOS)
         return 0
     except ErroValidacao as exc:
-        log.error("siga_falha", tipo=exc.tipo, mensagem=str(exc)[:300])
+        log.error("siga_falha", tipo=exc.tipo, mensagem=str(exc))
         return 1
+    except Exception as exc:
+        # Sem traceback: exceções do driver podem carregar linhas dos arquivos.
+        log.error("siga_falha", tipo=type(exc).__name__, sqlstate=getattr(exc, "sqlstate", None))
+        return 1
+    finally:
+        if conn is not None:
+            await conn.close()
+        if baixou:
+            _reter_ultimas(RAIZ_DADOS)
 
 
 def main() -> None:

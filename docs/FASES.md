@@ -63,9 +63,12 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 **Critério de aceite**
 - Reprocessar os mesmos 3 CSVs mantém contagens e registros, sem duplicação. ✅ (teste e carga
   real: a segunda execução registrou `sem_mudanca`)
-- Falha de validação ou de gravação preserva a carga anterior. ✅ (testes)
+- Falha de validação, de download ou de gravação preserva a carga anterior e fica em `cargas`. ✅
+  (testes) Itens ou participantes abaixo de 70% da carga ativa não publicam. ✅ (teste)
+- Revisão independente concluída e achados tratados (ADR 0019, seção "Revisão independente"). ✅
+- Conferência manual de 10 atas contra o CSV bruto. ✅ (10 de 10, 13/10/2026)
 - `v_atas_ti_vigentes` lista as atas de TI vigentes do RJ com itens e preço unitário. ✅ (24 atas
-  em 13/10/2026) Conferência manual de 10 atas contra o CSV: **pendente**.
+  em 13/10/2026) Conferência manual de 10 atas contra o CSV bruto: ✅ 10 de 10.
 - Precisão e recall medidos contra o rótulo final (D6; meta proposta: recall ≥ 95% e precisão
   ≥ 85%). **Pendente:** revisão da pré-rotulagem pelo Lucas e rotulagem final do censo (`insumos/rotulagem_siga.csv`, 1.574 atas). Decidido
   em 13/10/2026: seguir o anexo da IN 05, inclusive telefonia, pontos de rede e videomonitoramento.

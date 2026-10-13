@@ -7,7 +7,14 @@ import pytest
 import siga_dados as d
 
 from pncp_ti.classificar.amostra import CABECALHO, escrever_csv, gerar_censo
-from pncp_ti.classificar.avaliar import RotuloInvalido, avaliar, interpretar, relatorio
+from pncp_ti.classificar.avaliar import (
+    CsvDefasado,
+    RotuloInvalido,
+    avaliar,
+    conferir_com_carga,
+    interpretar,
+    relatorio,
+)
 from pncp_ti.fontes.siga import arquivos_de_diretorio, carregar
 
 
@@ -89,3 +96,13 @@ def test_avaliacao_calcula_precisao_recall_e_lista_erros():
     texto = relatorio(av, Path("rotulagem.csv"), 0.85, 0.95)
     assert "| Precisão | 66.7% | ≥ 85% | não |" in texto
     assert "Falsos positivos" in texto and "| 2 |" in texto
+
+
+def test_csv_defasado_em_relacao_a_carga_ativa_e_recusado():
+    """I4 da revisão: a avaliação não pode medir uma regra que não está mais valendo."""
+    linhas = [_linha(id_ata="1", filtro_sistema="TI"), _linha(id_ata="2", filtro_sistema="NAO_TI")]
+    conferir_com_carga(linhas, {"1": True, "2": False})
+    with pytest.raises(CsvDefasado, match="decisão do sistema"):
+        conferir_com_carga(linhas, {"1": True, "2": True})
+    with pytest.raises(CsvDefasado, match="ids divergem"):
+        conferir_com_carga(linhas, {"1": True, "3": False})

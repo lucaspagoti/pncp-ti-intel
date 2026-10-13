@@ -68,6 +68,7 @@ CABECALHO_PARTICIPANTES = (
 
 LIMITE_ORFAOS = 0.01
 LIMITE_CONFLITOS = 0.01
+LIMITE_SEM_ITEM = 0.05
 # UTF-8 lido como cp1252 vira "Ã©", "Âº" etc.; em português legítimo "Ã" só precede letras.
 _MOJIBAKE = re.compile("Ã[©§£¡³ªº¢´µ¨ƒ‡°]|Â[ºª°]")
 
@@ -76,7 +77,8 @@ class ErroValidacao(RuntimeError):
     """Falha de validação da origem; `tipo` é estável e vai para `cargas.erro_tipo`."""
 
     def __init__(self, tipo: str, mensagem: str) -> None:
-        super().__init__(mensagem)
+        # Mensagens vão para log e para `cargas`; texto de origem passa por `sanitizar`.
+        super().__init__(str(sanitizar(mensagem))[:300])
         self.tipo = tipo
 
 
@@ -157,15 +159,18 @@ def _ler_tabela(texto: str, esperado: tuple[str, ...], nome: str) -> list[list[s
     if tuple(cabecalho) != esperado:
         raise ErroValidacao("cabecalho", f"{nome}: cabeçalho inesperado: {cabecalho!r}")
     linhas: list[list[str]] = []
-    for numero, linha in enumerate(leitor, start=2):
-        if not linha:
-            continue
-        if len(linha) != len(esperado):
-            raise ErroValidacao(
-                "colunas",
-                f"{nome}: linha {numero} com {len(linha)} colunas, esperado {len(esperado)}",
-            )
-        linhas.append([_normalizar(c) for c in linha])
+    try:
+        for numero, linha in enumerate(leitor, start=2):
+            if not linha:
+                continue
+            if len(linha) != len(esperado):
+                raise ErroValidacao(
+                    "colunas",
+                    f"{nome}: linha {numero} com {len(linha)} colunas, esperado {len(esperado)}",
+                )
+            linhas.append([_normalizar(c) for c in linha])
+    except csv.Error as exc:
+        raise ErroValidacao("csv", f"{nome}: CSV malformado: {exc}") from None
     if not linhas:
         raise ErroValidacao("vazio", f"{nome}: sem linhas de dados")
     return linhas
@@ -190,15 +195,24 @@ def _data(valor: str) -> date | None:
         return None
 
 
+# Formatos aceitos (com `-` opcional): `12`, `12,50`, `,45` e `4.500,00`. Ponto sem vírgula
+# (`1.234`) é ambíguo entre milhar e decimal e vira inválido, em vez de arriscar um erro de
+# 1000x em silêncio.
+_NUMERO = re.compile(r"^-?(?:\d+(?:,\d+)?|,\d+|\d{1,3}(?:\.\d{3})+,\d+)$")
+
+
 def _decimal(valor: str) -> Decimal | None:
-    if not valor:
+    if not valor or not _NUMERO.match(valor):
         return None
-    texto = valor.replace(".", "").replace(",", ".") if "," in valor else valor
     try:
-        numero = Decimal(texto)
+        return Decimal(valor.replace(".", "").replace(",", "."))
     except InvalidOperation:
         return None
-    return numero if numero.is_finite() else None
+
+
+def _invalidos(linha: list[str], colunas: tuple[int, ...]) -> bool:
+    """Há número não vazio que não parseia?"""
+    return any(linha[c] and _decimal(linha[c]) is None for c in colunas)
 
 
 def _chave(*campos: str) -> str:
@@ -277,6 +291,8 @@ def montar(
         atas_conflito=conflitos,
         datas_invalidas=datas_invalidas,
     )
+    if datas_invalidas > LIMITE_CONFLITOS * len(atas):
+        raise ErroValidacao("datas", f"{datas_invalidas} datas de vigência não parseáveis")
     if conflitos > LIMITE_CONFLITOS * len(atas):
         raise ErroValidacao(
             "conflito_ata", f"{conflitos} atas com campos divergentes entre linhas do mesmo ID"
@@ -285,17 +301,23 @@ def montar(
 
     # --- itens: dedupe por conteúdo; chave estável ---
     itens: dict[str, Item] = {}
-    orfaos_itens = invalidos = 0
+    orfaos_itens = invalidos = numeros_invalidos = 0
     for linha in linhas_itens:
         if linha[0] not in ids:
             orfaos_itens += 1
             continue
         descricao = _texto(linha[4])
+        fornecedor = _texto(linha[6])
         valor = _decimal(linha[8])
         valido = valor is not None and valor > 0
-        chave = _chave(*linha[:-1])
+        # A chave usa o texto já mascarado: nunca o CPF completo (ADR 0013 e 0019).
+        chave = _chave(
+            linha[0], _texto(linha[1]), _texto(linha[2]), linha[3], descricao, linha[5],
+            fornecedor, linha[7], linha[8], linha[9],
+        )  # fmt: skip
         if chave in itens:
             continue
+        numeros_invalidos += _invalidos(linha, (7, 8, 9))
         invalidos += not valido
         itens[chave] = Item(
             chave=chave,
@@ -304,7 +326,7 @@ def montar(
             descricao=descricao,
             nome_catalogo=descricao.split(" - ", 1)[0].strip(),
             id_fornecedor=linha[5],
-            fornecedor=_texto(linha[6]),
+            fornecedor=fornecedor,
             quantidade=_decimal(linha[7]),
             valor_unitario=valor if valido else None,
             taxa_pct=_decimal(linha[9]),
@@ -316,26 +338,44 @@ def montar(
         itens_gravados=len(itens),
         itens_duplicados=len(linhas_itens) - orfaos_itens - len(itens),
         itens_valor_invalido=invalidos,
+        itens_numero_invalido=numeros_invalidos,
     )
     if orfaos_itens > LIMITE_ORFAOS * len(linhas_itens):
         raise ErroValidacao("orfaos", f"{orfaos_itens} itens sem ata correspondente")
+    if numeros_invalidos > LIMITE_CONFLITOS * len(itens):
+        raise ErroValidacao("numeros", f"{numeros_invalidos} itens com número não parseável")
+
+    # Cobertura: um arquivo de itens regenerado pela metade deixaria atas válidas sem preço.
+    com_item = {i.ata_id_origem for i in itens.values()}
+    validas = [a.id_origem for a in atas if a.status_origem == "Válida"]
+    sem_item = sum(1 for id_ in validas if id_ not in com_item)
+    contagens["validas_sem_item"] = sem_item
+    if validas and sem_item > LIMITE_SEM_ITEM * len(validas):
+        raise ErroValidacao(
+            "cobertura_itens", f"{sem_item} de {len(validas)} atas válidas sem nenhum item"
+        )
 
     # --- participantes ---
     participantes: dict[str, Participante] = {}
-    orfaos_part = 0
+    orfaos_part = part_numeros_invalidos = 0
     for linha in linhas_part:
         if linha[0] not in ids:
             orfaos_part += 1
             continue
-        chave = _chave(*linha[:-1])
+        item_texto, unidade = _texto(linha[4]), _texto(linha[2])
+        chave = _chave(
+            linha[0], _texto(linha[1]), unidade, _texto(linha[3]), item_texto, linha[5],
+            linha[6], linha[7], linha[8], linha[9],
+        )  # fmt: skip
         if chave in participantes:
             continue
+        part_numeros_invalidos += _invalidos(linha, (6, 7, 8, 9))
         participantes[chave] = Participante(
             chave=chave,
             ata_id_origem=linha[0],
             id_item=linha[5],
-            item=_texto(linha[4]),
-            unidade=_texto(linha[2]),
+            item=item_texto,
+            unidade=unidade,
             qtd_demandada=_decimal(linha[6]),
             qtd_consumida=_decimal(linha[7]),
             valor_demandado=_decimal(linha[8]),
@@ -346,7 +386,12 @@ def montar(
         participantes_orfaos=orfaos_part,
         participantes_gravados=len(participantes),
         participantes_duplicados=len(linhas_part) - orfaos_part - len(participantes),
+        participantes_numero_invalido=part_numeros_invalidos,
     )
+    if part_numeros_invalidos > LIMITE_CONFLITOS * len(participantes):
+        raise ErroValidacao(
+            "numeros", f"{part_numeros_invalidos} participantes com número não parseável"
+        )
     if orfaos_part > LIMITE_ORFAOS * len(linhas_part):
         raise ErroValidacao("orfaos", f"{orfaos_part} participantes sem ata correspondente")
 

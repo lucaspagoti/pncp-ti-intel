@@ -22,6 +22,19 @@ HOJE_SP = "(now() AT TIME ZONE 'America/Sao_Paulo')::date"
 
 
 def upgrade() -> None:
+    # Guarda: o schema antigo só pode sair se nunca publicou um snapshot completo.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM snapshots_atas_ti WHERE ativo AND status = 'concluido') THEN
+                RAISE EXCEPTION
+                    '0005 recusada: há snapshot /v1/atas concluido e ativo; faça backup e '
+                    'remova-o conscientemente antes de aplicar (migração destrutiva)';
+            END IF;
+        END $$
+        """
+    )
     op.execute("DROP VIEW IF EXISTS v_atas_ti_vigentes")
     op.execute("DROP TABLE IF EXISTS amostra_atas_descartadas")
     op.execute("DROP TABLE IF EXISTS atas")
@@ -43,7 +56,8 @@ def upgrade() -> None:
             geracao jsonb NOT NULL DEFAULT '{}'::jsonb,
             contagens jsonb NOT NULL DEFAULT '{}'::jsonb,
             erro_tipo text,
-            erro_mensagem text
+            erro_mensagem text,
+            CONSTRAINT ck_cargas_ativa_concluida CHECK (NOT ativa OR status = 'concluida')
         )
         """
     )

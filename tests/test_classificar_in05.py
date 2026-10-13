@@ -99,3 +99,17 @@ def test_insumo_de_impressora_unitarizadora_nao_e_impressao_de_ti():
     assert not classificar_ata("Aquisição de Insumos DGS", [nome]).is_ti
     assert classificar_ata("AQUISIÇÃO DE IMPRESSORAS", []).is_ti
     assert classificar_ata("X", ["IMPRESSORA TERMICA"]).is_ti
+
+
+def test_objeto_com_ti_e_nobreak_continua_sendo_ti():
+    """M8 da revisão: nobreak no objeto só exclui quando não há sinal de TI no próprio objeto."""
+    decisao = classificar_ata("Aquisição de microcomputadores e nobreaks", [])
+    assert decisao.is_ti
+    assert decisao.motivo.startswith("III-computadores:")
+
+
+def test_versao_da_regra_muda_com_a_configuracao(monkeypatch):
+    antes = in05.versao_regra()
+    assert antes == in05.versao_regra()
+    monkeypatch.setattr(in05, "CATEGORIAS_FORA_DE_ESCOPO", frozenset({"I-telecom"}))
+    assert in05.versao_regra() != antes

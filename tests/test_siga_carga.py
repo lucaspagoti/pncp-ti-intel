@@ -65,7 +65,7 @@ async def test_views_listam_so_atas_ti_vigentes_com_preco_valido(
         "SELECT id_ata, id_item, valor_unitario, valor_valido FROM v_ata_itens_ti"
     )
     itens = await cur.fetchall()
-    assert {i["id_ata"] for i in itens} == {"1", "4", "6"}
+    assert {i["id_ata"] for i in itens} == {"1", "4", "6", "7"}
     assert [i for i in itens if i["id_item"] in ("12", "14")] and all(
         i["valor_unitario"] is None for i in itens if i["id_item"] in ("12", "14")
     )
@@ -80,7 +80,7 @@ async def test_reprocessar_mesmos_arquivos_nao_duplica_e_registra_sem_mudanca(
     segunda = await _carga(conn_ingest, tmp_path, d.conjunto_basico())
     assert (primeira.status, segunda.status) == ("concluida", "sem_mudanca")
     assert await _um(conn_ingest, "SELECT count(*) n FROM atas") == 7
-    assert await _um(conn_ingest, "SELECT count(*) n FROM ata_itens") == 7
+    assert await _um(conn_ingest, "SELECT count(*) n FROM ata_itens") == 9
     assert await _um(conn_ingest, "SELECT count(*) n FROM cargas WHERE status='sem_mudanca'") == 1
     ativa = await (await conn_ingest.execute("SELECT id FROM cargas WHERE ativa")).fetchone()
     assert ativa["id"] == primeira.carga_id
@@ -300,3 +300,90 @@ async def test_forcar_republica_com_os_mesmos_arquivos_e_reclassifica(
         await conn_ingest.execute("SELECT is_ti FROM atas WHERE id_origem = '7'")
     ).fetchone()
     assert voip["is_ti"] is False
+
+
+async def test_queda_de_itens_nao_substitui_a_carga_ativa(conn_ingest, tmp_path):
+    """I1 da revisão: arquivo de itens regenerado pela metade não pode publicar."""
+    await _carga(conn_ingest, tmp_path, d.conjunto_grande(100))
+    atas, itens, part = d.conjunto_grande(100)
+    linhas = itens.split(b"\r\n")
+    cortado = b"\r\n".join(linhas[:61]) + b"\r\n"  # cabeçalho + 60 itens
+    with pytest.raises(ErroValidacao) as exc:
+        await _carga(conn_ingest, tmp_path, (atas, cortado, part))
+    assert exc.value.tipo in {"queda_volume", "cobertura_itens"}
+    assert await _um(conn_ingest, "SELECT count(*) n FROM ata_itens") == 100
+
+
+async def test_data_extracao_no_futuro_e_recusada(conn_ingest, tmp_path):
+    with pytest.raises(ErroValidacao) as exc:
+        await _carga(conn_ingest, tmp_path, d.conjunto_basico(geracao="01/01/2099"))
+    assert exc.value.tipo == "geracao_futura"
+    assert await _um(conn_ingest, "SELECT count(*) n FROM cargas WHERE ativa") == 0
+
+
+async def test_mudanca_de_regra_reclassifica_sem_forcar(conn_ingest, tmp_path, monkeypatch):
+    primeira = await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    from pncp_ti.classificar import in05
+
+    monkeypatch.setattr(in05, "CATEGORIAS_FORA_DE_ESCOPO", frozenset({"I-telecom"}))
+    segunda = await carregar(conn_ingest, arquivos_de_diretorio(tmp_path / "c0"))
+    assert (primeira.status, segunda.status) == ("concluida", "concluida")
+    voip = await (
+        await conn_ingest.execute("SELECT is_ti FROM atas WHERE id_origem='7'")
+    ).fetchone()
+    assert voip["is_ti"] is False
+
+
+async def test_falha_de_download_fica_registrada_em_cargas(conn_ingest, tmp_path, sem_espera):
+    def handler(req):
+        return httpx.Response(404)
+
+    async with _cliente(handler) as client:
+        with pytest.raises(ErroValidacao):
+            await siga.baixar_registrando(conn_ingest, tmp_path / "dl", client)
+    falha = await (
+        await conn_ingest.execute("SELECT status, erro_tipo FROM cargas WHERE status = 'falhou'")
+    ).fetchone()
+    assert (falha["status"], falha["erro_tipo"]) == ("falhou", "http")
+
+
+async def test_erro_do_driver_grava_so_classe_e_sqlstate(conn_ingest, tmp_path, monkeypatch):
+    original = siga.preparar
+
+    def quebrado(arquivos):
+        conjunto, decisoes = original(arquivos)
+        decisoes["2"] = (None, "x")
+        return conjunto, decisoes
+
+    monkeypatch.setattr(siga, "preparar", quebrado)
+    with pytest.raises(psycopg.errors.NotNullViolation):
+        await _carga(conn_ingest, tmp_path, d.conjunto_basico())
+    falha = await (
+        await conn_ingest.execute(
+            "SELECT erro_tipo, erro_mensagem FROM cargas WHERE status='falhou'"
+        )
+    ).fetchone()
+    assert falha["erro_tipo"] == "NotNullViolation"
+    assert falha["erro_mensagem"] == "NotNullViolation sqlstate=23502"
+    assert "Failing row" not in falha["erro_mensagem"]
+
+
+def test_retencao_so_apaga_pastas_de_carga_com_timestamp(tmp_path):
+    for nome in ("20260101T000000", "20260102T000000", "20260103T000000", "20260104T000000"):
+        (tmp_path / nome).mkdir()
+    (tmp_path / "minha_pasta_de_trabalho").mkdir()
+    siga._reter_ultimas(tmp_path, manter=2)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "20260103T000000", "20260104T000000", "minha_pasta_de_trabalho",
+    ]  # fmt: skip
+
+
+async def test_arquivo_baixado_fica_com_permissao_restrita(tmp_path):
+    atas, itens, part = d.conjunto_basico()
+
+    def handler(req):
+        return httpx.Response(200, content=atas)
+
+    async with _cliente(handler) as client:
+        baixados = await siga.baixar(tmp_path / "dl", client)
+    assert baixados["atas"].caminho.stat().st_mode & 0o777 == 0o600

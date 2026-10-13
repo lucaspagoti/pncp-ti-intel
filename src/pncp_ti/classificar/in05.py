@@ -20,6 +20,7 @@ uma futura exclusão pontual. Nobreak e drone não constam do anexo e seguem exc
 
 from __future__ import annotations
 
+import hashlib
 import re
 import unicodedata
 from collections.abc import Iterable
@@ -217,6 +218,12 @@ _COMPILADOS = {
 _FORA_DO_ANEXO = tuple(re.compile(t) for t in TERMOS_FORA_DO_ANEXO)
 
 
+def versao_regra() -> str:
+    """Hash do conteúdo da regra; vai para `cargas.geracao` para detectar carga defasada."""
+    conteudo = repr((CATEGORIAS, sorted(CATEGORIAS_FORA_DE_ESCOPO), TERMOS_FORA_DO_ANEXO))
+    return hashlib.sha256(conteudo.encode()).hexdigest()[:12]
+
+
 @dataclass(frozen=True, slots=True)
 class Decisao:
     is_ti: bool
@@ -249,11 +256,15 @@ def _primeiro_sinal(texto: str, ignorar: frozenset[str] = frozenset()) -> tuple[
 def classificar_ata(objeto: str, nomes_catalogo: Iterable[str]) -> Decisao:
     """Decide se uma ata é de TI, e devolve o motivo (auditável na rotulagem).
 
-    Ordem: (1) termo fora do anexo no objeto exclui; (2) sinal de TI dentro do escopo
-    no objeto ou nos nomes de catálogo inclui; (3) sinal só em categoria fora do
-    escopo exclui, com o motivo; (4) sem sinal.
+    Ordem: (1) sinal de TI dentro do escopo no objeto inclui; (2) termo fora do anexo no
+    objeto exclui (mesmo com item de TI); (3) sinal de TI nos nomes de catálogo inclui;
+    (4) sinal só em categoria fora do escopo exclui, com o motivo; (5) sem sinal.
     """
     texto_objeto = normalizar(objeto)
+    # Objeto que cita TI e também nobreak/drone ("microcomputadores e nobreaks") segue como TI.
+    sinal_objeto = _primeiro_sinal(texto_objeto, ignorar=CATEGORIAS_FORA_DE_ESCOPO)
+    if sinal_objeto:
+        return Decisao(True, f"{sinal_objeto[0]}:{sinal_objeto[1]}@objeto")
     for padrao in _FORA_DO_ANEXO:
         achado = padrao.search(texto_objeto)
         if achado:

@@ -108,6 +108,8 @@ def conjunto_basico(geracao: str = GERACAO) -> tuple[bytes, bytes, bytes]:
         item("4", "14", "NOTEBOOK - TIPO: 15 POLEGADAS", valor="0,00", geracao=geracao),
         item("2", "21", "DIPIRONA - 500MG", geracao=geracao),
         item("6", "61", "CATRACA - TIPO: PEDESTAL", geracao=geracao),
+        item("5", "51", "SOFTWARE - TIPO: BACKUP", geracao=geracao),
+        item("7", "71", "SERVICOS DE TELEFONIA - DESCRICAO: LINHA", geracao=geracao),
     ]
     part = [
         participante("1", "11", geracao=geracao),

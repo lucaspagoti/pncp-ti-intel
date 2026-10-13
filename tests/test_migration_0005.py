@@ -41,7 +41,7 @@ def test_0005_troca_o_schema_e_remove_o_snapshot_antigo(banco_na_0004):
     with psycopg.connect(dsn) as conn:
         conn.execute(
             "INSERT INTO snapshots_atas_ti (id, data_referencia, status, ativo) "
-            "VALUES (%s, '2026-10-12', 'concluido', true)",
+            "VALUES (%s, '2026-10-12', 'falhou', false)",
             (snapshot,),
         )
         conn.execute(
@@ -85,3 +85,21 @@ def test_0005_nao_tem_downgrade(banco_na_0004):
     )  # fmt: skip
     assert resultado.returncode != 0
     assert "não tem downgrade" in resultado.stderr
+
+
+def test_0005_recusa_quando_ha_snapshot_antigo_concluido_e_ativo(banco_na_0004):
+    _, env, dsn = banco_na_0004
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "INSERT INTO snapshots_atas_ti (id, data_referencia, status, ativo) "
+            "VALUES (%s, '2026-10-12', 'concluido', true)",
+            (uuid4(),),
+        )
+    resultado = subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        env=env, cwd=REPO_ROOT, capture_output=True, text=True,
+    )  # fmt: skip
+    assert resultado.returncode != 0
+    assert "0005 recusada" in resultado.stderr
+    with psycopg.connect(dsn) as conn:  # nada foi removido
+        assert conn.execute("SELECT to_regclass('public.snapshots_atas_ti')").fetchone()[0]

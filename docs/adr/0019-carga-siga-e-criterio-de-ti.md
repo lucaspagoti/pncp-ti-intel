@@ -27,17 +27,27 @@ O perfil dos 3 CSVs do SIGA de 13/10/2026 mostrou que o modelo "uma linha por at
    itens e participantes pertencem a uma `carga_id`; só uma carga por fonte fica `ativa`.
 2. **Tudo numa transação.** Insere a carga nova, troca a ativa, apaga a anterior e registra
    `atas_vistas`. Falha em qualquer ponto faz rollback e a carga anterior continua visível; a
-   falha fica em `cargas` (`falhou`, tipo e mensagem curta, sem linhas dos arquivos). Uma trava
-   consultiva impede duas cargas simultâneas.
+   falha, inclusive a de **download**, fica em `cargas` (`falhou`, tipo e mensagem curta). Para
+   exceções do driver grava só a classe e o SQLSTATE, porque a mensagem do Postgres pode trazer
+   a linha inteira; mensagens de validação passam por `sanitizar`. Uma trava consultiva impede
+   duas cargas simultâneas.
 3. **Chaves.** Ata: `ID Ata` (as linhas por processo são colapsadas; todos os processos ficam em
-   `processos[]`). Item e participante: hash do conteúdo da linha sem `data_extracao`; linhas
-   idênticas colapsam. Variações legítimas de quantidade/valor são preservadas.
-4. **Sem mudança é registrado, não reprocessado.** Se os 3 sha256 coincidem com a carga ativa, a
-   execução grava uma `cargas` com `sem_mudanca`.
+   `processos[]`). Item e participante: hash do conteúdo da linha sem `data_extracao`, **calculado
+   sobre o texto já mascarado** (a primeira versão hasheava a linha bruta com o CPF completo, o
+   que permitia enumerar o CPF; corrigido na revisão). Linhas idênticas colapsam. Variações
+   legítimas de quantidade/valor são preservadas, e aparecem como linhas distintas em
+   `v_ata_itens_ti`; quem consome preço deve agrupar por `(id_ata, id_item)`.
+4. **Sem mudança é registrado, não reprocessado.** Se os 3 sha256 **e a versão da regra de TI**
+   (hash de `CATEGORIAS`, exclusões e termos) coincidem com a carga ativa, a execução grava uma
+   `cargas` com `sem_mudanca` e a defasagem em dias; acima de 3 dias, avisa no log. Mudar a regra
+   reclassifica na carga seguinte sem `--forcar`.
 5. **Validação estrita (falha alto, nada é publicado):** cabeçalho exato (após `strip`) e número
-   de colunas; os 3 `data_extracao` iguais e `Last-Modified` dentro de 15 min; codificação
-   cp1252 estrita sem indício de UTF-8; arquivo vazio; menos de 50% das atas da carga ativa;
-   `data_extracao` anterior à da carga ativa; órfãos ou conflitos acima de 1%.
+   de colunas; CSV malformado (`csv.Error`); os 3 `data_extracao` iguais, não futuros (mais de
+   1 dia à frente de hoje) e não anteriores à da carga ativa; `Last-Modified` dentro de 15 min;
+   cp1252 estrito sem indício de UTF-8; arquivo vazio; **pisos contra a carga ativa: 50% das
+   atas e 70% dos itens e dos participantes**; mais de 5% das atas `Válida` sem nenhum item;
+   órfãos, conflitos, datas ou números não parseáveis acima de 1%. Números só aceitam `12`,
+   `12,50`, `,45`, `4.500,00` (com `-` opcional); `1.234` é inválido, por ser ambíguo.
 6. **Vigente** = `status_origem = 'Válida'` **e** `inicio <= hoje <= fim` em `America/Sao_Paulo`
    (início vazio é aceito). `Interrompida`, `Suspensa` e `Aguardando Vigência` ficam fora, mesmo
    com datas que cobrem hoje.
@@ -49,7 +59,14 @@ O perfil dos 3 CSVs do SIGA de 13/10/2026 mostrou que o modelo "uma linha por at
    como carga inicial.
 9. **Privacidade:** todo texto de terceiros passa por `privacy.sanitizar` (CPF mascarado) antes
    de ser gravado ou usado na chave.
-10. **Arquivos brutos** ficam em `data/siga/<timestamp>/` (fora do Git), com as 3 últimas cargas.
+10. **Arquivos brutos** ficam em `data/siga/<timestamp>/` (fora do Git, pasta `0700`, arquivos
+    `0600`), com as 3 últimas cargas; a poda roda também em falha e só toca pastas com nome de
+    timestamp. **Os CSVs brutos contêm CPF completo** (8 itens e 1 participante em 13/10/2026):
+    é o único lugar onde ele existe, e `identificar_fornecedor` ("CPF só em memória") não vale
+    para esses arquivos. Apague `data/siga` ao descartar o ambiente.
+11. **Limites de leitura:** 100 MB por arquivo (o maior real tem ~50 MB); a leitura inteira em
+    memória usa cerca de 9x o tamanho (~660 MB para os 74 MB de hoje). Streaming fica para
+    quando o volume pedir.
 
 ## Decisão — critério de TI
 
@@ -90,3 +107,20 @@ decisão separada.
   ajustada contra rótulos.
 - A migração 0005 é destrutiva para o schema do snapshot `/v1/atas` (vazio) e não tem downgrade.
 - Índices full-text e trigram ficam para a R4, quando houver a consulta que os use.
+- A migração tem guarda: recusa-se a rodar se houver snapshot `/v1/atas` concluído e ativo, e
+  `cargas` tem `CHECK (NOT ativa OR status = 'concluida')`.
+- `make eval` confere o CSV rotulado contra a carga ativa (ids e `filtro_sistema`) e falha se
+  estiver defasado, para não medir uma regra que não está mais valendo.
+- **Risco para R2 e R3:** alguns termos da regra não são ancorados (`hospedagem`, `barramento`,
+  `bpm`, `gestao de ativos`, `switch`) e nunca casaram nas atas do SIGA vigentes. Em fontes
+  federais e municipais podem gerar falso positivo; reavaliar com amostra antes de reutilizar.
+- Nobreak/drone no **objeto** só excluem quando o próprio objeto não cita TI
+  ("microcomputadores e nobreaks" segue TI).
+
+## Revisão independente (13/10/2026)
+
+Um subagente revisou o commit `bee69ba`. Procedeu e foi corrigido: chave com CPF (bloqueante),
+pisos para itens e participantes, falha de download fora de `cargas`, data de extração futura,
+defasagem não detectada, avaliação sobre CSV defasado, mensagens com possível linha de origem,
+permissões dos arquivos brutos, poda ampla demais, parsers permissivos, guarda da migração.
+Ficou documentado e não corrigido: leitura inteira em memória (nota 11) e termos não ancorados.

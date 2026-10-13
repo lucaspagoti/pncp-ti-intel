@@ -7,6 +7,7 @@ amostral, e **não** se estendem a outras fontes.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import csv
 import unicodedata
 from dataclasses import dataclass
@@ -20,6 +21,47 @@ _NAO_TI = {"NAO_TI", "NAO TI", "NAO", "N", "NAO-TI"}
 
 class RotuloInvalido(ValueError):
     pass
+
+
+class CsvDefasado(RuntimeError):
+    """O CSV rotulado não corresponde à carga ativa (a regra ou os dados mudaram)."""
+
+
+def conferir_com_carga(linhas: list[dict[str, str]], atuais: dict[str, bool]) -> None:
+    """Falha se os ids ou a decisão `filtro_sistema` do CSV divergem da carga ativa.
+
+    Sem isso, `make eval` mediria a regra que gerou o CSV, não a que está valendo.
+    """
+    ids = {linha["id_ata"] for linha in linhas}
+    so_csv, so_banco = ids - atuais.keys(), atuais.keys() - ids
+    if so_csv or so_banco:
+        raise CsvDefasado(
+            f"ids divergem da carga ativa: {len(so_csv)} só no CSV, {len(so_banco)} só no banco"
+        )
+    divergentes = [
+        linha["id_ata"]
+        for linha in linhas
+        if (interpretar(linha["filtro_sistema"]) == "TI") != atuais[linha["id_ata"]]
+    ]
+    if divergentes:
+        raise CsvDefasado(
+            f"{len(divergentes)} atas com decisão do sistema diferente da carga ativa "
+            f"(ex.: {', '.join(divergentes[:5])}); regere o CSV preservando os rótulos"
+        )
+
+
+async def _decisoes_ativas() -> dict[str, bool]:
+    from pncp_ti.classificar.amostra import gerar_censo
+    from pncp_ti.config import get_settings
+    from pncp_ti.db import conectar
+
+    conn = await conectar(get_settings())
+    try:
+        return {
+            linha["id_ata"]: linha["filtro_sistema"] == "TI" for linha in await gerar_censo(conn)
+        }
+    finally:
+        await conn.close()
 
 
 def interpretar(valor: str) -> str | None:
@@ -142,9 +184,17 @@ def main() -> None:
     parser.add_argument("--meta-precisao", type=float, default=0.85)
     parser.add_argument("--meta-recall", type=float, default=0.95)
     parser.add_argument("--saida", type=Path, default=None)
+    parser.add_argument(
+        "--sem-banco", action="store_true", help="não confere o CSV contra a carga ativa"
+    )
     args = parser.parse_args()
     with args.rotulos.open(newline="", encoding="utf-8") as arquivo:
         linhas = list(csv.DictReader(arquivo))
+    if not args.sem_banco:
+        try:
+            conferir_com_carga(linhas, asyncio.run(_decisoes_ativas()))
+        except CsvDefasado as exc:
+            raise SystemExit(f"CSV defasado: {exc}") from None
     av = avaliar(linhas)
     if av.sem_rotulo:
         raise SystemExit(f"{av.sem_rotulo} atas sem `rotulo_lucas`; conclua a rotulagem.")

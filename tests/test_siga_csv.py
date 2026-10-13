@@ -54,7 +54,8 @@ def test_decimal_com_milhar_e_virgula():
 @pytest.mark.parametrize(
     ("texto", "esperado"),
     [("1.234,56", Decimal("1234.56")), (",45", Decimal("0.45")), ("7", Decimal("7")),
-     ("", None), ("abc", None), ("NaN", None)],
+     ("-3,61", Decimal("-3.61")), ("-,01", Decimal("-0.01")),
+     ("", None), ("abc", None), ("NaN", None), ("1.234", None), ("1,2,3", None)],
 )  # fmt: skip
 def test_decimal(texto, esperado):
     assert siga_csv._decimal(texto) == esperado
@@ -157,3 +158,57 @@ def test_orfaos_abaixo_do_limite_sao_descartados_e_contados():
     assert c.contagens["itens_orfaos"] == 1
     assert c.contagens["itens_gravados"] == 150
     assert all(i.ata_id_origem != "99999" for i in c.itens)
+
+
+def test_chave_nao_e_hash_do_conteudo_bruto_com_cpf():
+    """B1 da revisão: a chave do item com CPF não pode permitir enumerar o CPF."""
+    import hashlib
+
+    c = _montar()
+    com_cpf = next(i for i in c.itens if i.id_item == "13")
+    bruto = [
+        "4", "0004/2026/1-01", "Menor Preço", "13",
+        "NOTEBOOK - TIPO: 14 POLEGADAS", "6",
+        f"JOSE DA SILVA {d.CPF_FICTICIO}", "10", "4.500,00", "",
+    ]  # fmt: skip
+    hash_bruto = hashlib.sha256("\x1f".join(bruto).encode()).hexdigest()[:32]
+    assert com_cpf.chave != hash_bruto
+    assert d.CPF_FICTICIO not in com_cpf.fornecedor
+
+
+def test_chave_depende_so_do_texto_mascarado():
+    atas, itens, part = d.conjunto_basico()
+    outro_cpf = itens.replace(d.CPF_FICTICIO.encode(), b"12399999909")  # mesmos 3+2 dígitos
+    a = {i.id_item: i.chave for i in montar(atas, itens, part).itens}
+    b = {i.id_item: i.chave for i in montar(atas, outro_cpf, part).itens}
+    assert a == b
+
+
+def test_numero_nao_parseavel_acima_do_limite_falha():
+    atas, itens, part = d.conjunto_basico()
+    with pytest.raises(ErroValidacao) as exc:
+        montar(atas, itens.replace(b";12,50;", b";doze;"), part)
+    assert exc.value.tipo == "numeros"
+
+
+def test_atas_validas_sem_item_acima_do_limite_falham():
+    atas, itens, part = d.conjunto_basico()
+    so_ata_1 = b"\r\n".join(
+        linha for linha in itens.split(b"\r\n") if linha.startswith((b'"ID Ata"', b"1;"))
+    )
+    with pytest.raises(ErroValidacao) as exc:
+        montar(atas, so_ata_1 + b"\r\n", part)
+    assert exc.value.tipo == "cobertura_itens"
+
+
+def test_campo_gigante_vira_erro_de_validacao():
+    atas, itens, part = d.conjunto_basico()
+    gigante = b"X" * 200_000
+    with pytest.raises(ErroValidacao) as exc:
+        montar(atas.replace(b"MEDICAMENTO", gigante), itens, part)
+    assert exc.value.tipo == "csv"
+
+
+def test_mensagem_de_erro_nao_carrega_cpf():
+    erro = ErroValidacao("x", f"valor estranho {d.CPF_FICTICIO}")
+    assert d.CPF_FICTICIO not in str(erro)
