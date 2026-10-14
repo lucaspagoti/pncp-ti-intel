@@ -726,3 +726,26 @@ async def test_item_reincluido_duplicado_na_origem_nao_e_falsa_incompletude(tmp_
     do_cache = cache.ler()[d.id_ata("1")][1]
     assert len(do_cache) == 1
     assert do_cache[0].valor_unitario == 99  # ficou a reinclusão mais nova
+
+
+async def test_linha_atualizada_entre_paginas_nao_esconde_linha_omitida(tmp_path):
+    # Revisão 5 do Codex: a página 2 repete o item da página 1 com outra dataHoraAtualizacao e
+    # o segundo item declarado nunca chega. Tem de ser falha, não checkpoint "completo".
+    atas = [d.ata(str(n), "Aquisição de computadores") for n in range(1, 31)]
+    itens = {d.id_ata(str(n)): [d.item(str(n), "1", "PC")] for n in range(1, 31)}
+    cliente = d.ClienteFalso(atas, itens)
+    original = cliente.list_resource
+    v1 = dict(d.item("1", "1", "PC"), dataHoraAtualizacao="2026-10-14T08:00:00")
+    v2 = dict(v1, dataHoraAtualizacao="2026-10-14T08:00:05", quantidadeEmpenhada=3.0)
+
+    async def pagina_repetida(rota, **kw):
+        if rota == arp.ROTA_ITENS_ATA and kw["numeroControlePncpAta"] == d.id_ata("1"):
+            linha = v1 if kw["pagina"] == 1 else v2
+            return d.envelope([linha], total=2, paginas=2)
+        return await original(rota, **kw)
+
+    cliente.list_resource = pagina_repetida
+    cache = arp.CacheItens.do_dia(d.hoje(), raiz=tmp_path)
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente, cache=cache)
+    assert preparado.contagens["falhas_busca_itens"] == 1
+    assert d.id_ata("1") not in cache.ler()

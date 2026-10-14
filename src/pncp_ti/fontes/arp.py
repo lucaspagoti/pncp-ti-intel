@@ -383,14 +383,35 @@ async def carregar_catalogo(client: DadosAbertosClient, orcamento: _Orcamento) -
     return CatalogoTI(pdms=frozenset(pdms), servicos=servicos)
 
 
+# Campos que mudam no mesmo registro entre uma página e outra (empenho, saldo, exclusão).
+# Fora da identidade: uma atualização no meio da leitura não pode contar como linha nova e
+# esconder uma linha omitida pela paginação (revisão 5 do Codex, 14/10/2026).
+CAMPOS_MUTAVEIS = frozenset(
+    {
+        "dataHoraAtualizacao",
+        "dataHoraExclusao",
+        "itemExcluido",
+        "quantidadeEmpenhada",
+        "percentualMaiorDesconto",
+        "situacaoSicaf",
+        "valorUnitario",
+        "valorTotal",
+        "maximoAdesao",
+        "quantidadeHomologadaItem",
+        "quantidadeHomologadaVencedor",
+    }
+)
+
+
 def _identidade_linha(bruto: Mapping[str, Any]) -> str:
-    """Identidade da linha inteira: repete só quando a paginação da API repete a linha.
+    """Identidade estável da linha: repete quando a paginação repete a linha, mesmo atualizada.
 
     A API também devolve o mesmo item duas vezes com `dataHoraInclusao` diferente (reinclusão
     duplicada na origem, 14/10/2026): são linhas distintas e contam para o total declarado.
     Fica só em memória (o documento do fornecedor chega sem máscara).
     """
-    return hashlib.sha256(json.dumps(bruto, sort_keys=True, default=str).encode()).hexdigest()
+    estavel = {k: v for k, v in bruto.items() if k not in CAMPOS_MUTAVEIS}
+    return hashlib.sha256(json.dumps(estavel, sort_keys=True, default=str).encode()).hexdigest()
 
 
 async def _itens_da_ata(
