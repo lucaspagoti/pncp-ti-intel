@@ -538,7 +538,13 @@ async def test_dia_cheio_que_cai_na_paginacao_conta_cada_linha_uma_vez():
 
 @pytest.mark.parametrize(
     ("tipo", "saida"),
-    [("total_registros", 2), ("contrato", 2), ("envelope", 1), ("teto_requisicoes", 1)],
+    [
+        ("total_registros", 2),
+        ("contrato", 2),
+        ("envelope", 2),
+        ("listagem_inconsistente", 1),
+        ("teto_requisicoes", 1),
+    ],
 )
 def test_codigo_de_saida_separa_erro_deterministico(tipo, saida):
     assert arp.codigo_saida(ErroValidacao(tipo, "x")) == saida
@@ -630,3 +636,55 @@ async def test_itens_com_total_que_muda_entre_paginas_contam_como_falha(tmp_path
     preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente, cache=cache)
     assert preparado.contagens["falhas_busca_itens"] == 1
     assert d.id_ata("1") not in cache.ler()
+
+
+async def test_lote_incompleto_nao_recupera_id_e_conta_falha():
+    # O lote declara 2 linhas (dois ids para o mesmo número), mas só 1 chega: nada é aceito.
+    atas, itens = _base_sem_id()
+    atas.append(_sem_id(d.ata("51", "Aquisição de notebooks")))
+    inicio = atas[-1]["dataVigenciaInicial"]
+    cliente = d.ClienteFalso(atas, itens)
+    original = cliente.list_resource
+
+    async def lote_que_omite(rota, **kw):
+        if rota == arp.ROTA_ITENS_LOTE:
+            return d.envelope([_do_lote("51", _id_recuperado(1), inicio)], total=2)
+        return await original(rota, **kw)
+
+    cliente.list_resource = lote_que_omite
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente)
+    assert preparado.contagens["atas_id_recuperado"] == 0
+    assert preparado.contagens["falhas_recuperacao_id"] == 1
+
+
+async def test_ata_sem_id_repetida_fica_com_a_linha_vigente():
+    atas, itens = _base_sem_id()
+    atas += [d.ata(str(n), "Gêneros alimentícios") for n in range(100, 260)]  # repetida < 1%
+    excluida = _sem_id(d.ata("51", "Aquisição de notebooks", excluida=True))
+    vigente = _sem_id(d.ata("51", "Aquisição de notebooks", atualizado="2026-09-01T00:00:00"))
+    atas += [excluida, vigente]
+    inicio = vigente["dataVigenciaInicial"]
+    recuperado = _id_recuperado(51)
+    itens[recuperado] = [_do_lote("51", recuperado, inicio)]
+    cliente = d.ClienteFalso(atas, itens)
+    cliente.lote = [_do_lote("51", recuperado, inicio)]
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente)
+    ata = next(a for a in preparado.atas if a.id_origem == recuperado)
+    assert ata.vigente_na_origem
+
+
+async def test_paginacao_com_total_que_muda_no_meio_falha_a_listagem():
+    cliente = d.ClienteFalso(_mesmo_dia(6), {}, tamanho=5)
+    original = cliente.list_resource
+
+    async def crescendo(rota, **kw):
+        resposta = await original(rota, **kw)
+        if rota.endswith("1.2_consultarARP_FimVigencia") and kw["pagina"] == 2:
+            resposta["totalRegistros"] += 3
+            resposta["totalPaginas"] += 1
+        return resposta
+
+    cliente.list_resource = crescendo
+    with pytest.raises(ErroValidacao) as erro:
+        await arp.listar_atas(cliente, arp._Orcamento(1000.0, 5000), d.hoje())
+    assert erro.value.tipo == "listagem_inconsistente"

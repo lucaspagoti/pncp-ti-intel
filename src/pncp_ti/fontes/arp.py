@@ -90,6 +90,7 @@ ERROS_DETERMINISTICOS = frozenset(
         "sem_id_excessivo",
         "conflito_id",
         "contrato",
+        "envelope",
         "data_anomala",
         "catalogo",
         "queda_volume",
@@ -241,7 +242,10 @@ async def listar_atas(client: DadosAbertosClient, orcamento: _Orcamento, hoje: d
                 elif chave is None:
                     resultado.sem_id_sem_chave += 1
                 else:
-                    resultado.sem_id.setdefault(chave, provisoria)
+                    atual_sem_id = resultado.sem_id.get(chave)
+                    resultado.sem_id[chave] = (
+                        provisoria if atual_sem_id is None else escolher(atual_sem_id, provisoria)
+                    )
                 continue
             ata = mapear_ata(bruto, hoje)
             if ata is None:
@@ -262,14 +266,23 @@ async def listar_atas(client: DadosAbertosClient, orcamento: _Orcamento, hoje: d
             resultado.atas[ata.id_origem] = escolhida
 
     async def paginar(
-        filtros: dict[str, str], primeira: list[dict[str, Any]], paginas: int
+        filtros: dict[str, str], primeira: list[dict[str, Any]], total: int, paginas: int
     ) -> list[dict[str, Any]]:
-        """Todas as páginas, sem as linhas idênticas que a paginação instável repete."""
+        """Todas as páginas, sem as linhas idênticas que a paginação instável repete.
+
+        Total ou número de páginas que mudam no meio: a lista mudou durante a leitura, e a
+        janela não pode ser dada como completa (erro transitório; a próxima tentativa refaz).
+        """
         resultado.paginadas += 1
         log.warning("arp_janela_paginada", paginas=paginas, **filtros)
         linhas = {json.dumps(r, sort_keys=True, default=str): r for r in primeira}
         for pagina in range(2, paginas + 1):
-            registros, _, _ = await consultar(filtros, pagina)
+            registros, total_pagina, paginas_pagina = await consultar(filtros, pagina)
+            if (total_pagina, paginas_pagina) != (total, paginas):
+                raise ErroValidacao(
+                    "listagem_inconsistente",
+                    f"página {pagina}: {total_pagina}/{paginas_pagina}, antes {total}/{paginas}",
+                )
             linhas.update((json.dumps(r, sort_keys=True, default=str), r) for r in registros)
         return list(linhas.values())
 
@@ -293,7 +306,7 @@ async def listar_atas(client: DadosAbertosClient, orcamento: _Orcamento, hoje: d
                 dias = encolher(largura, total, corte)
                 continue
             if paginas > 1:
-                registros = await paginar(filtros, registros, paginas)
+                registros = await paginar(filtros, registros, total, paginas)
             fatias.extend(registros)
             soma += total
             final = inicio - timedelta(days=1)
@@ -303,7 +316,7 @@ async def listar_atas(client: DadosAbertosClient, orcamento: _Orcamento, hoje: d
         else:
             # Ex.: ata sem data de assinatura some do filtro. Pagina o dia inteiro e descarta
             # as fatias, para nenhuma linha ser contada duas vezes.
-            guardar(await paginar(dia, primeira, paginas_dia))
+            guardar(await paginar(dia, primeira, total_dia, paginas_dia))
         resultado.declarado += total_dia
 
     async def por_fim(inicio: date, fim: date) -> None:
@@ -585,13 +598,27 @@ async def recuperar_ids(
             "dataVigenciaInicialMax": inicio,
         }
         ids: dict[str, set[str]] = defaultdict(set)
+        vistos: set[tuple[str, str, str, str]] = set()
+        declarado: tuple[int, int] | None = None
         try:
             pagina = 1
             while True:
                 async with semaforo:
                     resposta = await _pagina(client, orcamento, ROTA_ITENS_LOTE, pagina, **filtros)
-                registros, _, paginas = validar_pagina(resposta, pagina)
+                registros, total, paginas = validar_pagina(resposta, pagina)
+                if declarado is None:
+                    declarado = (total, paginas)
+                elif (total, paginas) != declarado:
+                    raise ErroValidacao("lote_inconsistente", "totais mudaram na paginação")
                 for r in registros:
+                    vistos.add(
+                        (
+                            texto(r.get("numeroControlePncpAta")),
+                            texto(r.get("numeroItem")),
+                            texto(r.get("niFornecedor")),
+                            texto(r.get("classificacaoFornecedor")),
+                        )
+                    )
                     # A API pode ignorar um filtro: a linha tem de ser do grupo.
                     if (
                         texto(r.get("codigoUnidadeGerenciadora")) != unidade
@@ -607,6 +634,10 @@ async def recuperar_ids(
                 if pagina >= paginas:
                     break
                 pagina += 1
+            # A paginação pode omitir linhas: um 2º id do mesmo número sumiria. Sem todas as
+            # linhas, nenhum id do grupo é aceito.
+            if declarado is not None and len(vistos) < declarado[0]:
+                raise ErroValidacao("lote_incompleto", f"{len(vistos)} de {declarado[0]} linhas")
         except ErroValidacao as exc:
             if exc.tipo == "teto_requisicoes":
                 raise
