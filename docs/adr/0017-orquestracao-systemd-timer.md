@@ -13,7 +13,8 @@ além de mais uma superfície para atualizar e proteger.
 
 - A ingestão é uma CLI testável (`make ingest`, com `FONTE=siga|arp|pncp_busca` opcional).
 - O agendamento é feito por um **systemd timer** no homelab. Os logs vão para o journald e
-  `OnFailure=` dispara o alerta (no Hermes, na fase de operação).
+  o alerta é um monitor *Push* do Uptime Kuma (ping ao fim das duas cargas; 26 h sem sinal alerta).
+  O Hermes não participa (ADR 0020, `docs/operacao-timer.md`).
 - O estado de cada execução fica na tabela `cargas`, e não no orquestrador.
 
 ## Consequências

@@ -20,9 +20,9 @@ migrate: ## Aplica as migrações do Alembic (schema, papéis, views).
 
 FONTE ?= siga
 
-ingest: ## Carga de uma fonte: make ingest FONTE=siga [ARGS=--forcar] (arp: R2; pncp_busca: R3).
-	@test "$(FONTE)" = "siga" || (echo "FONTE=$(FONTE) ainda não implementada (arp: R2, pncp_busca: R3)." >&2 && exit 1)
-	uv run python -m pncp_ti.fontes.siga $(ARGS)
+ingest: ## Carga de uma fonte: make ingest FONTE=siga|arp [ARGS=--validar] (pncp_busca: R3).
+	@case "$(FONTE)" in siga|arp) ;; *) echo "FONTE=$(FONTE) ainda não implementada (pncp_busca: R3)." >&2; exit 1;; esac
+	uv run python -m pncp_ti.fontes.$(FONTE) $(ARGS)
 
 backup: ## pg_dump do Postgres local para backups/ (fora do Git).
 	./scripts/backup_postgres.sh

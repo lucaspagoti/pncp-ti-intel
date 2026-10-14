@@ -306,8 +306,8 @@ async def _publicar(
         await _copiar(
             conn,
             "COPY atas (carga_id, id_origem, numero, unidade_gerenciadora, objeto, licitacao, "
-            "inicio, fim, criterio_julgamento, status_origem, processos, is_ti, motivo_ti) "
-            "FROM STDIN",
+            "inicio, fim, criterio_julgamento, status_origem, processos, is_ti, motivo_ti, "
+            "vigente_na_origem) FROM STDIN",
             (
                 (
                     carga_id,
@@ -322,6 +322,7 @@ async def _publicar(
                     a.status_origem,
                     list(a.processos),
                     *decisoes[a.id_origem],
+                    a.status_origem == "Válida",
                 )
                 for a in conjunto.atas
             ),
@@ -395,6 +396,7 @@ async def _registrar_falha(
     carga_id: UUID,
     exc: BaseException,
     geracao: dict[str, dict[str, object]],
+    fonte: str = FONTE,
 ) -> None:
     # Só tipo e mensagem curta. Exceção do driver pode trazer "Failing row contains (...)",
     # então fora de ErroValidacao grava apenas a classe e o SQLSTATE.
@@ -408,7 +410,7 @@ async def _registrar_falha(
         "INSERT INTO cargas (id, fonte, data_referencia, status, concluido_em, geracao, "
         "erro_tipo, erro_mensagem) VALUES (%s, %s, (now() AT TIME ZONE "
         "'America/Sao_Paulo')::date, 'falhou', now(), %s, %s, %s)",
-        (carga_id, FONTE, json.dumps(geracao), tipo, mensagem[:500]),
+        (carga_id, fonte, json.dumps(geracao), tipo, mensagem[:500]),
     )
     await conn.commit()
 
@@ -437,15 +439,13 @@ def _reter_ultimas(raiz: Path, manter: int = RETER_CARGAS) -> None:
         shutil.rmtree(pasta, ignore_errors=True)
 
 
-async def tentar_trava_sessao(conn: psycopg.AsyncConnection) -> bool:
+async def tentar_trava_sessao(conn: psycopg.AsyncConnection, chave: str = CHAVE_TRAVA) -> bool:
     """Trava de sessão que cobre download + parse + publicação (a de transação só cobre o fim).
 
     Dura até a conexão fechar; sobrevive a commit/rollback.
     """
     linha = await (
-        await conn.execute(
-            "SELECT pg_try_advisory_lock(hashtextextended(%s, 0)) AS ok", (CHAVE_TRAVA,)
-        )
+        await conn.execute("SELECT pg_try_advisory_lock(hashtextextended(%s, 0)) AS ok", (chave,))
     ).fetchone()
     await conn.commit()
     return bool(linha["ok"])

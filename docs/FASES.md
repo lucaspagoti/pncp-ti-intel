@@ -80,15 +80,17 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 
 ## R2 · Ingestão Dados Abertos ARP
 
-**Entregas**
-- `fontes/arp.py` sobre o `DadosAbertosClient` do `compras-mcp`: atas vigentes (duas janelas de
-  365 dias ou `1.2_consultarARP_FimVigencia`), filtro de TI, depois itens (`2_consultarARPItem`) só
-  das atas de TI.
-- Motor `ingest/executar.py` generalizado (hoje está acoplado ao `PNCPClient`). Fila
-  reprocessável, com limite de taxa.
+**Entregas** (ADR 0020)
+- `fontes/arp.py` sobre o `DadosAbertosClient` do `compras-mcp`: atas vigentes em três janelas de
+  365 dias (`1.2_consultarARP_FimVigencia`), itens só das candidatas (`2.1_consultarARPItem_Id`),
+  critério de TI composto (anexo da IN 05 ou catálogo CATMAT 70/CATSER) e troca atômica.
+- Migração 0006 (`vigente_na_origem`, campos da ARP) e remoção do ingestor legado por página.
+- Timer systemd diário às 03:00 (`deploy/systemd/`, `scripts/carga_diaria.sh`), SIGA e ARP
+  independentes, com ping opcional no Uptime Kuma.
 
 **Critério de aceite**
-- Idempotência; amostra conferida contra o `linkAtaPNCP`; itens com preço unitário.
+- Idempotência; atas = `totalRegistros` (±1%); amostra de 10 atas conferida contra o
+  `linkAtaPNCP`; itens com preço unitário; relatório de recall por PDM em `evals/`.
 
 ## R3 · Busca PNCP por termos de TI
 
