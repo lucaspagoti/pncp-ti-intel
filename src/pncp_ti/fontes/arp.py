@@ -383,11 +383,21 @@ async def carregar_catalogo(client: DadosAbertosClient, orcamento: _Orcamento) -
     return CatalogoTI(pdms=frozenset(pdms), servicos=servicos)
 
 
+def _identidade_linha(bruto: Mapping[str, Any]) -> str:
+    """Identidade da linha inteira: repete só quando a paginação da API repete a linha.
+
+    A API também devolve o mesmo item duas vezes com `dataHoraInclusao` diferente (reinclusão
+    duplicada na origem, 14/10/2026): são linhas distintas e contam para o total declarado.
+    Fica só em memória (o documento do fornecedor chega sem máscara).
+    """
+    return hashlib.sha256(json.dumps(bruto, sort_keys=True, default=str).encode()).hexdigest()
+
+
 async def _itens_da_ata(
     client: DadosAbertosClient, orcamento: _Orcamento, ata_id: str
 ) -> list[ItemArp]:
-    itens: list[ItemArp] = []
-    vistos: set[tuple[str, str, str]] = set()
+    itens: dict[str, tuple[str, ItemArp]] = {}  # chave -> (atualização, item mais recente)
+    vistos: set[str] = set()
     declarado: tuple[int, int] | None = None
     pagina = 1
     while True:
@@ -405,24 +415,22 @@ async def _itens_da_ata(
             )
         validar_contrato(registros, CAMPOS_ITEM)
         for bruto in registros:
-            vistos.add(
-                (
-                    str(bruto.get("numeroItem")),
-                    str(bruto.get("niFornecedor")),
-                    str(bruto.get("classificacaoFornecedor")),
-                )
-            )
+            vistos.add(_identidade_linha(bruto))
             item = mapear_item(bruto)
-            if item is not None and item.ata_id_origem == ata_id:
-                itens.append(item)
+            if item is None or item.ata_id_origem != ata_id:
+                continue
+            versao = str(bruto.get("dataHoraAtualizacao") or "")
+            anterior = itens.get(item.chave)
+            if anterior is None or versao >= anterior[0]:
+                itens[item.chave] = (versao, item)  # reinclusão duplicada: fica a mais nova
         if pagina >= paginas:
             break
         pagina += 1
     # A paginação da API pode repetir e omitir linhas (ver `listar_atas`): ata incompleta não
     # vira checkpoint nem carga; conta como falha e o chamador usa os itens anteriores.
     if len(vistos) < total:
-        raise ErroValidacao("itens_incompletos", f"{len(vistos)} de {total} itens únicos")
-    return itens
+        raise ErroValidacao("itens_incompletos", f"{len(vistos)} de {total} linhas distintas")
+    return [item for _, item in itens.values()]
 
 
 class CacheItens:
@@ -598,7 +606,7 @@ async def recuperar_ids(
             "dataVigenciaInicialMax": inicio,
         }
         ids: dict[str, set[str]] = defaultdict(set)
-        vistos: set[tuple[str, str, str, str]] = set()
+        vistos: set[str] = set()
         declarado: tuple[int, int] | None = None
         try:
             pagina = 1
@@ -611,16 +619,7 @@ async def recuperar_ids(
                 elif (total, paginas) != declarado:
                     raise ErroValidacao("lote_inconsistente", "totais mudaram na paginação")
                 for r in registros:
-                    # Documento bruto só em memória (como em `_itens_da_ata`): a máscara de CPF
-                    # juntaria fornecedores distintos e acusaria falsa incompletude.
-                    vistos.add(
-                        (
-                            str(r.get("numeroControlePncpAta")),
-                            str(r.get("numeroItem")),
-                            str(r.get("niFornecedor")),
-                            str(r.get("classificacaoFornecedor")),
-                        )
-                    )
+                    vistos.add(_identidade_linha(r))
                     # A API pode ignorar um filtro: a linha tem de ser do grupo.
                     if (
                         texto(r.get("codigoUnidadeGerenciadora")) != unidade

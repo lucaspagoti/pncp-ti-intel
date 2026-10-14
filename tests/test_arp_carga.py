@@ -706,3 +706,23 @@ async def test_lote_com_cpfs_de_mesma_mascara_nao_e_falsa_incompletude():
     preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente)
     assert preparado.contagens["atas_id_recuperado"] == 1
     assert preparado.contagens["falhas_recuperacao_id"] == 0
+
+
+async def test_item_reincluido_duplicado_na_origem_nao_e_falsa_incompletude(tmp_path):
+    # A API devolve o mesmo item duas vezes, diferindo só em dataHoraInclusao/Atualizacao
+    # (14/10/2026): a ata veio completa, entra uma vez e vai para o checkpoint.
+    atas = [d.ata(str(n), "Aquisição de computadores") for n in range(1, 11)]
+    itens = {d.id_ata(str(n)): [d.item(str(n), "1", "PC")] for n in range(1, 11)}
+    velho, novo = dict(itens[d.id_ata("1")][0]), dict(itens[d.id_ata("1")][0])
+    velho.update(dataHoraInclusao="2026-08-31T09:55:27", dataHoraAtualizacao="2026-08-31T09:55:27")
+    novo.update(dataHoraInclusao="2026-09-03T07:45:06", dataHoraAtualizacao="2026-09-03T07:45:06")
+    novo["valorUnitario"] = 99.0
+    itens[d.id_ata("1")] = [velho, novo]
+    cache = arp.CacheItens.do_dia(d.hoje(), raiz=tmp_path)
+    preparado, _ = await arp.coletar(
+        CONFIG, d.hoje(), client=d.ClienteFalso(atas, itens), cache=cache
+    )
+    assert preparado.contagens["falhas_busca_itens"] == 0
+    do_cache = cache.ler()[d.id_ata("1")][1]
+    assert len(do_cache) == 1
+    assert do_cache[0].valor_unitario == 99  # ficou a reinclusão mais nova
