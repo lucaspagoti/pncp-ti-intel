@@ -1,6 +1,8 @@
 # 0020 — Fonte ARP do Compras.gov.br: carga atômica, critério de TI composto e limpeza
 
 - Status: aceita (13/10/2026). Decisões do Lucas na rodada de perguntas da R2 (13/10/2026).
+- Corrigida pela ADR 0021 (14/10/2026): atas sem número PNCP, ids repetidos, listagem
+  adaptativa e tempos medidos.
 - Detalha: ADR 0016 (fontes), 0019 (padrão de carga atômica) e 0017 (agendamento).
 - Substitui, no que toca à R2: a previsão de "generalizar `ingest/executar.py`" em `docs/FASES.md`.
 
@@ -60,8 +62,9 @@ de TI; por ata custam cerca de 0,5 s.
 
 ## Consequências
 
-- A primeira carga leva cerca de 1 h; as diárias, a listagem (cerca de 10 min) mais os itens
-  das atas novas, alteradas e do dia de renovação. Os tempos medidos vão na PR.
+- A primeira carga leva cerca de 1 h; as diárias, a listagem mais os itens das atas novas,
+  alteradas e do dia de renovação. A listagem por bissecção custou 41 min na 1ª carga real
+  (não 10 min); os tempos da listagem adaptativa estão na ADR 0021 e na PR.
 - Preço por ata fica disponível (resolve a dúvida da F2B), com limite de adesão e empenho.
 - Atas de TI com objeto genérico podem escapar até a auditoria por PDM; o `motivo_ti` e o
   relatório de recall tornam o furo visível, e não escondem.

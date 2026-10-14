@@ -7,8 +7,11 @@ cd "$(dirname "$0")/.."
 status=0
 for fonte in siga arp; do
     echo "== carga $fonte: $(date -Is)"
-    if ! uv run python -m "pncp_ti.fontes.$fonte"; then
-        echo "FALHA na carga $fonte" >&2
+    uv run python -m "pncp_ti.fontes.$fonte"
+    saida=$?
+    if [ "$saida" -ne 0 ]; then
+        # 2 = erro determinístico (dado ou contrato da API): precisa de gente, não de nova tentativa.
+        echo "FALHA na carga $fonte (saída $saida)" >&2
         status=1
     fi
 done

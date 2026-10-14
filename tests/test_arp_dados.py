@@ -8,8 +8,10 @@ import pytest
 from pncp_ti.fontes.arp_dados import (
     CAMPOS_ATA,
     CatalogoTI,
+    chave_sem_id,
     decidir_ata,
     e_candidata,
+    escolher,
     mapear_ata,
     mapear_item,
     validar_contrato,
@@ -128,3 +130,32 @@ def test_cpfs_distintos_com_mesma_mascara_nao_colidem_na_chave():
     b = mapear_item(d.item("1", "1", "Serviço", ni="12300000909"))
     assert a.chave != b.chave
     assert "12345678909" not in a.chave and "12300000909" not in b.chave
+
+
+def test_ata_sem_id_tem_chave_natural_e_aceita_id_recuperado():
+    bruto = d.ata("7", "Aquisição de notebooks")
+    bruto["numeroControlePncpAta"] = None
+    assert mapear_ata(bruto, d.hoje()) is None
+    inicio = (d.hoje() - timedelta(days=30)).isoformat()
+    assert chave_sem_id(bruto) == ("999999", "00010", "2026", inicio, "7/2026")
+    recuperada = mapear_ata(bruto, d.hoje(), id_origem="id-recuperado")
+    assert recuperada.id_origem == "id-recuperado"
+    del bruto["numeroCompra"]
+    assert chave_sem_id(bruto) is None
+
+
+@pytest.mark.parametrize("excluida_primeiro", [True, False])
+def test_repetida_excluida_nao_derruba_a_vigente(excluida_primeiro):
+    valida = mapear_ata(d.ata("8", "Notebooks", atualizado="2025-11-07T12:31:28"), d.hoje())
+    excluida = mapear_ata(
+        d.ata("8", "Notebooks", excluida=True, atualizado="2026-06-09T07:30:21"), d.hoje()
+    )
+    par = (excluida, valida) if excluida_primeiro else (valida, excluida)
+    assert escolher(*par) is valida
+
+
+def test_entre_repetidas_no_mesmo_estado_fica_a_mais_recente():
+    velha = mapear_ata(d.ata("9", "Notebooks", atualizado="2026-01-01T00:00:00"), d.hoje())
+    nova = mapear_ata(d.ata("9", "Notebooks", atualizado="2026-02-01T00:00:00"), d.hoje())
+    assert escolher(velha, nova) is nova
+    assert escolher(nova, velha) is nova

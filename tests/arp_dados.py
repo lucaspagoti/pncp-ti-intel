@@ -120,6 +120,8 @@ class ClienteFalso:
         self.servicos = servicos if servicos is not None else {1260: 8713}
         self.tamanho = tamanho
         self.chamadas: list[str] = []
+        self.filtros: list[tuple[str, dict[str, Any]]] = []
+        self.lote: list[dict[str, Any]] = []  # itens do endpoint em lote (2_consultarARPItem)
 
     def _fatiar(self, registros: list[dict[str, Any]], pagina: int):
         paginas = max(1, -(-len(registros) // self.tamanho)) if registros else 0
@@ -130,6 +132,7 @@ class ClienteFalso:
 
     async def list_resource(self, rota: str, *, pagina: int = 1, tamanho_pagina: int = 50, **f):
         self.chamadas.append(rota)
+        self.filtros.append((rota, f))
         if rota.endswith("1.2_consultarARP_FimVigencia"):
             minimo = f["dataVigenciaFinalMin"]
             maximo = f["dataVigenciaFinalMax"]
@@ -141,6 +144,17 @@ class ClienteFalso:
                     if f["dataAssinaturaInicial"] <= a["dataAssinatura"] <= f["dataAssinaturaFinal"]
                 ]
             return self._fatiar(do_periodo, pagina)
+        if rota.endswith("2_consultarARPItem"):
+            do_grupo = [
+                i
+                for i in self.lote
+                if i["codigoUnidadeGerenciadora"] == f["codigoUnidadeGerenciadora"]
+                and i["numeroCompra"] == f["numeroCompra"]
+                and f["dataVigenciaInicialMin"]
+                <= i["dataVigenciaInicial"]
+                <= f["dataVigenciaInicialMax"]
+            ]
+            return self._fatiar(do_grupo, pagina)
         if rota.endswith("2.1_consultarARPItem_Id"):
             return self._fatiar(self.itens.get(f["numeroControlePncpAta"], []), pagina)
         if rota.endswith("3_consultarPdmMaterial"):
@@ -153,3 +167,7 @@ class ClienteFalso:
             ]
             return self._fatiar(registros, pagina)
         raise AssertionError(f"rota inesperada: {rota}")
+
+    def buscadas(self) -> list[str]:
+        """Atas cujos itens foram buscados por id."""
+        return [f["numeroControlePncpAta"] for r, f in self.filtros if r.endswith("Item_Id")]

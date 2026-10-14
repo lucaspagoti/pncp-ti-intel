@@ -84,6 +84,9 @@ def _texto(valor: Any) -> str:
     return " ".join(str(sanitizar(str(valor))).split())[:LIMITE_TEXTO]
 
 
+texto = _texto  # mesmo tratamento para o texto lido em `fontes.arp`
+
+
 def _data(valor: Any) -> date | None:
     if not valor:
         return None
@@ -139,13 +142,14 @@ def validar_contrato(registros: Sequence[Mapping[str, Any]], campos: Iterable[st
         raise ErroValidacao("contrato", f"campos ausentes na API: {', '.join(ausentes)}")
 
 
-def mapear_ata(bruto: Mapping[str, Any], hoje: date) -> AtaArp | None:
+def mapear_ata(bruto: Mapping[str, Any], hoje: date, id_origem: str | None = None) -> AtaArp | None:
     """Converte uma ata; `None` descarta (sem identificador, sem fim ou com início inválido).
 
     Início preenchido e inválido (ex.: `2026-02-31`) não pode virar "início desconhecido",
     porque a view trata início nulo como já vigente (mesma regra de quarentena da R1).
+    `id_origem` vale para a ata sem `numeroControlePncpAta` cujo id foi recuperado pelos itens.
     """
-    id_origem = _texto(bruto.get("numeroControlePncpAta"))
+    id_origem = id_origem or _texto(bruto.get("numeroControlePncpAta"))
     fim = _data(bruto.get("dataVigenciaFinal"))
     inicio = _data(bruto.get("dataVigenciaInicial"))
     if not id_origem or fim is None or (inicio is None and bruto.get("dataVigenciaInicial")):
@@ -174,6 +178,37 @@ def mapear_ata(bruto: Mapping[str, Any], hoje: date) -> AtaArp | None:
         quantidade_itens=_inteiro(bruto.get("quantidadeItens")),
         atualizado_em=_texto(bruto.get("dataHoraAtualizacao")),
     )
+
+
+def chave_sem_id(bruto: Mapping[str, Any]) -> tuple[str, str, str, str, str] | None:
+    """Chave natural da ata que veio sem `numeroControlePncpAta` (cerca de 1,7%, 14/10/2026).
+
+    `(unidade, compra, ano, início, número da ata)`: os três primeiros e o início filtram o
+    endpoint de itens em lote, que traz o id; o número separa as atas da mesma compra.
+    `None` se faltar algum campo (não há como recuperar o id).
+    """
+    if _texto(bruto.get("numeroControlePncpAta")):
+        return None
+    inicio = _data(bruto.get("dataVigenciaInicial"))
+    campos = (
+        _texto(bruto.get("codigoUnidadeGerenciadora")),
+        _texto(bruto.get("numeroCompra")),
+        _texto(bruto.get("anoCompra")),
+        inicio.isoformat() if inicio else "",
+        _texto(bruto.get("numeroAtaRegistroPreco")),
+    )
+    return campos if all(campos) else None
+
+
+def escolher(atual: AtaArp, nova: AtaArp) -> AtaArp:
+    """Desempate de duas linhas com o mesmo id (a API repete atas, 14/10/2026).
+
+    Prefere a vigente na origem: uma reinclusão duplicada excluída depois não derruba a
+    original. Entre duas no mesmo estado, fica a de `dataHoraAtualizacao` mais recente.
+    """
+    if atual.vigente_na_origem != nova.vigente_na_origem:
+        return atual if atual.vigente_na_origem else nova
+    return nova if nova.atualizado_em > atual.atualizado_em else atual
 
 
 def _chave_item(*campos: str) -> str:
@@ -261,10 +296,13 @@ __all__ = [
     "CatalogoTI",
     "Decisao",
     "ItemArp",
+    "chave_sem_id",
     "decidir_ata",
     "e_candidata",
+    "escolher",
     "mapear_ata",
     "mapear_item",
+    "texto",
     "validar_contrato",
     "validar_pagina",
 ]

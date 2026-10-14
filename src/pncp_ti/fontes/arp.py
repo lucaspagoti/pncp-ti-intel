@@ -15,9 +15,11 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
 import time
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from collections import Counter, defaultdict
+from collections.abc import Callable, Coroutine, Iterable, Mapping, Sequence
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -40,10 +42,13 @@ from pncp_ti.fontes.arp_dados import (
     AtaArp,
     CatalogoTI,
     ItemArp,
+    chave_sem_id,
     decidir_ata,
     e_candidata,
+    escolher,
     mapear_ata,
     mapear_item,
+    texto,
     validar_contrato,
     validar_pagina,
 )
@@ -56,6 +61,7 @@ CHAVE_TRAVA = "carga:compras_arp"
 URL_BASE = "https://dadosabertos.compras.gov.br"
 ROTA_ATAS = "/modulo-arp/1.2_consultarARP_FimVigencia"
 ROTA_ITENS_ATA = "/modulo-arp/2.1_consultarARPItem_Id"
+ROTA_ITENS_LOTE = "/modulo-arp/2_consultarARPItem"
 ROTA_PDM = "/modulo-material/3_consultarPdmMaterial"
 ROTA_SERVICOS = "/modulo-servico/6_consultarItemServico"
 
@@ -63,12 +69,34 @@ TAMANHO_PAGINA = 500
 JANELA_DIAS = 365  # limite da API para dataVigenciaFinalMin/Max
 JANELAS = 3
 ASSINATURA_MINIMA = date(2000, 1, 1)
+ASSINATURA_PASSO_INICIAL = 64  # dias; num dia cheio, a assinatura costuma estar ~1 ano antes
+ASSINATURA_PASSO_MAXIMO = 4000
+ALVO_PAGINA = 0.9  # fração de uma página que a caminhada adaptativa mira por consulta
 CONCORRENCIA = 2
 TENTATIVAS_HTTP = 6  # o 429 da API pede ~36 s de espera; o cliente respeita o Retry-After
 PISO_ATAS = 0.5
 PISO_ITENS = 0.7
-TOLERANCIA_TOTAL = 0.01  # |atas únicas − totalRegistros| em relação ao declarado
+ID_PNCP_ATA = re.compile(r"\d{14}-\d-\d{6}/\d{4}-\d{6}")  # CNPJ-1-compra/ano-ata
+TOLERANCIA_TOTAL = 0.01  # |linhas explicadas − totalRegistros| em relação ao declarado
+LIMITE_SEM_ID = 0.05  # atas sem numeroControlePncpAta (1,7% em 14/10/2026)
+LIMITE_CONFLITO_ID = 0.01  # mesmo id com número de ata diferente
 LIMITE_SEM_ITEM = 0.05  # candidatas sem item (inclui falhas de busca)
+
+FORMATO_CACHE = 2  # muda quando o mapeamento do item ou a regra de completude mudam
+# Erros que se repetem iguais numa nova tentativa: dado ou contrato da API, não rede.
+ERROS_DETERMINISTICOS = frozenset(
+    {
+        "total_registros",
+        "sem_id_excessivo",
+        "conflito_id",
+        "contrato",
+        "data_anomala",
+        "catalogo",
+        "queda_volume",
+        "geracao_antiga",
+    }
+)
+SAIDA_DETERMINISTICA = 2
 
 RAIZ_CACHE = Path(__file__).resolve().parents[3] / "data" / "arp"
 
@@ -109,6 +137,39 @@ def janelas(hoje: date) -> list[tuple[date, date]]:
     return resultado
 
 
+@dataclass(slots=True)
+class Listagem:
+    """Resultado da listagem, com a conta de cada linha que a API declarou (ADR 0021)."""
+
+    atas: dict[str, AtaArp] = field(default_factory=dict)
+    # Atas sem `numeroControlePncpAta`: chave natural -> ata com id provisório.
+    sem_id: dict[tuple[str, ...], AtaArp] = field(default_factory=dict)
+    sem_id_sem_chave: int = 0  # sem id e sem os campos para recuperá-lo
+    descartadas: int = 0  # sem fim ou com início inválido
+    repetidas: int = 0  # linhas com id já visto (desempate em `escolher`)
+    conflitos: int = 0  # mesmo id, número de ata diferente: erro da origem
+    exclusao_recente_ignorada: int = 0  # a linha excluída era a mais nova (ADR 0021)
+    declarado: int = 0
+    paginadas: int = 0
+    requisicoes: int = 0
+
+    @property
+    def explicadas(self) -> int:
+        return len(self.atas) + len(self.sem_id) + self.sem_id_sem_chave + self.descartadas
+
+    def contagens(self) -> dict[str, int]:
+        return {
+            "atas_declaradas": self.declarado,
+            "atas_sem_controle_pncp": len(self.sem_id) + self.sem_id_sem_chave,
+            "atas_descartadas": self.descartadas,
+            "atas_id_repetido": self.repetidas,
+            "atas_conflito_id": self.conflitos,
+            "atas_exclusao_recente_ignorada": self.exclusao_recente_ignorada,
+            "janelas_paginadas": self.paginadas,
+            "requisicoes_listagem": self.requisicoes,
+        }
+
+
 async def _pagina(
     client: DadosAbertosClient, orcamento: _Orcamento, rota: str, pagina: int, **filtros: Any
 ) -> dict[str, Any]:
@@ -116,79 +177,167 @@ async def _pagina(
     return await client.list_resource(rota, pagina=pagina, tamanho_pagina=TAMANHO_PAGINA, **filtros)
 
 
-async def listar_atas(
-    client: DadosAbertosClient, orcamento: _Orcamento, hoje: date
-) -> tuple[dict[str, AtaArp], int, int]:
-    """Todas as atas com fim de vigência de hoje em diante: `(atas, declarado, paginadas)`.
+async def listar_atas(client: DadosAbertosClient, orcamento: _Orcamento, hoje: date) -> Listagem:
+    """Todas as atas com fim de vigência de hoje em diante, sem depender da paginação.
 
     A API pagina por offset sem desempate estável: numa janela de duas semanas, 682 de 6.979
-    registros vieram repetidos e outros 682 nunca vieram (13/10/2026). Por isso a janela é
-    dividida até caber numa página só, primeiro pelo fim da vigência e, num dia cheio, pela data
-    de assinatura. Só se nem isso couber a janela é paginada (`paginadas`, risco de perda).
+    registros vieram repetidos e outros 682 nunca vieram (13/10/2026). Por isso cada consulta
+    precisa caber numa página. A caminhada é adaptativa: anda pelo fim da vigência com uma
+    janela dimensionada pela densidade da anterior (cerca de 90% de uma página); num dia cheio,
+    anda pela data de assinatura, de hoje para trás, até somar o total do dia. Só se nem isso
+    couber a faixa é paginada (`paginadas`, risco de perda que a conferência do total mede).
     """
-    atas: dict[str, AtaArp] = {}
-    declarado = 0
-    paginadas = 0
+    resultado = Listagem()
     semaforo = asyncio.Semaphore(CONCORRENCIA)
+    tamanho = TAMANHO_PAGINA  # a página real, aprendida da primeira resposta cheia
 
     async def consultar(filtros: dict[str, str], pagina: int = 1):
+        nonlocal tamanho
         async with semaforo:
             resposta = await _pagina(client, orcamento, ROTA_ATAS, pagina, **filtros)
-        return validar_pagina(resposta, pagina)
+        resultado.requisicoes += 1
+        registros, total, paginas = validar_pagina(resposta, pagina)
+        if pagina == 1 and paginas > 1 and registros:  # a última página vem parcial
+            tamanho = len(registros)
+        return registros, total, paginas
+
+    def proxima(largura: int, total: int, limite: int) -> int:
+        """Dias da próxima janela, mirando ~90% de uma página pela densidade observada."""
+        if total == 0:
+            return min(limite, largura * 4)
+        return max(1, min(limite, largura * int(tamanho * ALVO_PAGINA) // total))
+
+    def cortar(registros: list[dict[str, Any]], campo: str, origem: date, total: int) -> int:
+        """Largura que cabe numa página, estimada pela 1ª página de uma janela que estourou.
+
+        A 1ª página é uma amostra do total: a largura que cobre ~90% de uma página em
+        proporção da amostra (distância da data de `campo` até a `origem` da caminhada).
+        """
+        distancias = []
+        for bruto in registros:
+            try:
+                distancias.append(abs((date.fromisoformat(str(bruto[campo])[:10]) - origem).days))
+            except (KeyError, ValueError):
+                continue
+        if not distancias:
+            return 0
+        distancias.sort()
+        k = max(1, min(len(distancias), int(len(distancias) * tamanho * ALVO_PAGINA / total)))
+        return distancias[k - 1] + 1
+
+    def encolher(largura: int, total: int, corte: int) -> int:
+        """Próxima largura depois de estourar: sempre menor que a atual."""
+        estimada = corte or proxima(largura, total, largura)
+        return max(1, min(largura - 1, estimada))
 
     def guardar(registros: list[dict[str, Any]]) -> None:
         validar_contrato(registros, CAMPOS_ATA)
         for bruto in registros:
+            if not bruto.get("numeroControlePncpAta"):
+                provisoria = mapear_ata(bruto, hoje, id_origem="sem-id")
+                chave = chave_sem_id(bruto)
+                if provisoria is None:
+                    resultado.descartadas += 1
+                elif chave is None:
+                    resultado.sem_id_sem_chave += 1
+                else:
+                    resultado.sem_id.setdefault(chave, provisoria)
+                continue
             ata = mapear_ata(bruto, hoje)
-            if ata is not None:
-                atas[ata.id_origem] = ata
+            if ata is None:
+                resultado.descartadas += 1
+                continue
+            atual = resultado.atas.get(ata.id_origem)
+            if atual is None:
+                resultado.atas[ata.id_origem] = ata
+                continue
+            resultado.repetidas += 1
+            if atual.numero != ata.numero:
+                resultado.conflitos += 1
+                log.warning("arp_conflito_id", ata=ata.id_origem)
+            escolhida = escolher(atual, ata)
+            outra = ata if escolhida is atual else atual
+            if not outra.vigente_na_origem and outra.atualizado_em > escolhida.atualizado_em:
+                resultado.exclusao_recente_ignorada += 1
+            resultado.atas[ata.id_origem] = escolhida
 
-    async def paginar(filtros: dict[str, str], primeira: list[dict[str, Any]], paginas: int):
-        nonlocal paginadas
-        paginadas += 1
+    async def paginar(
+        filtros: dict[str, str], primeira: list[dict[str, Any]], paginas: int
+    ) -> list[dict[str, Any]]:
+        """Todas as páginas, sem as linhas idênticas que a paginação instável repete."""
+        resultado.paginadas += 1
         log.warning("arp_janela_paginada", paginas=paginas, **filtros)
-        guardar(primeira)
+        linhas = {json.dumps(r, sort_keys=True, default=str): r for r in primeira}
         for pagina in range(2, paginas + 1):
             registros, _, _ = await consultar(filtros, pagina)
-            guardar(registros)
+            linhas.update((json.dumps(r, sort_keys=True, default=str), r) for r in registros)
+        return list(linhas.values())
 
-    async def janela(fim: tuple[date, date], assinatura: tuple[date, date] | None) -> int:
-        filtros = {
-            "dataVigenciaFinalMin": fim[0].isoformat(),
-            "dataVigenciaFinalMax": fim[1].isoformat(),
-        }
-        if assinatura:
-            filtros["dataAssinaturaInicial"] = assinatura[0].isoformat()
-            filtros["dataAssinaturaFinal"] = assinatura[1].isoformat()
-        registros, total, paginas = await consultar(filtros)
-        if paginas <= 1:
-            guardar(registros)
-            return total
-        if fim[0] < fim[1]:
-            meio = fim[0] + (fim[1] - fim[0]) // 2
-            partes = [
-                janela((fim[0], meio), assinatura),
-                janela((meio + timedelta(days=1), fim[1]), assinatura),
-            ]
+    async def dia_cheio(
+        dia: dict[str, str], primeira: list[dict[str, Any]], total_dia: int, paginas_dia: int
+    ):
+        soma = 0
+        fatias: list[dict[str, Any]] = []  # só são guardadas se a soma fechar com o dia
+        final, dias = hoje, ASSINATURA_PASSO_INICIAL
+        while final >= ASSINATURA_MINIMA and soma < total_dia:
+            inicio = max(ASSINATURA_MINIMA, final - timedelta(days=dias - 1))
+            filtros = {
+                **dia,
+                "dataAssinaturaInicial": inicio.isoformat(),
+                "dataAssinaturaFinal": final.isoformat(),
+            }
+            registros, total, paginas = await consultar(filtros)
+            largura = (final - inicio).days + 1
+            if paginas > 1 and largura > 1:
+                corte = cortar(registros, "dataAssinatura", final, total)
+                dias = encolher(largura, total, corte)
+                continue
+            if paginas > 1:
+                registros = await paginar(filtros, registros, paginas)
+            fatias.extend(registros)
+            soma += total
+            final = inicio - timedelta(days=1)
+            dias = proxima(largura, total, ASSINATURA_PASSO_MAXIMO)
+        if soma == total_dia:
+            guardar(fatias)
         else:
-            faixa = assinatura or (ASSINATURA_MINIMA, hoje)
-            if faixa[0] >= faixa[1]:
-                await paginar(filtros, registros, paginas)
-                return total
-            meio = faixa[0] + (faixa[1] - faixa[0]) // 2
-            partes = [
-                janela(fim, (faixa[0], meio)),
-                janela(fim, (meio + timedelta(days=1), faixa[1])),
-            ]
-        soma = sum(await asyncio.gather(*partes))
-        if soma != total:
-            # Ex.: ata sem data de assinatura some do filtro. Pagina a janela inteira.
-            await paginar(filtros, registros, paginas)
-        return total
+            # Ex.: ata sem data de assinatura some do filtro. Pagina o dia inteiro e descarta
+            # as fatias, para nenhuma linha ser contada duas vezes.
+            guardar(await paginar(dia, primeira, paginas_dia))
+        resultado.declarado += total_dia
 
-    for minimo, maximo in janelas(hoje):
-        declarado += await janela((minimo, maximo), None)
-    return atas, declarado, paginadas
+    async def por_fim(inicio: date, fim: date) -> None:
+        dias = 1
+        while inicio <= fim:
+            final = min(inicio + timedelta(days=dias - 1), fim)
+            filtros = {
+                "dataVigenciaFinalMin": inicio.isoformat(),
+                "dataVigenciaFinalMax": final.isoformat(),
+            }
+            registros, total, paginas = await consultar(filtros)
+            largura = (final - inicio).days + 1
+            if paginas > 1 and largura > 1:
+                dias = encolher(
+                    largura, total, cortar(registros, "dataVigenciaFinal", inicio, total)
+                )
+                continue
+            if paginas > 1:
+                await dia_cheio(filtros, registros, total, paginas)
+            else:
+                guardar(registros)
+                resultado.declarado += total
+            inicio = final + timedelta(days=1)
+            dias = proxima(largura, total, JANELA_DIAS)
+
+    # O primeiro ano concentra quase tudo: duas caminhadas em paralelo, mais uma para o resto.
+    (primeiro, fim_ano), *resto = janelas(hoje)
+    meio = primeiro + (fim_ano - primeiro) // 2
+    await asyncio.gather(
+        por_fim(primeiro, meio),
+        por_fim(meio + timedelta(days=1), fim_ano),
+        por_fim(resto[0][0], resto[-1][1]),
+    )
+    return resultado
 
 
 async def carregar_catalogo(client: DadosAbertosClient, orcamento: _Orcamento) -> CatalogoTI:
@@ -226,12 +375,21 @@ async def _itens_da_ata(
 ) -> list[ItemArp]:
     itens: list[ItemArp] = []
     vistos: set[tuple[str, str, str]] = set()
+    declarado: tuple[int, int] | None = None
     pagina = 1
     while True:
         resposta = await _pagina(
             client, orcamento, ROTA_ITENS_ATA, pagina, numeroControlePncpAta=ata_id
         )
         registros, total, paginas = validar_pagina(resposta, pagina)
+        # Total ou número de páginas que mudam no meio: a lista mudou durante a leitura.
+        if declarado is None:
+            declarado = (total, paginas)
+        elif (total, paginas) != declarado:
+            raise ErroValidacao(
+                "itens_inconsistentes",
+                f"página {pagina}: {total} itens/{paginas} páginas, antes {declarado}",
+            )
         validar_contrato(registros, CAMPOS_ITEM)
         for bruto in registros:
             vistos.add(
@@ -271,12 +429,12 @@ class CacheItens:
         vespera = hoje - timedelta(days=1)
         return cls(raiz / f"itens-{hoje.isoformat()}.jsonl", raiz / f"itens-{vespera}.jsonl")
 
-    def ler(self) -> dict[str, tuple[str | None, list[ItemArp]]]:
+    def ler(self) -> dict[str, tuple[str, list[ItemArp]]]:
         """`{ata: (dataHoraAtualizacao da ata quando os itens foram buscados, itens)}`.
 
-        Versão `None`: linha do formato anterior, sem versão (só da noite de 13/10/2026).
+        Linha de outro formato ou sem versão é ignorada: a ata é rebuscada.
         """
-        lidos: dict[str, tuple[str | None, list[ItemArp]]] = {}
+        lidos: dict[str, tuple[str, list[ItemArp]]] = {}
         for caminho in (self.anterior, self.caminho):
             if caminho is None or not caminho.is_file():
                 continue
@@ -284,17 +442,27 @@ class CacheItens:
                 for linha in arquivo:
                     try:
                         registro = json.loads(linha)
+                        if registro.get("formato") != FORMATO_CACHE:
+                            continue
+                        versao = registro["versao"]
+                        if not isinstance(versao, str) or not versao:
+                            continue
                         itens = [_item_de_json(i) for i in registro["itens"]]
                         ata = str(registro["ata"])
-                    except (ValueError, KeyError, TypeError):
+                    except (ValueError, KeyError, TypeError, AttributeError):
                         continue  # linha truncada por queda no meio da escrita
-                    versao = registro.get("versao")
-                    lidos[ata] = (None if versao is None else str(versao), itens)
+                    lidos[ata] = (versao, itens)
         return lidos
 
     def gravar(self, ata_id: str, versao: str, itens: list[ItemArp]) -> None:
         linha = json.dumps(
-            {"ata": ata_id, "versao": versao, "itens": [asdict(i) for i in itens]}, default=str
+            {
+                "formato": FORMATO_CACHE,
+                "ata": ata_id,
+                "versao": versao,
+                "itens": [asdict(i) for i in itens],
+            },
+            default=str,
         )
         novo = not self.caminho.exists()
         with self.caminho.open("a", encoding="utf-8") as arquivo:
@@ -349,19 +517,120 @@ async def buscar_itens(
                 falhas += 1
                 log.warning("arp_itens_falha", ata=ata_id, tipo=type(exc).__name__)
 
-    async with asyncio.TaskGroup() as grupo:
-        for ata_id in ids:
-            grupo.create_task(uma(ata_id))
+    await _em_grupo(uma(ata_id) for ata_id in ids)
     return resultado, falhas
 
 
-def validar_total(atas: Mapping[str, AtaArp], declarado: int) -> None:
-    if not atas:
+def validar_total(listagem: Listagem) -> None:
+    """Toda linha declarada pela API tem de estar explicada: ata, sem id ou descartada.
+
+    O que sobra é perda (paginação, linha repetida no lugar de outra) e tolera até 1%.
+    """
+    declarado = listagem.declarado
+    if not listagem.atas:
         raise ErroValidacao("sem_atas", "a API não devolveu nenhuma ata vigente")
-    if declarado and abs(len(atas) - declarado) > TOLERANCIA_TOTAL * declarado:
+    sem_id = len(listagem.sem_id) + listagem.sem_id_sem_chave
+    if sem_id > LIMITE_SEM_ID * declarado:
+        raise ErroValidacao("sem_id_excessivo", f"{sem_id} de {declarado} atas sem id do PNCP")
+    if listagem.conflitos > LIMITE_CONFLITO_ID * declarado:
+        raise ErroValidacao("conflito_id", f"{listagem.conflitos} ids com atas diferentes")
+    if declarado and abs(listagem.explicadas - declarado) > TOLERANCIA_TOTAL * declarado:
         raise ErroValidacao(
-            "total_registros", f"{len(atas)} atas únicas contra {declarado} declaradas"
+            "total_registros",
+            f"{listagem.explicadas} linhas explicadas ({len(listagem.atas)} atas únicas) "
+            f"contra {declarado} declaradas",
         )
+
+
+async def _em_grupo(tarefas: Iterable[Coroutine[Any, Any, None]]) -> None:
+    """Roda as tarefas num `TaskGroup` e relança o erro de validação sem o `ExceptionGroup`.
+
+    Assim `teto_requisicoes` chega a `principal` com o tipo certo (log e código de saída).
+    """
+    try:
+        async with asyncio.TaskGroup() as grupo:
+            for tarefa in tarefas:
+                grupo.create_task(tarefa)
+    except* ErroValidacao as erros:
+        raise erros.exceptions[0] from None
+
+
+async def recuperar_ids(
+    client: DadosAbertosClient, orcamento: _Orcamento, listagem: Listagem
+) -> tuple[dict[str, AtaArp], int]:
+    """Id do PNCP das candidatas sem `numeroControlePncpAta`, pelo endpoint de itens em lote.
+
+    A listagem de atas omite o id de cerca de 1,7% delas, mas os itens trazem (14/10/2026).
+    Uma consulta por (unidade, compra, início) mapeia o número da ata para o id. A linha do
+    lote só conta se unidade, compra, início (e ano, se vier) baterem com o grupo; o id só vale
+    se tiver o formato do PNCP, começar pelo id da compra da ata (quando a listagem o traz),
+    for único para o número e não existir na listagem nem em outra recuperação. Falha numa
+    consulta não derruba a carga: a ata fica sem id e contada. Devolve `(recuperadas, falhas)`.
+    """
+    grupos: dict[tuple[str, ...], dict[str, AtaArp]] = defaultdict(dict)
+    for (unidade, compra, ano, inicio, numero), ata in listagem.sem_id.items():
+        if e_candidata(ata.objeto):
+            grupos[(unidade, compra, ano, inicio)][numero] = ata
+    achadas: list[AtaArp] = []
+    falhas = 0
+    semaforo = asyncio.Semaphore(CONCORRENCIA)
+
+    async def um(grupo: tuple[str, ...], atas: dict[str, AtaArp]) -> None:
+        nonlocal falhas
+        unidade, compra, ano, inicio = grupo
+        filtros = {
+            "codigoUnidadeGerenciadora": unidade,
+            "numeroCompra": compra,
+            "dataVigenciaInicialMin": inicio,
+            "dataVigenciaInicialMax": inicio,
+        }
+        ids: dict[str, set[str]] = defaultdict(set)
+        try:
+            pagina = 1
+            while True:
+                async with semaforo:
+                    resposta = await _pagina(client, orcamento, ROTA_ITENS_LOTE, pagina, **filtros)
+                registros, _, paginas = validar_pagina(resposta, pagina)
+                for r in registros:
+                    # A API pode ignorar um filtro: a linha tem de ser do grupo.
+                    if (
+                        texto(r.get("codigoUnidadeGerenciadora")) != unidade
+                        or texto(r.get("numeroCompra")) != compra
+                        or texto(r.get("dataVigenciaInicial"))[:10] != inicio
+                        or texto(r.get("anoCompra")) not in ("", ano)
+                    ):
+                        continue
+                    numero = texto(r.get("numeroAtaRegistroPreco"))
+                    id_pncp = texto(r.get("numeroControlePncpAta"))
+                    if numero in atas and ID_PNCP_ATA.fullmatch(id_pncp):
+                        ids[numero].add(id_pncp)
+                if pagina >= paginas:
+                    break
+                pagina += 1
+        except ErroValidacao as exc:
+            if exc.tipo == "teto_requisicoes":
+                raise
+            falhas += 1
+            log.warning("arp_recuperar_id_falha", tipo=exc.tipo)
+            return
+        except ComprasError as exc:
+            falhas += 1
+            log.warning("arp_recuperar_id_falha", tipo=type(exc).__name__)
+            return
+        for numero, achados in ids.items():
+            if len(achados) != 1:
+                continue
+            (id_pncp,) = achados
+            compra_pncp = atas[numero].numero_controle_pncp_compra
+            if compra_pncp and not id_pncp.startswith(f"{compra_pncp}-"):
+                continue
+            if id_pncp not in listagem.atas:
+                achadas.append(replace(atas[numero], id_origem=id_pncp))
+
+    await _em_grupo(um(grupo, atas) for grupo, atas in grupos.items())
+    vezes = Counter(a.id_origem for a in achadas)
+    # Duas atas sem id que levam ao mesmo id: ambíguo, nenhuma é recuperada.
+    return {a.id_origem: a for a in achadas if vezes[a.id_origem] == 1}, falhas
 
 
 @dataclass(slots=True)
@@ -370,9 +639,8 @@ class Preparado:
     itens: list[ItemArp]
     decisoes: dict[str, tuple[bool, str]]
     contagens: dict[str, int]
-    # Versão da ata a que os itens correspondem, quando difere da atual (fallback por falha):
-    # gravada em `atualizado_origem` para a próxima carga rebuscar.
-    versao_itens: dict[str, str] = field(default_factory=dict)
+    # Itens de fallback (busca falhou): `atualizado_origem` vai nulo e a próxima carga rebusca.
+    versao_itens: dict[str, str | None] = field(default_factory=dict)
 
 
 def preparar(
@@ -383,8 +651,9 @@ def preparar(
     declarado: int,
     catalogo: CatalogoTI,
 ) -> Preparado:
-    """Valida o conjunto e classifica; sem rede nem banco."""
-    validar_total(atas, declarado)
+    """Valida o conjunto e classifica; sem rede nem banco (o total é conferido na listagem)."""
+    if not atas:
+        raise ErroValidacao("sem_atas", "a API não devolveu nenhuma ata vigente")
     sem_item = [a for a in candidatas if not itens_por_ata.get(a)]
     if candidatas and len(sem_item) > LIMITE_SEM_ITEM * len(candidatas):
         raise ErroValidacao(
@@ -495,7 +764,7 @@ async def _publicar(
                     a.orgao,
                     a.valor_total,
                     a.quantidade_itens,
-                    preparado.versao_itens.get(a.id_origem, a.atualizado_em),
+                    preparado.versao_itens.get(a.id_origem, a.atualizado_em) or None,
                 )
                 for a in preparado.atas
             ),
@@ -553,6 +822,11 @@ async def _publicar(
 Anteriores = Mapping[str, tuple[str, list[ItemArp]]]  # id -> (dataHoraAtualizacao, itens)
 
 
+def codigo_saida(exc: ErroValidacao) -> int:
+    """2 para erro que se repetiria igual numa nova tentativa (dado ou contrato); 1 se não."""
+    return SAIDA_DETERMINISTICA if exc.tipo in ERROS_DETERMINISTICOS else 1
+
+
 def dia_de_renovar(ata_id: str, hoje: date) -> bool:
     """Cada ata cai num dia da semana fixo: seus itens são rebuscados ao menos 1x por semana."""
     return int(hashlib.sha256(ata_id.encode()).hexdigest()[:8], 16) % 7 == hoje.toordinal() % 7
@@ -608,15 +882,20 @@ async def _coletar_com(
     anteriores: Anteriores,
     cache: CacheItens | None = None,
 ) -> tuple[Preparado, dict[str, dict[str, object]]]:
-    atas, declarado, paginadas = await listar_atas(client, orcamento, hoje)
-    log.info("arp_atas_listadas", atas=len(atas), declaradas=declarado, paginadas=paginadas)
-    validar_total(atas, declarado)  # falha cedo, antes de gastar a cota com itens
+    listagem = await listar_atas(client, orcamento, hoje)
+    log.info("arp_atas_listadas", atas=len(listagem.atas), **listagem.contagens())
+    validar_total(listagem)  # falha cedo, antes de gastar a cota com itens
+    declarado = listagem.declarado
+    recuperadas_id, falhas_id = await recuperar_ids(client, orcamento, listagem)
+    atas = {**listagem.atas, **recuperadas_id}
     catalogo = await carregar_catalogo(client, orcamento)
     candidatas = sorted(i for i, a in atas.items() if e_candidata(a.objeto))
     reaproveitar = [
         i
         for i in candidatas
         if i in anteriores
+        # Versão vazia = itens de fallback ou desconhecidos: sempre rebuscar.
+        and anteriores[i][0]
         and anteriores[i][0] == atas[i].atualizado_em
         and not dia_de_renovar(i, hoje)
     ]
@@ -624,8 +903,8 @@ async def _coletar_com(
     do_cache = {
         i: itens
         for i, (versao, itens) in (cache.ler() if cache else {}).items()
-        # Ata mudou desde a busca: rebuscar. Sem versão = formato anterior (mesma noite).
-        if i in atas and versao in (None, atas[i].atualizado_em)
+        # Ata mudou desde a busca: rebuscar.
+        if i in atas and versao == atas[i].atualizado_em
     }
     pendentes = [i for i in candidatas if i not in reaproveitadas]
     buscar = [i for i in pendentes if i not in do_cache]
@@ -644,15 +923,19 @@ async def _coletar_com(
         itens_por_ata[i] = anteriores[i][1]
     # Busca falhou numa ata que já tinha itens: manter os anteriores a apagar preço e motivo.
     recuperadas = [i for i in buscar if i not in itens_por_ata and i in anteriores]
-    versoes: dict[str, str] = {}
+    versoes: dict[str, str | None] = {}
     for i in recuperadas:
         itens_por_ata[i] = anteriores[i][1]
-        versoes[i] = anteriores[i][0]  # continua "desatualizada": a próxima carga rebusca
+        # Versão nula: a próxima carga rebusca, mesmo que a ata não mude (renovação que falhou).
+        versoes[i] = None
     preparado = preparar(atas, itens_por_ata, candidatas, falhas, declarado, catalogo)
     preparado.versao_itens = versoes
     preparado.contagens.update(
+        listagem.contagens(),
+        atas_sem_id_candidatas=sum(1 for a in listagem.sem_id.values() if e_candidata(a.objeto)),
+        atas_id_recuperado=len(recuperadas_id),
+        falhas_recuperacao_id=falhas_id,
         requisicoes=orcamento.requisicoes,
-        janelas_paginadas=paginadas,
         atas_itens_buscados=len(buscar),
         atas_itens_reaproveitados=len(reaproveitar),
         atas_itens_do_cache=len(pendentes) - len(buscar),
@@ -721,7 +1004,8 @@ async def principal(validar: bool) -> int:
         return 0
     except ErroValidacao as exc:
         log.error("arp_falha", tipo=exc.tipo, mensagem=str(exc))
-        return 1
+        # 2: repetir agora daria o mesmo erro (supervisor e timer não insistem).
+        return codigo_saida(exc)
     except Exception as exc:
         # Sem traceback: exceção do driver pode carregar linhas dos dados.
         log.error("arp_falha", tipo=type(exc).__name__, sqlstate=getattr(exc, "sqlstate", None))

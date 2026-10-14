@@ -13,8 +13,10 @@ from __future__ import annotations
 import asyncio
 import random
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import structlog
@@ -52,6 +54,14 @@ def _janelas(inicio: date, fim: date) -> list[tuple[date, date]]:
     return resultado
 
 
+def no_universo(ata: Mapping[str, Any], hoje: date) -> bool:
+    """O mesmo filtro das views públicas (migração 0006): vigente na origem e no prazo hoje."""
+    inicio = ata["inicio"]
+    return (
+        bool(ata["vigente_na_origem"]) and (inicio is None or inicio <= hoje) and ata["fim"] >= hoje
+    )
+
+
 def _celula(texto: str | None, limite: int = 90) -> str:
     # Texto de terceiros vai para `evals/` (versionado): CPF mascarado antes de tudo.
     texto = " ".join(str(sanitizar(texto or "")).split()).replace("|", "/")
@@ -65,7 +75,7 @@ async def principal() -> int:
     try:
         cur = await conn.execute(
             "SELECT a.id_origem, a.is_ti, a.motivo_ti, a.objeto, a.link_origem, a.inicio, "
-            "a.vigente_na_origem, c.data_referencia, c.contagens "
+            "a.fim, a.vigente_na_origem, c.data_referencia, c.contagens "
             "FROM cargas c JOIN atas a ON a.carga_id = c.id WHERE c.fonte = %s AND c.ativa",
             (FONTE,),
         )
@@ -92,7 +102,7 @@ async def principal() -> int:
     finally:
         await conn.close()
 
-    vigentes = {i: a for i, a in atas.items() if a["vigente_na_origem"]}
+    vigentes = {i: a for i, a in atas.items() if no_universo(a, hoje)}
     inicios = [a["inicio"] for a in vigentes.values() if a["inicio"]]
     primeiro = max(min(inicios), hoje - timedelta(days=365 * ANOS_MAXIMOS))
     orcamento = _Orcamento(settings.arp_requests_per_second, settings.arp_max_requisicoes)

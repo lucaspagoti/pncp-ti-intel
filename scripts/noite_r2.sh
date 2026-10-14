@@ -56,7 +56,13 @@ done
 tentativa=0
 while [ "$(sucessos)" -lt 1 ] && no_prazo; do
     tentativa=$((tentativa + 1))
-    rodar pncp_ti.fontes.arp "arp_tentativa${tentativa}" && continue
+    rodar pncp_ti.fontes.arp "arp_tentativa${tentativa}"
+    status=$?
+    [ "$status" -eq 0 ] && continue
+    if [ "$status" -eq 2 ]; then
+        registro "erro determinístico (dado ou contrato da API): repetir não adianta; parando"
+        break
+    fi
     no_prazo || break
     registro "tentativa $tentativa falhou; nova tentativa em $((ESPERA / 60)) min"
     sleep "$ESPERA"
