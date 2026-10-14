@@ -688,3 +688,21 @@ async def test_paginacao_com_total_que_muda_no_meio_falha_a_listagem():
     with pytest.raises(ErroValidacao) as erro:
         await arp.listar_atas(cliente, arp._Orcamento(1000.0, 5000), d.hoje())
     assert erro.value.tipo == "listagem_inconsistente"
+
+
+async def test_lote_com_cpfs_de_mesma_mascara_nao_e_falsa_incompletude():
+    atas, itens = _base_sem_id()
+    atas.append(_sem_id(d.ata("51", "Aquisição de notebooks")))
+    inicio = atas[-1]["dataVigenciaInicial"]
+    recuperado = _id_recuperado(51)
+    # Mesmos dígitos visíveis na máscara, documentos diferentes.
+    um = _do_lote("51", recuperado, inicio)
+    um["niFornecedor"] = "12345678909"
+    outro = _do_lote("51", recuperado, inicio)
+    outro["niFornecedor"] = "12345600909"
+    itens[recuperado] = [um]
+    cliente = d.ClienteFalso(atas, itens)
+    cliente.lote = [um, outro]
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente)
+    assert preparado.contagens["atas_id_recuperado"] == 1
+    assert preparado.contagens["falhas_recuperacao_id"] == 0

@@ -611,12 +611,14 @@ async def recuperar_ids(
                 elif (total, paginas) != declarado:
                     raise ErroValidacao("lote_inconsistente", "totais mudaram na paginação")
                 for r in registros:
+                    # Documento bruto só em memória (como em `_itens_da_ata`): a máscara de CPF
+                    # juntaria fornecedores distintos e acusaria falsa incompletude.
                     vistos.add(
                         (
-                            texto(r.get("numeroControlePncpAta")),
-                            texto(r.get("numeroItem")),
-                            texto(r.get("niFornecedor")),
-                            texto(r.get("classificacaoFornecedor")),
+                            str(r.get("numeroControlePncpAta")),
+                            str(r.get("numeroItem")),
+                            str(r.get("niFornecedor")),
+                            str(r.get("classificacaoFornecedor")),
                         )
                     )
                     # A API pode ignorar um filtro: a linha tem de ser do grupo.
