@@ -309,3 +309,50 @@ async def test_cache_do_dia_evita_rebuscar_itens_depois_de_uma_falha(tmp_path):
     assert segundo.chamadas.count(arp.ROTA_ITENS_ATA) == 0
     assert preparado.contagens["atas_itens_do_cache"] == 10
     assert preparado.contagens["itens_gravados"] == 10
+
+
+async def test_ata_com_itens_incompletos_conta_como_falha_e_nao_vai_para_o_cache(tmp_path):
+    atas = [
+        d.ata(str(n), "Aquisição de computadores", assinatura=d.hoje() - timedelta(days=n))
+        for n in range(1, 31)
+    ]
+    itens = {d.id_ata(str(n)): [d.item(str(n), "1", "PC")] for n in range(1, 31)}
+    itens[d.id_ata("1")] = [d.item("1", str(k), "PC") for k in range(1, 6)]
+    cliente = d.ClienteFalso(atas, itens, tamanho=2)  # 5 itens em páginas sobrepostas de 2
+    cache = arp.CacheItens.do_dia(d.hoje(), raiz=tmp_path)
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente, cache=cache)
+    assert preparado.contagens["falhas_busca_itens"] == 1
+    assert d.id_ata("1") not in cache.ler()
+
+
+async def test_cache_de_versao_antiga_da_ata_e_rebuscado(tmp_path):
+    atas = [d.ata(str(n), "Aquisição de computadores") for n in range(1, 11)]
+    itens = {d.id_ata(str(n)): [d.item(str(n), "1", "PC")] for n in range(1, 11)}
+    cache = arp.CacheItens.do_dia(d.hoje(), raiz=tmp_path)
+    await arp.coletar(CONFIG, d.hoje(), client=d.ClienteFalso(atas, itens), cache=cache)
+    atas[0] = d.ata("1", "Aquisição de computadores", atualizado="2026-10-13T23:00:00")
+    segundo = d.ClienteFalso(atas, itens)
+    await arp.coletar(CONFIG, d.hoje(), client=segundo, cache=cache)
+    assert segundo.chamadas.count(arp.ROTA_ITENS_ATA) == 1
+
+
+async def test_fallback_grava_a_versao_antiga_e_a_proxima_carga_rebusca(conn_ingest):
+    atas = [d.ata(str(n), "Aquisição de computadores") for n in range(1, 31)]
+    itens = {d.id_ata(str(n)): [d.item(str(n), "1", "PC")] for n in range(1, 31)}
+    await _carga(conn_ingest, atas, itens)
+    anteriores = await arp.carregar_anteriores(conn_ingest)
+    atas[0] = d.ata("1", "Aquisição de computadores", atualizado="2026-10-13T08:00:00")
+    cliente = d.ClienteFalso(atas, itens)
+    original = cliente.list_resource
+
+    async def falha_na_ata_1(rota, **kw):
+        if rota == arp.ROTA_ITENS_ATA and kw["numeroControlePncpAta"] == d.id_ata("1"):
+            raise ComprasServerError("HTTP 503")
+        return await original(rota, **kw)
+
+    cliente.list_resource = falha_na_ata_1
+    preparado, geracao = await arp.coletar(CONFIG, d.hoje(), client=cliente, anteriores=anteriores)
+    await arp._publicar(conn_ingest, preparado, geracao, __import__("uuid").uuid4(), d.hoje())
+    depois = await arp.carregar_anteriores(conn_ingest)
+    assert depois[d.id_ata("1")][0] == "2026-10-01T10:00:00"  # versão dos itens, não da ata
+    await conn_ingest.commit()

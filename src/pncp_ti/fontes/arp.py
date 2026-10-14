@@ -17,7 +17,7 @@ import hashlib
 import json
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -225,20 +225,33 @@ async def _itens_da_ata(
     client: DadosAbertosClient, orcamento: _Orcamento, ata_id: str
 ) -> list[ItemArp]:
     itens: list[ItemArp] = []
+    vistos: set[tuple[str, str, str]] = set()
     pagina = 1
     while True:
         resposta = await _pagina(
             client, orcamento, ROTA_ITENS_ATA, pagina, numeroControlePncpAta=ata_id
         )
-        registros, _, paginas = validar_pagina(resposta, pagina)
+        registros, total, paginas = validar_pagina(resposta, pagina)
         validar_contrato(registros, CAMPOS_ITEM)
         for bruto in registros:
+            vistos.add(
+                (
+                    str(bruto.get("numeroItem")),
+                    str(bruto.get("niFornecedor")),
+                    str(bruto.get("classificacaoFornecedor")),
+                )
+            )
             item = mapear_item(bruto)
             if item is not None and item.ata_id_origem == ata_id:
                 itens.append(item)
         if pagina >= paginas:
-            return itens
+            break
         pagina += 1
+    # A paginação da API pode repetir e omitir linhas (ver `listar_atas`): ata incompleta não
+    # vira checkpoint nem carga; conta como falha e o chamador usa os itens anteriores.
+    if len(vistos) < total:
+        raise ErroValidacao("itens_incompletos", f"{len(vistos)} de {total} itens únicos")
+    return itens
 
 
 class CacheItens:
@@ -258,8 +271,12 @@ class CacheItens:
         vespera = hoje - timedelta(days=1)
         return cls(raiz / f"itens-{hoje.isoformat()}.jsonl", raiz / f"itens-{vespera}.jsonl")
 
-    def ler(self) -> dict[str, list[ItemArp]]:
-        lidos: dict[str, list[ItemArp]] = {}
+    def ler(self) -> dict[str, tuple[str | None, list[ItemArp]]]:
+        """`{ata: (dataHoraAtualizacao da ata quando os itens foram buscados, itens)}`.
+
+        Versão `None`: linha do formato anterior, sem versão (só da noite de 13/10/2026).
+        """
+        lidos: dict[str, tuple[str | None, list[ItemArp]]] = {}
         for caminho in (self.anterior, self.caminho):
             if caminho is None or not caminho.is_file():
                 continue
@@ -268,13 +285,17 @@ class CacheItens:
                     try:
                         registro = json.loads(linha)
                         itens = [_item_de_json(i) for i in registro["itens"]]
+                        ata = str(registro["ata"])
                     except (ValueError, KeyError, TypeError):
                         continue  # linha truncada por queda no meio da escrita
-                    lidos[registro["ata"]] = itens
+                    versao = registro.get("versao")
+                    lidos[ata] = (None if versao is None else str(versao), itens)
         return lidos
 
-    def gravar(self, ata_id: str, itens: list[ItemArp]) -> None:
-        linha = json.dumps({"ata": ata_id, "itens": [asdict(i) for i in itens]}, default=str)
+    def gravar(self, ata_id: str, versao: str, itens: list[ItemArp]) -> None:
+        linha = json.dumps(
+            {"ata": ata_id, "versao": versao, "itens": [asdict(i) for i in itens]}, default=str
+        )
         novo = not self.caminho.exists()
         with self.caminho.open("a", encoding="utf-8") as arquivo:
             arquivo.write(linha + "\n")
@@ -349,6 +370,9 @@ class Preparado:
     itens: list[ItemArp]
     decisoes: dict[str, tuple[bool, str]]
     contagens: dict[str, int]
+    # Versão da ata a que os itens correspondem, quando difere da atual (fallback por falha):
+    # gravada em `atualizado_origem` para a próxima carga rebuscar.
+    versao_itens: dict[str, str] = field(default_factory=dict)
 
 
 def preparar(
@@ -471,7 +495,7 @@ async def _publicar(
                     a.orgao,
                     a.valor_total,
                     a.quantidade_itens,
-                    a.atualizado_em,
+                    preparado.versao_itens.get(a.id_origem, a.atualizado_em),
                 )
                 for a in preparado.atas
             ),
@@ -597,7 +621,12 @@ async def _coletar_com(
         and not dia_de_renovar(i, hoje)
     ]
     reaproveitadas = set(reaproveitar)
-    do_cache = cache.ler() if cache else {}
+    do_cache = {
+        i: itens
+        for i, (versao, itens) in (cache.ler() if cache else {}).items()
+        # Ata mudou desde a busca: rebuscar. Sem versão = formato anterior (mesma noite).
+        if i in atas and versao in (None, atas[i].atualizado_em)
+    }
     pendentes = [i for i in candidatas if i not in reaproveitadas]
     buscar = [i for i in pendentes if i not in do_cache]
     log.info(
@@ -606,9 +635,8 @@ async def _coletar_com(
         buscar=len(buscar),
         cache=len(pendentes) - len(buscar),
     )
-    itens_por_ata, falhas = await buscar_itens(
-        client, orcamento, buscar, cache.gravar if cache else None
-    )
+    gravar = (lambda i, itens: cache.gravar(i, atas[i].atualizado_em, itens)) if cache else None
+    itens_por_ata, falhas = await buscar_itens(client, orcamento, buscar, gravar)
     for i in pendentes:
         if i in do_cache and i not in itens_por_ata:
             itens_por_ata[i] = do_cache[i]
@@ -616,9 +644,12 @@ async def _coletar_com(
         itens_por_ata[i] = anteriores[i][1]
     # Busca falhou numa ata que já tinha itens: manter os anteriores a apagar preço e motivo.
     recuperadas = [i for i in buscar if i not in itens_por_ata and i in anteriores]
+    versoes: dict[str, str] = {}
     for i in recuperadas:
         itens_por_ata[i] = anteriores[i][1]
+        versoes[i] = anteriores[i][0]  # continua "desatualizada": a próxima carga rebusca
     preparado = preparar(atas, itens_por_ata, candidatas, falhas, declarado, catalogo)
+    preparado.versao_itens = versoes
     preparado.contagens.update(
         requisicoes=orcamento.requisicoes,
         janelas_paginadas=paginadas,

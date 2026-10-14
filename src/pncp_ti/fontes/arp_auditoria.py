@@ -33,6 +33,7 @@ from pncp_ti.fontes.arp import (
 )
 from pncp_ti.fontes.arp_dados import validar_pagina
 from pncp_ti.fontes.siga_csv import ErroValidacao
+from pncp_ti.privacy import sanitizar
 
 ROTA_ITENS = "/modulo-arp/2_consultarARPItem"
 JANELA_DIAS = 365
@@ -52,7 +53,8 @@ def _janelas(inicio: date, fim: date) -> list[tuple[date, date]]:
 
 
 def _celula(texto: str | None, limite: int = 90) -> str:
-    texto = " ".join((texto or "").split()).replace("|", "/")
+    # Texto de terceiros vai para `evals/` (versionado): CPF mascarado antes de tudo.
+    texto = " ".join(str(sanitizar(texto or "")).split()).replace("|", "/")
     return texto if len(texto) <= limite else texto[: limite - 1] + "…"
 
 
@@ -120,7 +122,12 @@ async def principal() -> int:
                             break
                         pagina += 1
                     paginadas += pagina > 1
-                except (ComprasError, ErroValidacao) as exc:
+                except ErroValidacao as exc:
+                    if exc.tipo == "teto_requisicoes":
+                        raise
+                    falhas += 1
+                    log.warning("auditoria_falha", pdm=pdm, erro=exc.tipo)
+                except ComprasError as exc:
                     falhas += 1
                     log.warning("auditoria_falha", pdm=pdm, erro=type(exc).__name__)
 
@@ -153,7 +160,12 @@ async def principal() -> int:
         "",
         f"- Atas vigentes com ao menos um item de PDM de TI (endpoint em lote): **{len(achadas)}**",
         f"- Dessas, classificadas como TI pela carga: **{len(achadas & ti)}**",
-        f"- **Recall medido: {recall:.1%}**; falsos negativos: **{len(perdidas)}**",
+        (
+            f"- **Recall medido: {recall:.1%}**; falsos negativos: **{len(perdidas)}**"
+            if not falhas
+            else f"- **INCONCLUSIVO**: {falhas} consultas falharam; recall parcial {recall:.1%}, "
+            f"falsos negativos vistos: {len(perdidas)}"
+        ),
         f"- Consultas com falha: {falhas}; janelas paginadas: {paginadas} (a paginação da API "
         "pode omitir registros, então o número de achadas é um piso)",
         "",
@@ -187,6 +199,9 @@ async def principal() -> int:
     RAIZ_EVALS.mkdir(exist_ok=True)
     destino = RAIZ_EVALS / f"arp_{hoje.strftime('%Y%m%d')}.md"
     destino.write_text("\n".join(linhas), encoding="utf-8")
+    if falhas:
+        log.error("auditoria_inconclusiva", arquivo=str(destino), falhas=falhas)
+        return 1
     log.info("auditoria_ok", arquivo=str(destino), recall=round(recall, 4), perdidas=len(perdidas))
     return 0
 

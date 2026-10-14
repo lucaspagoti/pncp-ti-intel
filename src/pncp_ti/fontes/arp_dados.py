@@ -17,7 +17,6 @@ from typing import Any
 from pncp_ti.classificar.in05 import Decisao, classificar_ata, normalizar
 from pncp_ti.classificar.regra import objeto_ata_tem_sinal_ti
 from pncp_ti.fontes.siga_csv import ErroValidacao
-from pncp_ti.mask import mascarar_ni
 from pncp_ti.privacy import identificar_fornecedor, sanitizar
 
 # Campos sem os quais o contrato da API mudou: falhar alto em vez de publicar vazio.
@@ -141,10 +140,15 @@ def validar_contrato(registros: Sequence[Mapping[str, Any]], campos: Iterable[st
 
 
 def mapear_ata(bruto: Mapping[str, Any], hoje: date) -> AtaArp | None:
-    """Converte uma ata; `None` descarta (sem identificador ou sem data de fim)."""
+    """Converte uma ata; `None` descarta (sem identificador, sem fim ou com início inválido).
+
+    Início preenchido e inválido (ex.: `2026-02-31`) não pode virar "início desconhecido",
+    porque a view trata início nulo como já vigente (mesma regra de quarentena da R1).
+    """
     id_origem = _texto(bruto.get("numeroControlePncpAta"))
     fim = _data(bruto.get("dataVigenciaFinal"))
-    if not id_origem or fim is None:
+    inicio = _data(bruto.get("dataVigenciaInicial"))
+    if not id_origem or fim is None or (inicio is None and bruto.get("dataVigenciaInicial")):
         return None
     if abs((fim - hoje).days) > FIM_ANOMALO_DIAS:
         raise ErroValidacao("data_anomala", f"fim de vigência {fim} fora do esperado")
@@ -160,7 +164,7 @@ def mapear_ata(bruto: Mapping[str, Any], hoje: date) -> AtaArp | None:
         orgao=_texto(bruto.get("nomeOrgao")),
         objeto=_texto(bruto.get("objeto")),
         licitacao=f"{compra}/{ano}" if compra and ano else compra or ano,
-        inicio=_data(bruto.get("dataVigenciaInicial")),
+        inicio=inicio,
         fim=fim,
         status_origem=status,
         vigente_na_origem=not excluida and not cancelada,
@@ -185,16 +189,20 @@ def mapear_item(bruto: Mapping[str, Any]) -> ItemArp | None:
     ni = bruto.get("niFornecedor")
     digitos = "".join(c for c in str(ni or "") if c.isdigit())
     tipo_pessoa = "PJ" if len(digitos) == 14 else "PF"
-    # CPF completo só existe em memória: a identidade guardada é HMAC e a chave usa o mascarado.
+    # CPF completo só existe em memória: identidade e chave usam o HMAC, nunca o documento.
     identidade = identificar_fornecedor(
         {"niFornecedor": ni, "tipoPessoa": tipo_pessoa, "numeroControlePNCP": ata_id}
     )
-    ni_mascarado = mascarar_ni(str(ni), tipo_pessoa) if ni else ""
     descricao = _texto(bruto.get("descricaoItem"))
     valor = _decimal(bruto.get("valorUnitario"))
     return ItemArp(
         chave=_chave_item(
-            ata_id, numero, _texto(bruto.get("codigoItem")), ni_mascarado or "", descricao
+            # Identidade HMAC: distingue CPFs com os mesmos dígitos visíveis e não é enumerável.
+            ata_id,
+            numero,
+            _texto(bruto.get("codigoItem")),
+            identidade or "",
+            descricao,
         ),
         ata_id_origem=ata_id,
         id_item=numero,

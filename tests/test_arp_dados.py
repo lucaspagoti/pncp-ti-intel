@@ -114,3 +114,17 @@ def test_catalogo_nao_reverte_exclusao_explicita_do_anexo():
 def test_item_fora_do_catalogo_nao_vira_ti():
     itens = [mapear_item(d.item("1", "1", "Caneta", pdm=77777))]
     assert not decidir_ata("Material de expediente", itens, CATALOGO).is_ti
+
+
+def test_inicio_preenchido_e_invalido_descarta_a_ata():
+    bruto = d.ata("9", "Notebooks")
+    bruto["dataVigenciaInicial"] = "2026-02-31"
+    assert mapear_ata(bruto, d.hoje()) is None
+
+
+def test_cpfs_distintos_com_mesma_mascara_nao_colidem_na_chave():
+    # 123.***.**9-09 nos dois: só os dígitos do meio mudam.
+    a = mapear_item(d.item("1", "1", "Serviço", ni="12345678909"))
+    b = mapear_item(d.item("1", "1", "Serviço", ni="12300000909"))
+    assert a.chave != b.chave
+    assert "12345678909" not in a.chave and "12300000909" not in b.chave
