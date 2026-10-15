@@ -76,7 +76,7 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
   anexo, inclusive telefonia, pontos de rede e videomonitoramento.
 - Link de origem: processo SEI + CSV de origem. O SIGA não tem URL pública por ata conhecida.
 
-**Status:** implementada e medida na branch `feat/r1-siga-rj` (PR #5); falta o merge.
+**Status:** concluída (PR #5 e #6 mergeados em 13/10/2026).
 
 ## R2 · Ingestão Dados Abertos ARP
 
@@ -91,6 +91,14 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 **Critério de aceite**
 - Idempotência; atas = `totalRegistros` (±1%); amostra de 10 atas conferida contra o
   `linkAtaPNCP`; itens com preço unitário; relatório de recall por PDM em `evals/`.
+
+**Resultado (14/10/2026):** 1ª carga real com 146.134 atas listadas contra 148.575 declaradas
+(as 2.515 sem identificador do PNCP ficam fora, ADR 0021), 6.161 atas de TI vigentes e 22.636
+itens. Conferência de 10 atas contra o PNCP: 10/10 em vigência, situação e preço. Recall por PDM
+de TI: **59%** (3.035 de 5.142 atas com item do grupo 70); o furo são atas com objeto genérico
+que não viram candidatas (`evals/arp_20261014.md`). Timer diário instalado no homelab (03:00).
+
+**Status:** concluída (PR #7).
 
 ## R3 · Busca PNCP por termos de TI
 

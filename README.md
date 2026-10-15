@@ -24,18 +24,22 @@ Plano: `docs/PLANO.md`. Fases: `docs/FASES.md`. Decisões: `docs/adr/`.
 
 ## Status
 
-**Mudança de arquitetura em 13/10/2026 (ADR 0016).** O snapshot nacional PNCP `/v1/atas` (F2) foi
-encerrado sem aceite: cerca de 484 mil atas em páginas de 50, duas cargas fracassadas e nenhuma
-publicada. O projeto passou a usar três fontes em lote e uma web própria. **R0** (replanejamento e
-remoção do adaptador antigo) está em andamento na branch `refactor/fontes-atas`. **R1** (ingestão do
-SIGA RJ) é a próxima. Ver `docs/FASES.md` e `LEIA-ME-CODEX.md`.
+**Arquitetura (ADR 0016):** três fontes em lote de atas de registro de preços de TI vigentes (SIGA RJ,
+Compras.gov.br ARP e, na R3, busca PNCP) e uma web própria. O snapshot nacional PNCP `/v1/atas`
+foi abandonado em 13/10/2026.
 
-**R1 (ingestão do SIGA RJ) implementada** na branch `feat/r1-siga-rj` (ADR 0019): carga de 36 s,
-11.662 atas, 52.013 itens e 138.254 participantes; 24 atas de TI vigentes em 13/10/2026 (critério: Anexo Único da
-IN PRODERJ 05/2024). Precisão e recall de 100% sobre o censo, rotulado pelo anexo (ver as
-ressalvas em `evals/siga_20261013.md`). `make ingest FONTE=siga` roda a carga; `ARGS=--forcar` reclassifica com os mesmos arquivos.
+- **R1 — SIGA RJ** (ADR 0019): 11.663 atas, 52.014 itens e 138.255 participantes; 24 atas de TI
+  vigentes em 14/10/2026 (critério: Anexo Único da IN PRODERJ 05/2024). Precisão e recall de 100%
+  sobre o censo rotulado pelo anexo (ressalvas em `evals/siga_20261013.md`).
+- **R2 — Compras.gov.br ARP** (ADR 0020 e 0021): 1ª carga real em 14/10/2026, com 146.134 atas
+  vigentes listadas (148.575 declaradas pela API; 2.515 vêm sem identificador do PNCP), **6.161
+  atas de TI vigentes** e 22.636 itens com preço. Critério de TI: anexo da IN 05 ou catálogo
+  (CATMAT grupo 70 / CATSER). Conferência de 10 atas contra o PNCP: 10/10. Recall por PDM de TI:
+  59% (atas com objeto genérico escapam; ver `evals/arp_20261014.md`).
+- **Carga diária** às 03:00 por systemd timer (`scripts/carga_diaria.sh`, `docs/operacao-timer.md`):
+  SIGA e depois ARP. A ARP é incremental (reaproveita os itens das atas sem mudança).
 
-O banco local está no schema da migração 0005 (aplicada após backup restaurado em banco temporário).
+`make ingest FONTE=siga|arp` roda uma carga manualmente. O banco local está na migração 0006.
 
 ## Como rodar
 
