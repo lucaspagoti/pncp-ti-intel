@@ -32,6 +32,8 @@ class Settings:
     ingest_password: str | None
     reader_password: str | None
     requests_per_second: float
+    arp_requests_per_second: float
+    arp_max_requisicoes: int
 
 
 def exigir(valor: str | None, nome: str) -> str:
@@ -56,6 +58,8 @@ def get_settings() -> Settings:
         ingest_password=os.environ.get("PNCP_TI_INGEST_PASSWORD"),
         reader_password=os.environ.get("PNCP_TI_READER_PASSWORD"),
         requests_per_second=float(os.environ.get("PNCP_REQUESTS_PER_SECOND", "2")),
+        arp_requests_per_second=float(os.environ.get("ARP_REQUESTS_PER_SECOND", "1.5")),
+        arp_max_requisicoes=int(os.environ.get("ARP_MAX_REQUISICOES", "20000")),
     )
 
 

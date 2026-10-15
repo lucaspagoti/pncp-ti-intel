@@ -76,19 +76,29 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
   anexo, inclusive telefonia, pontos de rede e videomonitoramento.
 - Link de origem: processo SEI + CSV de origem. O SIGA não tem URL pública por ata conhecida.
 
-**Status:** implementada e medida na branch `feat/r1-siga-rj` (PR #5); falta o merge.
+**Status:** concluída (PR #5 e #6 mergeados em 13/10/2026).
 
 ## R2 · Ingestão Dados Abertos ARP
 
-**Entregas**
-- `fontes/arp.py` sobre o `DadosAbertosClient` do `compras-mcp`: atas vigentes (duas janelas de
-  365 dias ou `1.2_consultarARP_FimVigencia`), filtro de TI, depois itens (`2_consultarARPItem`) só
-  das atas de TI.
-- Motor `ingest/executar.py` generalizado (hoje está acoplado ao `PNCPClient`). Fila
-  reprocessável, com limite de taxa.
+**Entregas** (ADR 0020)
+- `fontes/arp.py` sobre o `DadosAbertosClient` do `compras-mcp`: atas vigentes em três janelas de
+  365 dias (`1.2_consultarARP_FimVigencia`), itens só das candidatas (`2.1_consultarARPItem_Id`),
+  critério de TI composto (anexo da IN 05 ou catálogo CATMAT 70/CATSER) e troca atômica.
+- Migração 0006 (`vigente_na_origem`, campos da ARP) e remoção do ingestor legado por página.
+- Timer systemd diário às 03:00 (`deploy/systemd/`, `scripts/carga_diaria.sh`), SIGA e ARP
+  independentes, com ping opcional no Uptime Kuma.
 
 **Critério de aceite**
-- Idempotência; amostra conferida contra o `linkAtaPNCP`; itens com preço unitário.
+- Idempotência; atas = `totalRegistros` (±1%); amostra de 10 atas conferida contra o
+  `linkAtaPNCP`; itens com preço unitário; relatório de recall por PDM em `evals/`.
+
+**Resultado (14/10/2026):** 1ª carga real com 146.134 atas listadas contra 148.575 declaradas
+(as 2.515 sem identificador do PNCP ficam fora, ADR 0021), 6.161 atas de TI vigentes e 22.636
+itens. Conferência de 10 atas contra o PNCP: 10/10 em vigência, situação e preço. Recall por PDM
+de TI: **59%** (3.035 de 5.142 atas com item do grupo 70); o furo são atas com objeto genérico
+que não viram candidatas (`evals/arp_20261014.md`). Timer diário instalado no homelab (03:00).
+
+**Status:** concluída (PR #7).
 
 ## R3 · Busca PNCP por termos de TI
 

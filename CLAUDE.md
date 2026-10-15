@@ -49,7 +49,10 @@ antes de propor qualquer fase.
 1. Ler `docs/FASES.md` e propor o plano da fase em modo plan. **Esperar aprovação do Lucas.**
 2. Implementar em branch própria, com testes junto do código.
 3. Revisão por subagente independente (segurança + critério de aceite).
-4. Lucas demonstra o critério de aceite; merge e tag.
+4. Claude abre o PR, espera o CI ficar verde e roda a revisão do Codex (`codex exec`, somente
+   leitura); corrige os achados.
+5. Lucas demonstra o critério de aceite e **autoriza o merge no chat** ("posso mergear o PR #N?").
+   Sem esse "sim", nunca mergear. Merge commit, apagar a branch remota e atualizar `master`.
 
 Definição de pronto: testes e lint verdes; critério de aceite demonstrado; README e este arquivo
 atualizados; ADR para toda decisão nova; nenhum segredo no repositório.
@@ -66,8 +69,9 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo. Sem Windows/W
 - `make down` — derruba os containers do projeto.
 - `make test` — lint (`ruff check`), format-check (`ruff format --check`) e testes (`pytest`).
 - `make migrate` — aplica as migrações do Alembic (schema, papéis, views).
-- `make ingest FONTE=siga` — carga do SIGA RJ (R1). `arp` (R2) e `pncp_busca` (R3) ainda retornam
-  erro, para não sinalizar carga concluída.
+- `make ingest FONTE=siga|arp [ARGS=--validar]` — carga do SIGA RJ (R1) ou do Compras ARP (R2).
+  `pncp_busca` (R3) ainda retorna erro, para não sinalizar carga concluída.
+- `scripts/carga_diaria.sh` — o que o timer systemd roda às 03:00 (`docs/operacao-timer.md`).
 - `make backup` — `pg_dump` do container para `backups/` (fora do Git).
 - `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.
 - `make amostra` — exporta `insumos/rotulagem_siga.csv` (censo das atas vigentes) para rotular TI.

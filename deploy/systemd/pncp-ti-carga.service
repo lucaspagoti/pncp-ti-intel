@@ -1,0 +1,12 @@
+[Unit]
+Description=Carga diária pncp-ti-intel (SIGA RJ e Compras ARP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projetos/pncp-ti-intel
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/projetos/pncp-ti-intel/scripts/carga_diaria.sh
+TimeoutStartSec=5h
+Nice=10

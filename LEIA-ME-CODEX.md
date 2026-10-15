@@ -979,3 +979,32 @@ metas D6/G2.
 PR aberto: https://github.com/lucaspagoti/pncp-ti-intel/pull/3. Commit de implementação `6d7bd23`.
 Varredura local `pre-commit run gitleaks --all-files` aprovada; CI remoto iniciado no PR.
 Não houve merge, migração de desenvolvimento ou carga nacional nesta revisão.
+
+## R2 — Compras.gov.br ARP + timer diário — 13 e 14/10/2026 (Claude/Opus 5.5 + Codex)
+
+Decisões do Lucas (rodada de perguntas de 13/10): critério de TI = anexo da IN 05 **ou** catálogo
+(CATMAT grupo 70 / CATSER), sem reverter exclusões do anexo; ingestor legado removido; itens só das
+candidatas, com auditoria por PDM; carga diária às 03:00 no mesmo PR; fluxo de PR com revisão do
+Codex e merge autorizado no chat (registrado no `CLAUDE.md`).
+
+Achados de campo (ADR 0020 e 0021):
+- A paginação da API ARP repete e omite registros (682 de 6.979 numa janela de 2 semanas). A
+  listagem divide as janelas até caber numa página (fim da vigência, depois data de assinatura), e
+  a completude dos itens de cada ata é conferida por identidade estável da linha (sem campos
+  mutáveis).
+- A API limita a ~100 req/min (429 com 36 s de espera); a taxa é 1,5 req/s.
+- 2.515 atas (1,7%) vêm sem `numeroControlePncpAta`. A noite de 13/10 falhou 9 vezes por isso
+  (erro determinístico). As candidatas sem id são recuperadas pelo endpoint de itens em lote
+  (97 recuperadas na 1ª carga); as demais ficam contadas em `atas_sem_controle_pncp`.
+- Itens incrementais: reaproveita os da carga ativa quando a ata não mudou, renova 1/7 por dia,
+  tem checkpoint diário em `data/arp/` e, em falha de busca, usa os itens anteriores marcando a
+  versão antiga para a próxima carga rebuscar.
+
+Resultado: 1ª carga real em 14/10 às 20:03, com 146.134 atas, 6.161 de TI vigentes e 22.636 itens
+em 30 min (com checkpoint). Seis rodadas de revisão do Codex (`logs/codex_review_*.md`, fora do
+Git); todos os achados foram corrigidos, com testes. Timer `pncp-ti-carga.timer` instalado como
+unit de usuário, com linger ativo. Conferência de 10 atas contra o PNCP: 10/10. Recall por PDM de
+TI: 59% (atas com objeto genérico não viram candidatas); proposta R2.1 em `evals/arp_20261014.md`.
+
+Pendente fora da R2: notificação do Uptime Kuma por WhatsApp (sessão do WAHA `STOPPED`; o monitor
+Push já existe e a URL está no `.env`).
