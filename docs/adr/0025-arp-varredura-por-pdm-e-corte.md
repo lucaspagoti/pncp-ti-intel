@@ -16,21 +16,31 @@ notebook e microcomputador, parque tecnológico, manutenção de equipamentos) p
 ## Decisão
 
 1. **Varredura por PDM** como segunda fonte de candidatas: uma consulta por PDM do grupo 70 e
-   janela de 365 dias de início de vigência em `2_consultarARPItem` (`codigoPdm`). A varredura
-   é **semanal e retomável**: janelas de 365 dias fixas na semana ISO e um checkpoint por par
-   (PDM, janela) em `data/arp/varredura-<ano>-W<semana>.jsonl`. A API chega a 10–30 s por
-   consulta, então a carga tem um **orçamento de tempo** (`ARP_VARREDURA_MINUTOS`, padrão 45): o
-   que não couber continua na noite seguinte, e uma semana completa não gasta nenhuma
-   requisição de varredura nos outros dias. Consulta que falha conta em `varredura_falhas`, não
-   derruba a carga e é repetida na noite seguinte (só reduz candidatas enquanto isso).
+   janela de 365 dias de início de vigência em `2_consultarARPItem` (`codigoPdm`). A janela que
+   pagina é partida ao meio até caber numa página (a paginação da API perde um registro por
+   fronteira, ADR 0021); só uma janela de 1 dia que ainda pagina fica marcada em
+   `varredura_incompletas`. A varredura é um **ciclo retomável**: janelas de 365 dias fixas a
+   partir do dia em que o ciclo começa e um checkpoint por par (PDM, janela) em
+   `data/arp/varredura-<data>.jsonl`, sem seguir links e com modo 0600. A API chega a 10–30 s
+   por consulta, então a carga tem um **orçamento de tempo** (`ARP_VARREDURA_MINUTOS`, padrão
+   45, valendo também no meio de um par paginado): o que não couber continua na noite seguinte,
+   mesmo atravessando a semana. Um ciclo completo não gasta requisição nos dias seguintes e só
+   recomeça passados 7 dias. O ciclo só vale como completo se todos os pares existem no arquivo
+   (um marcador `completa` sozinho, depois de linha truncada, não vale). O cache guarda tudo que a
+   API devolve, sem filtrar pelas atas do dia. Consulta que falha conta em `varredura_falhas`,
+   não derruba a carga e é repetida na noite seguinte.
 2. **Corte de precisão** (`insumos/regra_ti_arp.json`, versionado, revisado pelo Lucas): a ata só
-   vira TI por itens de catálogo se **≥ 50% dos itens** forem de TI **ou** tiver ao menos um item
-   de **PDM central** (toda a classe 7010 de computadores e servidores, mais switch, roteador,
-   firewall, impressoras laser/multifuncional/jato de tinta/monocromática e scanner). O
-   pré-corte usa `quantidadeItens` da listagem e evita buscar itens das incidentais; o corte final
-   usa os itens de fato buscados. O objeto e o anexo da IN 05 continuam valendo primeiro.
-3. `motivo_ti` registra a conta: `catmat70:pdm8435@item:central` ou `...:prop2de4`;
-   `catalogo_incidental` marca a ata que teve item de TI e não passou no corte.
+   vira TI por itens de catálogo se **≥ 50% dos itens** (contados por `id_item`, não por linha de
+   fornecedor) forem de TI **ou** tiver ao menos um item de **PDM central** (toda a classe 7010 de
+   computadores e servidores, mais switch, roteador, firewall, impressoras
+   laser/multifuncional/jato de tinta/monocromática e scanner). O objeto e o anexo da IN 05
+   continuam valendo primeiro. O **pré-corte** da varredura usa `quantidadeItens` da listagem
+   com folga (metade do limiar; contagem ausente ou menor que os achados sempre confere) só para
+   decidir de quais atas buscar itens; o corte final usa os itens buscados. Quem já tinha itens na
+   carga anterior continua candidata, então uma varredura parcial não derruba TI já classificada.
+3. `motivo_ti` registra o item que decidiu e a conta: `catmat70:pdm8435@item:central` ou
+   `...:prop2de4`; `catalogo_incidental` marca a ata cujos itens foram buscados e não passaram
+   no corte (as descartadas no pré-corte não têm itens e ficam como `sem_sinal`).
 4. A auditoria (`evals/arp_<data>.md`) passa a medir o recall **pelo critério** (atas que passam no
    corte) e a reportar quantas são incidentais.
 5. Os parâmetros ficam em arquivo, e não no código, para poderem ser calibrados com rótulos

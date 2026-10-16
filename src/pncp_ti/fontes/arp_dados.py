@@ -290,14 +290,18 @@ def decidir_ata(
     decisao = classificar_ata(objeto, sorted({i.nome_pdm for i in itens if i.nome_pdm}))
     if decisao.is_ti or decisao.motivo != "sem_sinal":
         return decisao
-    motivos = [m for m in (_ti_por_catalogo(i, catalogo) for i in itens) if m]
-    if not motivos:
+    decisivos = [(i, m) for i in itens if (m := _ti_por_catalogo(i, catalogo))]
+    if not decisivos:
         return decisao
-    tem_central = any(i.codigo_pdm in regra.pdms_centrais for i in itens)
-    if not regra.passa(len(motivos), len(itens), tem_central):
+    # Um item com vários fornecedores vira várias linhas: conta-se por `id_item`.
+    itens_ti = {i.id_item for i, _ in decisivos}
+    itens_total = {i.id_item for i in itens}
+    central = next(((i, m) for i, m in decisivos if i.codigo_pdm in regra.pdms_centrais), None)
+    if not regra.passa(len(itens_ti), len(itens_total), central is not None):
         return Decisao(False, "catalogo_incidental")
-    prefixo = "central" if tem_central else f"prop{len(motivos)}de{len(itens)}"
-    return Decisao(True, f"{motivos[0]}:{prefixo}")
+    if central:
+        return Decisao(True, f"{central[1]}:central")
+    return Decisao(True, f"{decisivos[0][1]}:prop{len(itens_ti)}de{len(itens_total)}")
 
 
 __all__ = [

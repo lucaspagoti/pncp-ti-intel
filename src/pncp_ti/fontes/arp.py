@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import os
 import re
 import time
 from collections import Counter, defaultdict
@@ -84,7 +85,7 @@ LIMITE_CONFLITO_ID = 0.01  # mesmo id com número de ata diferente
 LIMITE_SEM_ITEM = 0.05  # candidatas sem item (inclui falhas de busca)
 
 ANOS_VARREDURA_MAXIMO = 5
-FORMATO_VARREDURA = 2
+FORMATO_VARREDURA = 3
 FORMATO_CACHE = 2  # muda quando o mapeamento do item ou a regra de completude mudam
 # Erros que se repetem iguais numa nova tentativa: dado ou contrato da API, não rede.
 ERROS_DETERMINISTICOS = frozenset(
@@ -570,14 +571,17 @@ async def buscar_itens(
 class Varredura:
     """Itens de TI do catálogo por ata, achados pelo endpoint em lote com `codigoPdm` (R2.1).
 
-    `itens` guarda `(codigoPdm, numeroItem)` distintos: a paginação repete registros.
-    `pendentes` conta os pares (PDM, janela) que o orçamento de tempo deixou para a próxima noite.
+    `itens` guarda `(codigoPdm, numeroItem)` distintos: a paginação repete registros. Fica tudo
+    que a API devolve (o filtro de vigentes é de quem usa), para o cache não depender de quais
+    atas estavam na listagem do dia em que a consulta foi feita.
     """
 
     itens: dict[str, set[tuple[int, str]]] = field(default_factory=dict)
+    nomes: dict[int, str] = field(default_factory=dict)
     falhas: int = 0
-    paginadas: int = 0
-    pendentes: int = 0
+    incompletas: int = 0  # janela de 1 dia ainda paginada: a API perde 1 registro por fronteira
+    pendentes: int = 0  # pares que o orçamento de tempo deixou para a próxima noite
+    completa: bool = False  # todos os pares do ciclo foram consultados com sucesso
 
     def adicionar(self, ata: str, pdm: int, numero: str) -> None:
         self.itens.setdefault(ata, set()).add((pdm, numero))
@@ -587,76 +591,119 @@ class Varredura:
 
 
 Janela = tuple[int, date, date]  # (índice, início mínimo, início máximo)
+Achados = list[tuple[str, str]]  # (numeroControlePncpAta, numeroItem)
 
 
-def janelas_da_semana(segunda: date, quantidade: int) -> list[Janela]:
-    """Janelas de 365 dias fixas na semana ISO, para o progresso valer entre as noites.
+class _PrazoEsgotado(Exception):
+    pass
 
-    A de índice 0 termina no domingo da semana; as seguintes voltam no tempo sem sobrepor.
+
+def janelas_do_ciclo(ancora: date, quantidade: int) -> list[Janela]:
+    """Janelas de 365 dias fixas a partir do dia em que o ciclo começou.
+
+    Datas fixas fazem o progresso valer entre as noites (e entre semanas). A de índice 0 termina
+    seis dias depois da âncora; as seguintes voltam no tempo sem sobrepor.
     """
     resultado = []
     for k in range(quantidade):
-        fim = segunda + timedelta(days=6 - JANELA_DIAS * k)
+        fim = ancora + timedelta(days=6 - JANELA_DIAS * k)
         resultado.append((k, fim - timedelta(days=JANELA_DIAS - 1), fim))
     return resultado
 
 
-def quantidade_de_janelas(segunda: date, primeiro_inicio: date | None) -> int:
+def quantidade_de_janelas(ancora: date, primeiro_inicio: date | None) -> int:
     """Janelas necessárias para chegar ao início mais antigo das vigentes (teto de 5 anos)."""
     if primeiro_inicio is None:
         return 1
-    limite = segunda - timedelta(days=365 * ANOS_VARREDURA_MAXIMO)
-    alvo = max(primeiro_inicio, limite)
-    dias = (segunda + timedelta(days=6) - alvo).days
+    alvo = max(primeiro_inicio, ancora - timedelta(days=365 * ANOS_VARREDURA_MAXIMO))
+    dias = (ancora + timedelta(days=6) - alvo).days
     return max(1, -(-(dias + 1) // JANELA_DIAS))
+
+
+async def _consultar(
+    client: Any,
+    orcamento: _Orcamento,
+    pdm: int,
+    minimo: date,
+    maximo: date,
+    prazo: float | None,
+) -> tuple[Achados, str, bool]:
+    """Todos os itens de um PDM na janela; parte a janela ao meio se a resposta pagina.
+
+    A paginação da API repete um registro por fronteira de página (ADR 0021): janela que cabe
+    numa página não perde nada. Se uma janela de 1 dia ainda pagina, devolve `incompleto`.
+    O prazo vale a cada requisição: um par grande não passa do orçamento de tempo.
+    """
+
+    def conferir_prazo() -> None:
+        if prazo is not None and time.monotonic() >= prazo:
+            raise _PrazoEsgotado
+
+    filtros = {
+        "codigoPdm": pdm,
+        "dataVigenciaInicialMin": minimo.isoformat(),
+        "dataVigenciaInicialMax": maximo.isoformat(),
+    }
+    conferir_prazo()
+    resposta = await _pagina(client, orcamento, ROTA_ITENS_LOTE, 1, **filtros)
+    registros, _, paginas = validar_pagina(resposta, 1)
+    if paginas > 1 and minimo < maximo:
+        meio = minimo + (maximo - minimo) // 2
+        a, nome_a, inc_a = await _consultar(client, orcamento, pdm, minimo, meio, prazo)
+        b, nome_b, inc_b = await _consultar(
+            client, orcamento, pdm, meio + timedelta(days=1), maximo, prazo
+        )
+        return a + b, nome_a or nome_b, inc_a or inc_b
+    achados: Achados = []
+    nome = ""
+    pagina = 1
+    while True:
+        for r in registros:
+            ata, numero = r.get("numeroControlePncpAta"), r.get("numeroItem")
+            if ata and numero is not None and r.get("itemExcluido") is not True:
+                achados.append((str(ata), str(numero)))
+                nome = nome or str(r.get("nomePdm") or "")
+        if pagina >= paginas:
+            return achados, nome, paginas > 1
+        pagina += 1
+        conferir_prazo()
+        resposta = await _pagina(client, orcamento, ROTA_ITENS_LOTE, pagina, **filtros)
+        registros, _, paginas = validar_pagina(resposta, pagina)
 
 
 async def varrer_pdm(
     client: Any,
     orcamento: _Orcamento,
     pdms: Iterable[int],
-    vigentes: Container[str],
     janelas: Sequence[Janela],
     feitos: Container[tuple[int, int]] = frozenset(),
-    ao_concluir: Callable[[int, int, list[tuple[str, str]]], None] | None = None,
+    ao_concluir: Callable[[int, int, Achados, str, bool], None] | None = None,
     prazo: float | None = None,
 ) -> Varredura:
     """Uma consulta por (PDM de TI, janela de início de vigência); pula os pares já feitos.
 
     Falha de uma consulta conta em `falhas`, não derruba a carga e deixa o par para a próxima
     execução (a varredura só acrescenta candidatas). O teto de requisições, esse sim, sobe.
-    `prazo` (instante `time.monotonic()`) para de começar pares novos: o resto vira `pendentes`.
+    `prazo` (instante de `time.monotonic()`) interrompe também no meio de um par: o par
+    interrompido não é gravado e, com os seguintes, vira `pendentes`.
     """
     varredura = Varredura()
+    parado = False
     for pdm in sorted(pdms):
         for k, minimo, maximo in janelas:
             if (pdm, k) in feitos:
                 continue
-            if prazo is not None and time.monotonic() >= prazo:
+            if parado:
                 varredura.pendentes += 1
                 continue
-            filtros = {
-                "codigoPdm": pdm,
-                "dataVigenciaInicialMin": minimo.isoformat(),
-                "dataVigenciaInicialMax": maximo.isoformat(),
-            }
-            achados: list[tuple[str, str]] = []
-            pagina = 1
             try:
-                while True:
-                    resposta = await _pagina(client, orcamento, ROTA_ITENS_LOTE, pagina, **filtros)
-                    registros, _, paginas = validar_pagina(resposta, pagina)
-                    for r in registros:
-                        ata, numero = r.get("numeroControlePncpAta"), r.get("numeroItem")
-                        if (
-                            ata in vigentes
-                            and numero is not None
-                            and r.get("itemExcluido") is not True
-                        ):
-                            achados.append((str(ata), str(numero)))
-                    if pagina >= paginas:
-                        break
-                    pagina += 1
+                achados, nome, incompleto = await _consultar(
+                    client, orcamento, pdm, minimo, maximo, prazo
+                )
+            except _PrazoEsgotado:
+                parado = True
+                varredura.pendentes += 1
+                continue
             except ErroValidacao as exc:
                 if exc.tipo == "teto_requisicoes":
                     raise
@@ -667,35 +714,54 @@ async def varrer_pdm(
                 varredura.falhas += 1
                 log.warning("arp_varredura_falha", pdm=pdm, erro=type(exc).__name__)
                 continue
-            varredura.paginadas += pagina > 1
+            varredura.incompletas += incompleto
             for ata, numero in achados:
                 varredura.adicionar(ata, pdm, numero)
+            if nome:
+                varredura.nomes[pdm] = nome
             if ao_concluir:
-                ao_concluir(pdm, k, achados)
+                ao_concluir(pdm, k, achados, nome, incompleto)
     return varredura
 
 
+_CICLO = re.compile(r"varredura-(\d{4}-\d{2}-\d{2})\.jsonl")
+CICLO_DIAS = 7  # um ciclo completo só recomeça passada uma semana
+
+
 class CacheVarredura:
-    """Progresso da varredura da semana ISO em disco (uma linha JSON por par PDM x janela).
+    """Progresso do ciclo de varredura em disco (uma linha JSON por par PDM x janela).
 
     A varredura de todos os PDMs é a parte lenta (a API chega a 10-30 s por consulta): o
-    progresso fica guardado e a próxima noite continua de onde parou. Trocar a versão do
-    catálogo recomeça. A primeira linha é o cabeçalho; `{"completa": true}` fecha a semana.
+    progresso fica guardado e a próxima noite continua de onde parou, mesmo se atravessar a
+    semana. Um ciclo só recomeça depois de completo e com mais de `CICLO_DIAS` dias. Trocar a
+    versão do catálogo recomeça. A primeira linha é o cabeçalho; `{"completa": true}` fecha.
+    Os arquivos são criados sem seguir links e com modo 0600.
     """
 
     def __init__(self, caminho: Path) -> None:
         self.caminho = caminho
 
     @classmethod
-    def da_semana(cls, hoje: date, raiz: Path = RAIZ_CACHE) -> CacheVarredura:
+    def do_ciclo(cls, hoje: date, raiz: Path = RAIZ_CACHE) -> CacheVarredura:
         raiz.mkdir(parents=True, exist_ok=True, mode=0o700)
-        ano, semana, _ = hoje.isocalendar()
-        return cls(raiz / f"varredura-{ano}-W{semana:02d}.jsonl")
+        if raiz.stat().st_uid == os.getuid():
+            raiz.chmod(0o700)
+        ciclos = sorted(
+            (m.group(1), p)
+            for p in raiz.glob("varredura-*.jsonl")
+            if (m := _CICLO.fullmatch(p.name))
+        )
+        if ciclos:
+            data, ultimo = ciclos[-1]
+            completo = _terminou(ultimo)
+            if not completo or (hoje - date.fromisoformat(data)).days < CICLO_DIAS:
+                return cls(ultimo)
+        return cls(raiz / f"varredura-{hoje.isoformat()}.jsonl")
 
     def ler(
         self, versao_catalogo: str
-    ) -> tuple[int, set[tuple[int, int]], dict[str, set[tuple[int, str]]], bool] | None:
-        """`(janelas, pares feitos, itens, completa)`, ou `None` se não há progresso válido."""
+    ) -> tuple[date, int, set[tuple[int, int]], Varredura, bool] | None:
+        """`(âncora, janelas, feitos, progresso, completa)`, ou `None` sem progresso válido."""
         try:
             linhas = self.caminho.read_text(encoding="utf-8").splitlines()
             cabecalho = json.loads(linhas[0])
@@ -705,7 +771,7 @@ class CacheVarredura:
             ):
                 return None
             feitos: set[tuple[int, int]] = set()
-            itens: dict[str, set[tuple[int, str]]] = {}
+            progresso = Varredura()
             completa = False
             for linha in linhas[1:]:
                 try:
@@ -717,31 +783,61 @@ class CacheVarredura:
                     continue
                 pdm, k = int(registro["pdm"]), int(registro["k"])
                 feitos.add((pdm, k))
+                progresso.incompletas += bool(registro.get("inc"))
+                if registro.get("nome"):
+                    progresso.nomes[pdm] = str(registro["nome"])
                 for ata, numero in registro["itens"]:
-                    itens.setdefault(str(ata), set()).add((pdm, str(numero)))
-            return int(cabecalho["janelas"]), feitos, itens, completa
+                    progresso.adicionar(str(ata), pdm, str(numero))
+            ancora = date.fromisoformat(cabecalho["ancora"])
+            return ancora, int(cabecalho["janelas"]), feitos, progresso, completa
         except (OSError, ValueError, KeyError, TypeError, IndexError):
             return None
 
-    def iniciar(self, versao_catalogo: str, janelas: int) -> None:
-        cabecalho = {"formato": FORMATO_VARREDURA, "catalogo": versao_catalogo, "janelas": janelas}
-        self.caminho.write_text(json.dumps(cabecalho) + "\n", encoding="utf-8")
-        self.caminho.chmod(0o600)
+    def _anexar(self, texto: str, *, recomecar: bool = False) -> None:
+        flags = (
+            os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | (os.O_TRUNC if recomecar else os.O_APPEND)
+        )
+        descritor = os.open(self.caminho, flags, 0o600)
+        with os.fdopen(descritor, "a" if not recomecar else "w", encoding="utf-8") as arquivo:
+            # Cauda truncada por queda de energia: fecha a linha antes de acrescentar a nova.
+            if not recomecar and arquivo.tell() and not _termina_em_quebra(self.caminho):
+                arquivo.write("\n")
+            arquivo.write(texto + "\n")
 
-    def _anexar(self, registro: dict[str, Any]) -> None:
-        with self.caminho.open("a", encoding="utf-8") as arquivo:
-            arquivo.write(json.dumps(registro) + "\n")
+    def iniciar(self, versao_catalogo: str, ancora: date, janelas: int) -> None:
+        cabecalho = {
+            "formato": FORMATO_VARREDURA,
+            "catalogo": versao_catalogo,
+            "ancora": ancora.isoformat(),
+            "janelas": janelas,
+        }
+        self._anexar(json.dumps(cabecalho), recomecar=True)
 
-    def gravar_par(self, pdm: int, k: int, achados: list[tuple[str, str]]) -> None:
-        self._anexar({"pdm": pdm, "k": k, "itens": achados})
+    def gravar_par(self, pdm: int, k: int, achados: Achados, nome: str, incompleto: bool) -> None:
+        registro = {"pdm": pdm, "k": k, "nome": nome, "inc": incompleto, "itens": achados}
+        self._anexar(json.dumps(registro))
 
     def marcar_completa(self) -> None:
-        self._anexar({"completa": True})
+        self._anexar(json.dumps({"completa": True}))
 
     def limpar_antigos(self) -> None:
         for antigo in self.caminho.parent.glob("varredura-*.json*"):
             if antigo != self.caminho:
                 antigo.unlink(missing_ok=True)
+
+
+def _termina_em_quebra(caminho: Path) -> bool:
+    with caminho.open("rb") as arquivo:
+        arquivo.seek(-1, os.SEEK_END)
+        return arquivo.read(1) == b"\n"
+
+
+def _terminou(caminho: Path) -> bool:
+    try:
+        ultima = [linha for linha in caminho.read_text(encoding="utf-8").splitlines() if linha][-1]
+        return json.loads(ultima).get("completa") is True
+    except (OSError, ValueError, IndexError, AttributeError):
+        return False
 
 
 async def obter_varredura(
@@ -753,42 +849,45 @@ async def obter_varredura(
     cache: CacheVarredura | None,
     minutos: float | None = None,
 ) -> Varredura:
-    """Varredura semanal por PDM, retomável: continua o que a semana já fez e respeita o prazo."""
-    segunda = hoje - timedelta(days=hoje.weekday())
+    """Varredura por PDM retomável: continua o ciclo em andamento e respeita o prazo da noite."""
     inicios = [a.inicio for a in atas.values() if a.inicio]
     versao = catalogo.versao()
     estado = cache.ler(versao) if cache else None
     if estado is None:
-        janelas = quantidade_de_janelas(segunda, min(inicios) if inicios else None)
+        ancora = hoje
+        janelas = quantidade_de_janelas(ancora, min(inicios) if inicios else None)
         feitos: set[tuple[int, int]] = set()
-        anteriores: dict[str, set[tuple[int, str]]] = {}
-        completa = False
+        resultado = Varredura()
         if cache:
-            cache.iniciar(versao, janelas)
+            try:
+                cache.iniciar(versao, ancora, janelas)
+            except OSError as exc:  # sem cache o ciclo vale só para esta noite
+                log.warning("arp_varredura_cache_indisponivel", erro=type(exc).__name__)
+                cache = None
     else:
-        janelas, feitos, anteriores, completa = estado
-    resultado = Varredura(itens={a: set(i) for a, i in anteriores.items()})
-    if completa:
-        return resultado
+        ancora, janelas, feitos, resultado, completa = estado
+        esperados = {(p, k) for p in catalogo.pdms for k in range(janelas)}
+        if completa and esperados <= feitos:
+            resultado.completa = True
+            return resultado
     prazo = time.monotonic() + minutos * 60 if minutos else None
     nova = await varrer_pdm(
         client,
         orcamento,
         catalogo.pdms,
-        atas,
-        janelas_da_semana(segunda, janelas),
+        janelas_do_ciclo(ancora, janelas),
         feitos,
         cache.gravar_par if cache else None,
         prazo,
     )
     for ata, itens in nova.itens.items():
         resultado.itens.setdefault(ata, set()).update(itens)
-    resultado.falhas, resultado.paginadas, resultado.pendentes = (
-        nova.falhas,
-        nova.paginadas,
-        nova.pendentes,
-    )
-    if cache and nova.falhas == 0 and nova.pendentes == 0:
+    resultado.nomes.update(nova.nomes)
+    resultado.falhas = nova.falhas
+    resultado.incompletas += nova.incompletas
+    resultado.pendentes = nova.pendentes
+    resultado.completa = nova.falhas == 0 and nova.pendentes == 0
+    if cache and resultado.completa:
         cache.marcar_completa()
     return resultado
 
@@ -796,17 +895,18 @@ async def obter_varredura(
 def candidatas_da_varredura(
     varredura: Varredura, atas: Mapping[str, AtaArp], regra: RegraArp
 ) -> tuple[set[str], int]:
-    """Atas que passam no pré-corte (proporção pelo `quantidadeItens` da listagem ou PDM central).
+    """Atas que passam no pré-corte (PDM central ou proporção com folga sobre `quantidadeItens`).
 
-    Devolve `(candidatas, incidentais)`: as incidentais têm item de TI mas não passam no corte
-    e não gastam requisição de itens.
+    O pré-corte é generoso de propósito: a contagem da listagem pode divergir dos itens reais, e
+    o corte final (`decidir_ata`) olha os itens buscados. Devolve `(candidatas, incidentais)`:
+    as incidentais têm item de TI mas não passam e não gastam requisição de itens.
     """
     passam: set[str] = set()
     for ata, itens in varredura.itens.items():
         if ata not in atas:
             continue
         central = any(pdm in regra.pdms_centrais for pdm, _ in itens)
-        if regra.passa(len(itens), atas[ata].quantidade_itens or 0, central):
+        if regra.passa_pre(len(itens), atas[ata].quantidade_itens or 0, central):
             passam.add(ata)
     return passam, sum(1 for a in varredura.itens if a in atas) - len(passam)
 
@@ -1203,7 +1303,8 @@ async def _coletar_com(
         client, orcamento, catalogo, atas, hoje, cache_varredura, minutos_varredura
     )
     da_varredura, incidentais = candidatas_da_varredura(varredura, atas, regra)
-    candidatas = sorted(do_objeto | da_varredura)
+    # Quem já tinha itens na carga anterior continua candidata: varredura parcial não derruba TI.
+    candidatas = sorted(do_objeto | da_varredura | {i for i in anteriores if i in atas})
     reaproveitar = [
         i
         for i in candidatas
@@ -1259,6 +1360,8 @@ async def _coletar_com(
         varredura_incidentais=incidentais,
         varredura_falhas=varredura.falhas,
         varredura_pendentes=varredura.pendentes,
+        varredura_incompletas=varredura.incompletas,
+        varredura_completa=int(varredura.completa),
     )
     return preparado, _geracao(atas, catalogo, declarado, regra)
 
@@ -1321,7 +1424,7 @@ async def principal(validar: bool) -> int:
         try:
             anteriores = await carregar_anteriores(conn)
             cache = CacheItens.do_dia(hoje)
-            cache_varredura = CacheVarredura.da_semana(hoje)
+            cache_varredura = CacheVarredura.do_ciclo(hoje)
             preparado, geracao = await coletar(
                 settings, hoje, anteriores=anteriores, cache=cache, cache_varredura=cache_varredura
             )

@@ -33,6 +33,19 @@ class RegraArp:
             return itens_ti > 0
         return itens_total > 0 and itens_ti / itens_total >= self.limiar_proporcao
 
+    def passa_pre(self, itens_ti: int, itens_total: int, tem_central: bool) -> bool:
+        """Pré-corte da varredura, com folga: decide só quais atas gastam requisição de itens.
+
+        `itens_total` vem da listagem e pode divergir dos itens reais (desconhecido, menor que
+        os achados, ou diferente): nesses casos a ata é conferida. Com a contagem plausível,
+        pede metade do limiar; o corte final (`passa`) usa os itens de fato.
+        """
+        if tem_central:
+            return itens_ti > 0
+        if itens_total <= 0 or itens_ti > itens_total:
+            return itens_ti > 0
+        return itens_ti / itens_total >= self.limiar_proporcao / 2
+
 
 def carregar_regra(caminho: Path = CAMINHO) -> RegraArp:
     try:

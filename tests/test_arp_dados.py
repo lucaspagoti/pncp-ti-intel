@@ -191,3 +191,23 @@ def test_pdm_central_classifica_mesmo_com_um_item_entre_muitos():
 
 def test_objeto_de_ti_vale_mesmo_sem_item_de_ti():
     assert decidir_ata("Aquisição de notebooks", _itens(1, 2, 3), CATALOGO, REGRA).is_ti
+
+
+def test_proporcao_conta_itens_e_nao_linhas_de_fornecedor():
+    """Revisão do Codex: item com 2 fornecedores são 2 linhas, mas 1 item."""
+    ti = [mapear_item(d.item("1", str(n), f"TI {n}", pdm=239 if n < 3 else 1)) for n in (1, 2)]
+    nao_ti = [
+        mapear_item(d.item("1", str(n), f"Outro {n}", pdm=1, ni=ni))
+        for n in (3, 4)
+        for ni in ("11222333000181", "99888777000161")
+    ]
+    catalogo = CatalogoTI(pdms=frozenset({239}), servicos={})
+    decisao = decidir_ata("Material diverso", ti + nao_ti, catalogo, REGRA)
+    assert decisao.is_ti and decisao.motivo.endswith(":prop2de4")  # 2 de 4 itens, não 2 de 6
+
+
+def test_motivo_central_aponta_o_item_central_e_nao_o_primeiro_item_de_ti():
+    catalogo = CatalogoTI(pdms=frozenset({283, 8435}), servicos={})
+    itens = _itens(283, 8435, 1, 2, 3, 4)
+    decisao = decidir_ata("Material diverso", itens, catalogo, REGRA)
+    assert decisao.is_ti and decisao.motivo == "catmat70:pdm8435@item:central"

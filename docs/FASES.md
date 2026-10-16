@@ -103,8 +103,9 @@ que não viram candidatas (`evals/arp_20261014.md`). Timer diário instalado no 
 ## R2.1 · Varredura por PDM e corte de precisão
 
 **Entregas** (ADR 0025)
-- `varrer_pdm` em `fontes/arp.py`: segunda fonte de candidatas (semanal com cache, mais os últimos
-  14 dias todo dia).
+- `varrer_pdm` em `fontes/arp.py`: segunda fonte de candidatas, em ciclo retomável com orçamento
+  de tempo (a API é lenta nas consultas por PDM). Ata nova de objeto genérico pode levar até
+  uma semana para entrar.
 - `insumos/regra_ti_arp.json` + `fontes/arp_regra.py`: ata só vira TI por itens de catálogo se
   ≥ 50% dos itens forem de TI ou tiver PDM central; `catalogo_incidental` marca o resto.
 - Auditoria mede o recall pelo critério.

@@ -51,6 +51,10 @@ def no_universo(ata: Mapping[str, Any], hoje: date) -> bool:
     )
 
 
+def _nomes_pdm(varredura: Any, ata: str) -> str:
+    return ", ".join(sorted(varredura.nomes.get(p) or f"pdm {p}" for p in varredura.pdms(ata)))
+
+
 def _celula(texto: str | None, limite: int = 90) -> str:
     # Texto de terceiros vai para `evals/` (versionado): CPF mascarado antes de tudo.
     texto = " ".join(str(sanitizar(texto or "")).split()).replace("|", "/")
@@ -104,7 +108,7 @@ async def principal() -> int:
     ) as client:
         catalogo = await carregar_catalogo(client, orcamento)
         varredura = await obter_varredura(
-            client, orcamento, catalogo, como_ata, hoje, CacheVarredura.da_semana(hoje)
+            client, orcamento, catalogo, como_ata, hoje, CacheVarredura.do_ciclo(hoje)
         )
     falhas, paginadas = varredura.falhas, varredura.paginadas
 
@@ -166,7 +170,7 @@ async def principal() -> int:
         "|---|---|---|---|",
         *(
             f"| `{i}` | {_celula(vigentes[i]['objeto'])} | "
-            f"{_celula(', '.join(sorted(varredura.pdms(i))), 60)} | {vigentes[i]['link_origem']} |"
+            f"{_celula(_nomes_pdm(varredura, i), 60)} | {vigentes[i]['link_origem']} |"
             for i in perdidas[:50]
         ),
         "",
