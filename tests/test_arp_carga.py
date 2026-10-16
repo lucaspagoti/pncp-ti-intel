@@ -805,10 +805,11 @@ async def test_varredura_acha_ata_de_objeto_generico_e_corta_a_incidental():
     assert decisoes[d.id_ata("10")][0] and decisoes[d.id_ata("10")][1].endswith(":central")
     assert decisoes[d.id_ata("12")][0] and decisoes[d.id_ata("12")][1].endswith(":prop1de2")
     assert not decisoes[d.id_ata("11")][0]  # 1 de 6 itens, nenhum central
-    assert d.id_ata("11") not in cliente.buscadas()  # incidental não gasta requisição de itens
+    assert decisoes[d.id_ata("11")][1] == "catalogo_incidental"
+    assert d.id_ata("11") in cliente.buscadas()  # sem pré-corte: o corte final usa os itens reais
     c = preparado.contagens
-    assert c["varredura_atas"] == 3 and c["varredura_candidatas_novas"] == 2
-    assert c["varredura_incidentais"] == 1 and c["varredura_falhas"] == 0
+    assert c["varredura_atas"] == 3 and c["varredura_candidatas_novas"] == 3
+    assert c["atas_incidentais"] == 1 and c["varredura_falhas"] == 0
 
 
 async def test_varredura_completa_nao_repete_nas_noites_seguintes(tmp_path):
@@ -827,41 +828,43 @@ async def test_varredura_completa_nao_repete_nas_noites_seguintes(tmp_path):
     assert preparado.decisoes[d.id_ata("10")][0]  # o cache continua alimentando as candidatas
 
 
-async def test_varredura_respeita_o_prazo_e_continua_de_onde_parou(tmp_path):
+async def test_varredura_respeita_o_prazo_mas_todo_ciclo_avanca_um_par_por_noite(tmp_path):
     cache = arp.CacheVarredura.do_ciclo(d.hoje(), tmp_path)
-    config = replace(CONFIG, arp_varredura_minutos=1e-9)  # prazo já vencido: nenhum par novo
-    sem_tempo = _cliente_varredura()
-    preparado, _ = await arp.coletar(config, d.hoje(), client=sem_tempo, cache_varredura=cache)
-    assert _chamadas_por_pdm(sem_tempo) == 0
-    assert preparado.contagens["varredura_pendentes"] >= 2
+    config = replace(CONFIG, arp_varredura_minutos=1e-9)  # prazo já vencido
+    pouco_tempo = _cliente_varredura()
+    preparado, _ = await arp.coletar(config, d.hoje(), client=pouco_tempo, cache_varredura=cache)
+    assert _chamadas_por_pdm(pouco_tempo) == 1  # só o 1º par (PDM central primeiro)
+    assert preparado.contagens["varredura_pendentes"] >= 1
     assert preparado.contagens["varredura_completa"] == 0
-    assert not preparado.decisoes[d.id_ata("10")][0]  # sem varredura, objeto genérico não entra
+    assert preparado.decisoes[d.id_ata("10")][0]  # o PDM central é o 1º da ordem
+    assert d.id_ata("12") not in {i for i, (ti, _) in preparado.decisoes.items() if ti}
     # Na noite seguinte há tempo: termina e fecha o ciclo.
     retomada = _cliente_varredura()
     preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=retomada, cache_varredura=cache)
-    assert _chamadas_por_pdm(retomada) >= 2
+    assert _chamadas_por_pdm(retomada) == 1  # só o par que faltava
     assert preparado.contagens["varredura_pendentes"] == 0
-    assert preparado.decisoes[d.id_ata("10")][0]
+    assert preparado.decisoes[d.id_ata("12")][0]
     assert '"completa": true' in cache.caminho.read_text(encoding="utf-8")
 
 
-async def test_prazo_vale_no_meio_de_um_par_paginado(monkeypatch):
-    cliente = d.ClienteFalso([], {}, pdms=[8435], tamanho=2)  # cada resposta tem 2 registros
+async def test_prazo_vale_no_meio_de_um_par_paginado_depois_do_primeiro_par(monkeypatch):
+    cliente = d.ClienteFalso([], {}, pdms=[8435, 283], tamanho=2)  # cada resposta tem 2 registros
     dia = d.hoje() - timedelta(days=30)
-    cliente.lote = [_lote_pdm(str(n), "1", 8435, dia) for n in range(8)]  # 1 dia: pagina de verdade
+    cliente.lote = [_lote_pdm(str(n), "1", pdm, dia) for n in range(8) for pdm in (8435, 283)]
     concluidos = []
-    # O prazo estoura depois da 1ª requisição do par: ele não pode terminar nem ser gravado.
-    relogio = iter([0.0, 0.0, 10_000.0])
+    # O 1º par roda sem prazo; o 2º estoura depois da sua 1ª requisição e não pode ser gravado.
+    relogio = iter([0.0, 10_000.0])
     monkeypatch.setattr(arp, "time", SimpleNamespace(monotonic=lambda: next(relogio, 10_000.0)))
     varredura = await arp.varrer_pdm(
         cliente,
         arp._Orcamento(1000.0, 1000),
-        [8435],
+        [8435, 283],
         arp.janelas_do_ciclo(d.hoje(), 1),
-        ao_concluir=lambda *a: concluidos.append(a),
+        ao_concluir=lambda pdm, *a: concluidos.append(pdm),
         prazo=1.0,
     )
-    assert varredura.pendentes == 1 and not concluidos and not varredura.itens
+    assert concluidos == [8435] and varredura.pendentes == 1
+    assert {p for _, itens in varredura.itens.items() for p, _ in itens} == {8435}
 
 
 async def test_varredura_parcial_retoma_so_os_pares_que_faltam(tmp_path):
@@ -919,11 +922,11 @@ async def test_varredura_parcial_nao_derruba_ata_que_ja_era_candidata():
     assert preparado.decisoes[d.id_ata("10")][0]  # segue TI pelo PDM central dos itens anteriores
 
 
-async def test_pre_corte_confere_ata_quando_a_contagem_da_listagem_diverge():
-    """Revisão do Codex: 1 de 2 itens reais, mas a listagem diz 3 itens: 1/3 < 50%, e ainda assim
-    a ata é conferida (folga) e passa no corte real de 1/2."""
+async def test_contagem_da_listagem_divergente_nao_perde_ata_porque_o_corte_usa_itens_reais():
+    """Revisão do Codex: 1 de 2 itens reais, mas a listagem diz 5 itens: não há pré-corte pela
+    contagem da listagem, então a ata é conferida e passa no corte real de 1/2."""
     atas = [d.ata("20", "Insumos gerais")]
-    atas[0]["quantidadeItens"] = 3
+    atas[0]["quantidadeItens"] = 5
     itens = {
         d.id_ata("20"): [d.item("20", "1", "Teclado", pdm=283), d.item("20", "2", "Caneta", pdm=77)]
     }

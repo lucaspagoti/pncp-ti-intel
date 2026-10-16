@@ -684,11 +684,13 @@ async def varrer_pdm(
 
     Falha de uma consulta conta em `falhas`, não derruba a carga e deixa o par para a próxima
     execução (a varredura só acrescenta candidatas). O teto de requisições, esse sim, sobe.
-    `prazo` (instante de `time.monotonic()`) interrompe também no meio de um par: o par
-    interrompido não é gravado e, com os seguintes, vira `pendentes`.
+    `prazo` (instante de `time.monotonic()`) interrompe também no meio de um par, mas só depois
+    do primeiro par concluído na execução: o par interrompido não é gravado e, com os
+    seguintes, vira `pendentes`.
     """
     varredura = Varredura()
     parado = False
+    concluidos = 0
     for pdm in pdms:  # a ordem é de quem chama: os PDMs centrais primeiro rendem mais cedo
         for k, minimo, maximo in janelas:
             if (pdm, k) in feitos:
@@ -697,8 +699,10 @@ async def varrer_pdm(
                 varredura.pendentes += 1
                 continue
             try:
+                # O 1º par da execução ignora o prazo: assim todo ciclo avança ao menos um par por
+                # noite, mesmo que um par sozinho leve mais que o orçamento.
                 achados, nome, incompleto = await _consultar(
-                    client, orcamento, pdm, minimo, maximo, prazo
+                    client, orcamento, pdm, minimo, maximo, prazo if concluidos else None
                 )
             except _PrazoEsgotado:
                 parado = True
@@ -719,6 +723,7 @@ async def varrer_pdm(
                 varredura.adicionar(ata, pdm, numero)
             if nome:
                 varredura.nomes[pdm] = nome
+            concluidos += 1
             if ao_concluir:
                 ao_concluir(pdm, k, achados, nome, incompleto)
     return varredura
@@ -895,23 +900,14 @@ async def obter_varredura(
     return resultado
 
 
-def candidatas_da_varredura(
-    varredura: Varredura, atas: Mapping[str, AtaArp], regra: RegraArp
-) -> tuple[set[str], int]:
-    """Atas que passam no pré-corte (PDM central ou proporção com folga sobre `quantidadeItens`).
+def candidatas_da_varredura(varredura: Varredura, atas: Mapping[str, AtaArp]) -> set[str]:
+    """Toda ata vigente com ao menos um item de TI do catálogo achado pela varredura.
 
-    O pré-corte é generoso de propósito: a contagem da listagem pode divergir dos itens reais, e
-    o corte final (`decidir_ata`) olha os itens buscados. Devolve `(candidatas, incidentais)`:
-    as incidentais têm item de TI mas não passam e não gastam requisição de itens.
+    Não há pré-corte: a contagem de itens da listagem pode divergir dos itens reais, então o
+    corte exato (`decidir_ata`) roda sobre os itens buscados. As incidentais custam a busca
+    de itens uma vez; depois os itens são reaproveitados da carga anterior.
     """
-    passam: set[str] = set()
-    for ata, itens in varredura.itens.items():
-        if ata not in atas:
-            continue
-        central = any(pdm in regra.pdms_centrais for pdm, _ in itens)
-        if regra.passa_pre(len(itens), atas[ata].quantidade_itens or 0, central):
-            passam.add(ata)
-    return passam, sum(1 for a in varredura.itens if a in atas) - len(passam)
+    return {ata for ata in varredura.itens if ata in atas}
 
 
 def validar_total(listagem: Listagem) -> None:
@@ -1082,6 +1078,7 @@ def preparar(
         "falhas_busca_itens": falhas,
         "itens_gravados": len(itens),
         "atas_ti": sum(1 for ti, _ in decisoes.values() if ti),
+        "atas_incidentais": sum(1 for _, m in decisoes.values() if m == "catalogo_incidental"),
         "atas_vigentes_ti": sum(
             1 for i, a in atas.items() if a.vigente_na_origem and decisoes[i][0]
         ),
@@ -1305,7 +1302,7 @@ async def _coletar_com(
     varredura = await obter_varredura(
         client, orcamento, catalogo, atas, hoje, cache_varredura, minutos_varredura, regra
     )
-    da_varredura, incidentais = candidatas_da_varredura(varredura, atas, regra)
+    da_varredura = candidatas_da_varredura(varredura, atas)
     # Quem já tinha itens na carga anterior continua candidata: varredura parcial não derruba TI.
     candidatas = sorted(do_objeto | da_varredura | {i for i in anteriores if i in atas})
     reaproveitar = [
@@ -1360,7 +1357,6 @@ async def _coletar_com(
         atas_itens_da_carga_anterior_por_falha=len(recuperadas),
         varredura_atas=len(varredura.itens),
         varredura_candidatas_novas=len(da_varredura - do_objeto),
-        varredura_incidentais=incidentais,
         varredura_falhas=varredura.falhas,
         varredura_pendentes=varredura.pendentes,
         varredura_incompletas=varredura.incompletas,

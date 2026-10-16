@@ -32,7 +32,6 @@ from pncp_ti.fontes.arp import (
     URL_BASE,
     CacheVarredura,
     _Orcamento,
-    candidatas_da_varredura,
     carregar_catalogo,
     obter_varredura,
 )
@@ -111,14 +110,25 @@ async def principal(minutos: float | None = None) -> int:
         varredura = await obter_varredura(
             client, orcamento, catalogo, como_ata, hoje, CacheVarredura.do_ciclo(hoje), minutos
         )
-    falhas, paginadas = varredura.falhas + varredura.pendentes, varredura.paginadas
+    falhas, incompletas = varredura.falhas + varredura.pendentes, varredura.incompletas
 
     # O mesmo pré-corte da carga: proporção pelo `quantidadeItens` ou PDM central (R2.1).
     quantidades = como_ata
     regra = REGRA_PADRAO
     ti = {i for i, a in vigentes.items() if a["is_ti"]}
     achadas = set(varredura.itens)
-    no_corte, incidentais = candidatas_da_varredura(varredura, quantidades, regra)
+    # Corte da regra pela contagem de itens da listagem (aproximação: a carga usa os itens reais).
+    no_corte = {
+        ata
+        for ata, itens in varredura.itens.items()
+        if ata in quantidades
+        and regra.passa(
+            len(itens),
+            quantidades[ata].quantidade_itens or 0,
+            any(pdm in regra.pdms_centrais for pdm, _ in itens),
+        )
+    }
+    incidentais = len(achadas & set(quantidades)) - len(no_corte)
     perdidas = sorted(no_corte - ti)
     recall = len(no_corte & ti) / len(no_corte) if no_corte else 0.0
     recall_bruto = len(achadas & ti) / len(achadas) if achadas else 0.0
@@ -159,8 +169,9 @@ async def principal(minutos: float | None = None) -> int:
             else f"- **INCONCLUSIVO**: {falhas} consultas falharam; recall parcial {recall:.1%}, "
             f"falsos negativos vistos: {len(perdidas)}"
         ),
-        f"- Consultas com falha ou pendentes: {falhas}; janelas paginadas: {paginadas} (a paginação da API "
-        "pode omitir registros, então o número de achadas é um piso)",
+        f"- Consultas com falha ou pendentes: {falhas}; janelas de 1 dia ainda paginadas: "
+        f"{incompletas} (a API perde 1 registro por fronteira de página, então o número de "
+        "achadas é um piso)",
         "",
         "Mede só o recall de material de TI pelo catálogo; serviços de TI e atas cujo item não",
         "tem PDM ficam fora. O corte usa `quantidadeItens` da listagem. Não é recall nacional.",

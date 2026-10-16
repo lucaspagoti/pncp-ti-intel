@@ -53,18 +53,3 @@ def test_arquivo_ausente_falha_alto(tmp_path):
     with pytest.raises(ErroValidacao):
         carregar_regra(tmp_path / "nao_existe.json")
     assert json.loads(CAMINHO.read_text(encoding="utf-8"))["versao"] >= 1
-
-
-@pytest.mark.parametrize(
-    ("ti", "total", "central", "esperado"),
-    [
-        (1, 4, False, True),  # 25% = metade do limiar: passa a conferir
-        (1, 5, False, False),  # 20%: abaixo da folga
-        (1, 0, False, True),  # contagem da listagem desconhecida: confere
-        (3, 2, False, True),  # achou mais itens de TI do que a listagem declara: confere
-        (1, 10, True, True),
-        (0, 0, False, False),
-    ],
-)
-def test_pre_corte_tem_folga_sobre_a_contagem_da_listagem(ti, total, central, esperado):
-    assert RegraArp(0.5, frozenset({1})).passa_pre(ti, total, central) is esperado

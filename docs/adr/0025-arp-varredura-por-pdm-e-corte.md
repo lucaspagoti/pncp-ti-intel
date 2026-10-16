@@ -25,7 +25,8 @@ notebook e microcomputador, parque tecnológico, manutenção de equipamentos) p
    por consulta, então a carga tem um **orçamento de tempo** (`ARP_VARREDURA_MINUTOS`, padrão
    45, valendo também no meio de um par paginado): o que não couber continua na noite seguinte,
    mesmo atravessando a semana. Um ciclo completo não gasta requisição nos dias seguintes e só
-   recomeça passados 7 dias. O ciclo só vale como completo se todos os pares existem no arquivo
+   recomeça passados 7 dias. Todo ciclo avança **ao menos um par por noite** (o primeiro par
+   ignora o prazo), para que um par lento nunca trave a retomada. O ciclo só vale como completo se todos os pares existem no arquivo
    (um marcador `completa` sozinho, depois de linha truncada, não vale). O cache guarda tudo que a
    API devolve, sem filtrar pelas atas do dia. Consulta que falha conta em `varredura_falhas`,
    não derruba a carga e é repetida na noite seguinte.
@@ -34,13 +35,15 @@ notebook e microcomputador, parque tecnológico, manutenção de equipamentos) p
    fornecedor) forem de TI **ou** tiver ao menos um item de **PDM central** (toda a classe 7010 de
    computadores e servidores, mais switch, roteador, firewall, impressoras
    laser/multifuncional/jato de tinta/monocromática e scanner). O objeto e o anexo da IN 05
-   continuam valendo primeiro. O **pré-corte** da varredura usa `quantidadeItens` da listagem
-   com folga (metade do limiar; contagem ausente ou menor que os achados sempre confere) só para
-   decidir de quais atas buscar itens; o corte final usa os itens buscados. Quem já tinha itens na
-   carga anterior continua candidata, então uma varredura parcial não derruba TI já classificada.
+   continuam valendo primeiro. **Não há pré-corte pela contagem da listagem**: a
+   `quantidadeItens` da listagem pode divergir dos itens reais, então toda ata vigente com ao
+   menos um item de TI achado pela varredura é candidata e o corte exato roda sobre os itens
+   buscados. As incidentais custam a busca de itens uma vez (depois são reaproveitadas da carga
+   anterior). Quem já tinha itens na carga anterior continua candidata, então uma varredura
+   parcial não derruba TI já classificada.
 3. `motivo_ti` registra o item que decidiu e a conta: `catmat70:pdm8435@item:central` ou
    `...:prop2de4`; `catalogo_incidental` marca a ata cujos itens foram buscados e não passaram
-   no corte (as descartadas no pré-corte não têm itens e ficam como `sem_sinal`).
+   no corte; a carga conta `atas_incidentais`.
 4. A auditoria (`evals/arp_<data>.md`) passa a medir o recall **pelo critério** (atas que passam no
    corte) e a reportar quantas são incidentais.
 5. Os parâmetros ficam em arquivo, e não no código, para poderem ser calibrados com rótulos
@@ -50,8 +53,9 @@ notebook e microcomputador, parque tecnológico, manutenção de equipamentos) p
 
 - A base ganha as atas de objeto genérico com TI relevante; perde as que só eram TI por item
   incidental. Parte das atas que hoje são TI "pelo catálogo" pode sair (ver o relatório da auditoria).
-- Custo: a varredura completa são ~1,3 mil a 2,7 mil consultas, uma vez por semana, repartidas
-  em quantas noites o orçamento exigir. Uma ata nova com objeto genérico pode levar até uma semana
+- Custo: a varredura completa são ~1,3 mil a 2,7 mil consultas por ciclo, repartidas em quantas
+  noites o orçamento exigir (os PDMs centrais vão primeiro), e a busca de itens das atas novas
+  (cerca de 2 mil a mais na primeira vez). Uma ata nova com objeto genérico pode levar até uma semana
   (mais as noites de varredura) para entrar; antes disso ela depende do objeto.
 - O limiar 50% e a lista de PDMs centrais são um ponto de partida, não uma verdade: serão
   ajustados com os rótulos do Lucas.

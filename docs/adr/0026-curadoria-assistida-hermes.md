@@ -57,10 +57,13 @@ traria 1 falso positivo"); (c) o Hermes redige a **proposta de ajuste** de
 `insumos/regra_ti_arp.json` ou das listas de palavras com a evidência, e a mudança entra por PR
 (Claude implementa, Codex revisa, Lucas autoriza), como qualquer mudança de regra.
 
-**5. Autonomia gradual.** Só depois de ≥ 200 rótulos e concordância ≥ 95% nos últimos 100, sem viés
-por fonte, a sugestão do Hermes de alta confiança pode decidir sozinha a zona de dúvida
-(`motivo_ti = hermes:…`), com amostra semanal de auditoria para o Lucas. Qualquer discordância
-na auditoria derruba a autonomia de volta. É reversível: o rótulo humano sempre vence.
+**5. Autonomia gradual (fase H4, só se o Lucas decidir).** Depois de ≥ 200 rótulos e
+concordância ≥ 95% nos últimos 100, sem viés por fonte, nosso código poderia aplicar a sugestão de
+alta confiança do Hermes na zona de dúvida (`motivo_ti = hermes:…`), com amostra semanal de
+auditoria. **Nessa fase a injeção de prompt volta a poder afetar a classificação** da zona de
+dúvida (e só dela): por isso a H4 exige confiança mínima, trava de segurança, concordância com os
+sinais determinísticos (a sugestão não pode contrariar com força a regra), auditoria semanal e
+um interruptor que a desliga. É reversível: o rótulo humano sempre vence.
 
 ## Riscos e controles
 
