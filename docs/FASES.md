@@ -167,7 +167,7 @@ e Caddy com Let's Encrypt é do Lucas (ADR 0024, proposta; checklist em `docs/ow
 operacional pendentes. Units com `OnFailure`, operação 08:30 e backup 09:00; o backup só
 publica depois de restaurar em banco temporário. Digest usa outbox, suprime carga inicial
 e preserva datas entre snapshots. Gancho R3 opcional via
-`contagens.resultados_por_termo` + `PNCP_TI_PNCP_TERMO`; ainda depende da integração R3.
+`contagens.resultados_por_termo` + `PNCP_TI_PNCP_TERMO`; a R3 grava o total por termo (ADR 0023), então o gancho já pode ser ligado.
 Migração **0009**, seguinte à 0008; pode precisar renumeração na integração com
 Claude. Testes de integração/restore real dependem de ambiente com Docker/Postgres
 acessíveis; não confundir testes simulados com demonstração do critério de aceite.

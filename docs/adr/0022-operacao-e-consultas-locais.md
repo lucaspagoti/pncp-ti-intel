@@ -63,7 +63,7 @@
 
 ## Integração com as branches paralelas
 
-R3 deve preencher `resultados_por_termo` com o total de origem por termo; não usar o número
+R3 preenche `resultados_por_termo` (feito, ADR 0023) com o total de origem por termo; não usar o número
 de atas depois de deduplicar. Até isso existir, deixar o termo vazio. R4 pode consultar
 `v_ata_precos_ti`; se criar `web_reader` depois da 0009, precisa conceder SELECT nessa view
 e EXECUTE em `unidade_preco_ti(text)` (runbook). Não foram alterados `fontes/pncp_busca.py`,

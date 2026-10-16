@@ -97,7 +97,7 @@ atas cuja primeira observação seja hoje. Confirmação de envio exige JSON `ok
 timeout após aceitação pode duplicar no reenvio (a bridge não oferece idempotência).
 
 Gancho PNCP opcional: `PNCP_TI_PNCP_TERMO` seleciona chave exata de
-`cargas.contagens.resultados_por_termo`. Deixe vazio até integrar R3. Normalização de preço
+`cargas.contagens.resultados_por_termo`. A R3 grava esse total por termo (ADR 0023); use um termo estável, como `notebook`. Normalização de preço
 é conservadora: somente descrição integral como unidade explícita, sem converter anual
 em mensal nem atribuir preço de franquia a página. RAG/anexos, outras fontes estaduais e
 renomeação seguem dependendo de decisão do Lucas.
