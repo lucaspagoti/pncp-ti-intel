@@ -69,8 +69,8 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo. Sem Windows/W
 - `make down` — derruba os containers do projeto.
 - `make test` — lint (`ruff check`), format-check (`ruff format --check`) e testes (`pytest`).
 - `make migrate` — aplica as migrações do Alembic (schema, papéis, views).
-- `make ingest FONTE=siga|arp [ARGS=--validar]` — carga do SIGA RJ (R1) ou do Compras ARP (R2).
-  `pncp_busca` (R3) ainda retorna erro, para não sinalizar carga concluída.
+- `make ingest FONTE=siga|arp|pncp_busca [ARGS=--validar]` — carga do SIGA RJ (R1), do Compras ARP
+  (R2) ou da busca PNCP por termos (R3, `insumos/termos_ti.txt`).
 - `scripts/carga_diaria.sh` — o que o timer systemd roda às 03:00 (`docs/operacao-timer.md`).
 - `make backup` — `pg_dump` do container para `backups/` (fora do Git).
 - `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.

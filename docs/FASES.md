@@ -113,6 +113,10 @@ que não viram candidatas (`evals/arp_20261014.md`). Timer diário instalado no 
 - Avaliar cobertura com referências independentes dos resultados da lista de termos (D6);
   registrar limites da amostra sem alegar recall nacional não demonstrado.
 
+**Status (16/10/2026):** implementada em `feat/r3-busca-pncp` (ADR 0023, migração 0007). Falta o
+Lucas revisar `insumos/termos_ti.txt` e a avaliação de cobertura com referência independente (D6),
+que não foi feita: o recall da lista de termos **não está demonstrado**.
+
 ## R4 · Web local
 
 **Entregas**

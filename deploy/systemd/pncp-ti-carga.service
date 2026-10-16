@@ -1,5 +1,5 @@
 [Unit]
-Description=Carga diária pncp-ti-intel (SIGA RJ e Compras ARP)
+Description=Carga diária pncp-ti-intel (SIGA RJ, Compras ARP e busca PNCP)
 After=network-online.target
 Wants=network-online.target
 
