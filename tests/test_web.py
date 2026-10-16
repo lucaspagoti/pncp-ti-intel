@@ -202,3 +202,23 @@ async def test_web_reader_so_le_views_e_nao_escreve(nome_banco_teste):
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 conn.execute(comando)
             conn.rollback()
+
+
+@pytest.mark.parametrize(
+    ("texto", "esperado"),
+    [
+        ("12,50", "12.50"),
+        ("12.50", "12.50"),
+        ("1.000", "1000"),
+        ("1.234,50", "1234.50"),
+        ("1.234.567", "1234567"),
+        ("0,5", "0.5"),
+        ("abc", None),
+    ],
+)
+def test_preco_aceita_formatos_e_sobrevive_a_ida_e_volta_pelo_link(texto, esperado):
+    f = consultas.ler_filtros({"preco_min": texto})
+    assert (None if f.preco_min is None else str(f.preco_min)) == esperado
+    if esperado is not None:
+        volta = consultas.ler_filtros(f.como_dict())
+        assert volta.preco_min == f.preco_min

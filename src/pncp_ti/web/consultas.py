@@ -28,6 +28,11 @@ FONTES = {"siga_rj": "SIGA RJ", "compras_arp": "Compras.gov.br", "pncp_busca": "
 ESFERAS = ("Federal", "Estadual", "Municipal", "Distrital")
 
 
+def _como_texto(valor: Decimal | None) -> str:
+    """Formato pt-BR sem milhar, para o link devolver o mesmo valor ao ser lido de novo."""
+    return "" if valor is None else format(valor, "f").replace(".", ",")
+
+
 @dataclass(frozen=True, slots=True)
 class Filtros:
     q: str = ""
@@ -50,8 +55,8 @@ class Filtros:
             "uf": self.uf,
             "orgao": self.orgao,
             "vence_ate": self.vence_ate.isoformat() if self.vence_ate else "",
-            "preco_min": str(self.preco_min) if self.preco_min is not None else "",
-            "preco_max": str(self.preco_max) if self.preco_max is not None else "",
+            "preco_min": _como_texto(self.preco_min),
+            "preco_max": _como_texto(self.preco_max),
             "ordem": self.ordem if self.ordem != "relevancia" else "",
         }
         return {k: v for k, v in bruto.items() if v}
@@ -69,10 +74,18 @@ def _data(valor: str | None) -> date | None:
 
 
 def _preco(valor: str | None) -> Decimal | None:
+    """Aceita `1.234,50` (pt-BR), `1234,50` e `12.50` (ponto com 1–2 casas é decimal)."""
     if not valor:
         return None
+    texto = valor.strip()
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    elif texto.count(".") == 1 and len(texto.rsplit(".", 1)[1]) != 3:
+        pass  # ponto decimal
+    else:
+        texto = texto.replace(".", "")  # `1.000` ou `1.234.567`: separador de milhar
     try:
-        numero = Decimal(valor.strip().replace(".", "").replace(",", "."))
+        numero = Decimal(texto)
     except InvalidOperation:
         return None
     return numero if numero.is_finite() and 0 <= numero < Decimal("1e12") else None
