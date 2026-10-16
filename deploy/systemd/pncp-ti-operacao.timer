@@ -1,0 +1,10 @@
+[Unit]
+Description=Frescor e digest pncp-ti-intel às 08:30 (Brasília)
+
+[Timer]
+OnCalendar=*-*-* 08:30:00 America/Sao_Paulo
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

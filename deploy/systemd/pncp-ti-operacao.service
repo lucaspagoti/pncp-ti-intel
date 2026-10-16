@@ -1,0 +1,12 @@
+[Unit]
+Description=Alertas de frescor e digest de novas atas de TI
+After=network-online.target
+OnFailure=pncp-ti-falha@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projetos/pncp-ti-intel
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/uv run python -m pncp_ti.operacao diaria
+TimeoutStartSec=30min
+Nice=10

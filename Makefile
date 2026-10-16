@@ -1,4 +1,4 @@
-.PHONY: up down test migrate ingest web backup restore amostra eval
+.PHONY: up down test migrate ingest web backup restore amostra eval operacao mcp
 
 up: ## Sobe o Postgres local (porta só em 127.0.0.1).
 	@test -f .env || (echo "Falta o .env. Copie .env.example para .env e preencha antes de rodar 'make up'." && exit 1)
@@ -40,3 +40,9 @@ amostra: ## Exporta insumos/rotulagem_siga.csv (censo das atas vigentes) para ro
 eval: ## Precisão/recall do filtro de TI: make eval ROT=insumos/rotulagem_siga.csv
 	@test -n "$(ROT)" || (echo "Informe ROT=<csv rotulado>." >&2 && exit 1)
 	uv run python -m pncp_ti.classificar.avaliar $(ROT)
+
+operacao: ## Alertas e digest (bridge configurada no .env).
+	uv run python -m pncp_ti.operacao diaria
+
+mcp: ## Servidor MCP local, somente stdio e SELECT em views.
+	uv run python -m pncp_ti.mcp_server

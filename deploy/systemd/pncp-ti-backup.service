@@ -1,0 +1,12 @@
+[Unit]
+Description=Backup Postgres com restauração em banco temporário
+After=network-online.target
+OnFailure=pncp-ti-falha@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projetos/pncp-ti-intel
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/projetos/pncp-ti-intel/scripts/backup_postgres.sh
+TimeoutStartSec=2h
+Nice=10
