@@ -35,6 +35,7 @@ class Settings:
     requests_per_second: float
     arp_requests_per_second: float
     arp_max_requisicoes: int
+    arp_varredura_minutos: float
 
 
 def exigir(valor: str | None, nome: str) -> str:
@@ -62,6 +63,7 @@ def get_settings() -> Settings:
         requests_per_second=float(os.environ.get("PNCP_REQUESTS_PER_SECOND", "2")),
         arp_requests_per_second=float(os.environ.get("ARP_REQUESTS_PER_SECOND", "1.5")),
         arp_max_requisicoes=int(os.environ.get("ARP_MAX_REQUISICOES", "20000")),
+        arp_varredura_minutos=float(os.environ.get("ARP_VARREDURA_MINUTOS", "45")),
     )
 
 

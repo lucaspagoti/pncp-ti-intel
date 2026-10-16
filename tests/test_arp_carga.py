@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import timedelta
+from types import SimpleNamespace
 
 import arp_dados as d
 import psycopg
@@ -63,7 +64,7 @@ async def test_carga_completa_publica_so_ti_vigente_e_classifica_com_motivo(
     assert all(a["link_origem"].startswith("https://pncp.gov.br/") for a in atas)
     cur = await conn_ingest.execute("SELECT id_origem, motivo_ti FROM atas ORDER BY id_origem")
     motivos = {r["id_origem"]: r["motivo_ti"] for r in await cur.fetchall()}
-    assert motivos[d.id_ata("2")] == "catmat70:pdm239@item"
+    assert motivos[d.id_ata("2")].startswith("catmat70:pdm239@item")
     assert motivos[d.id_ata("1")].endswith("@objeto")
     await conn_ingest.commit()
 
@@ -749,3 +750,316 @@ async def test_linha_atualizada_entre_paginas_nao_esconde_linha_omitida(tmp_path
     preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente, cache=cache)
     assert preparado.contagens["falhas_busca_itens"] == 1
     assert d.id_ata("1") not in cache.ler()
+
+
+def _lote_pdm(numero: str, n_item: str, pdm: int, inicio):
+    return {
+        **d.item(numero, n_item, f"Item {n_item}", pdm=pdm, nome_pdm=f"PDM {pdm}"),
+        "dataVigenciaInicial": inicio.isoformat(),
+    }
+
+
+def _cenario_varredura():
+    """Atas de objeto genérico: uma central, uma incidental (1 de 6) e uma na proporção (1 de 2)."""
+    atas = [
+        d.ata("10", "Material de expediente"),
+        d.ata("11", "Material de consumo diverso"),
+        d.ata("12", "Insumos diversos"),
+    ]
+    atas[1]["quantidadeItens"] = 6
+    inicio = d.hoje() - timedelta(days=30)
+    itens = {
+        d.id_ata("10"): [d.item("10", "1", "Item central", pdm=8435, nome_pdm="PRODUTO CENTRAL")],
+        d.id_ata("11"): [
+            d.item("11", "1", "Mouse pad", pdm=283),
+            *(d.item("11", str(n), "Caneta", pdm=77) for n in (2, 3, 4, 5, 6)),
+        ],
+        d.id_ata("12"): [
+            d.item("12", "1", "Teclado", pdm=283),
+            d.item("12", "2", "Caneta", pdm=77),
+        ],
+    }
+    lote = [
+        _lote_pdm("10", "1", 8435, inicio),
+        _lote_pdm("11", "1", 283, inicio),
+        _lote_pdm("12", "1", 283, inicio),
+    ]
+    return atas, itens, lote
+
+
+def _cliente_varredura():
+    atas, itens, lote = _cenario_varredura()
+    cliente = d.ClienteFalso(atas, itens, pdms=[283, 8435])
+    cliente.lote = lote
+    return cliente
+
+
+def _chamadas_por_pdm(cliente) -> int:
+    return sum(1 for rota, f in cliente.filtros if rota == arp.ROTA_ITENS_LOTE and "codigoPdm" in f)
+
+
+async def test_varredura_acha_ata_de_objeto_generico_e_corta_a_incidental():
+    cliente = _cliente_varredura()
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente)
+    decisoes = preparado.decisoes
+    assert decisoes[d.id_ata("10")][0] and decisoes[d.id_ata("10")][1].endswith(":central")
+    assert decisoes[d.id_ata("12")][0] and decisoes[d.id_ata("12")][1].endswith(":prop1de2")
+    assert not decisoes[d.id_ata("11")][0]  # 1 de 6 itens, nenhum central
+    assert decisoes[d.id_ata("11")][1] == "catalogo_incidental"
+    assert d.id_ata("11") in cliente.buscadas()  # sem pré-corte: o corte final usa os itens reais
+    c = preparado.contagens
+    assert c["varredura_atas"] == 3 and c["varredura_candidatas_novas"] == 3
+    assert c["atas_incidentais"] == 1 and c["varredura_falhas"] == 0
+
+
+async def test_varredura_completa_nao_repete_nas_noites_seguintes(tmp_path):
+    cache = arp.CacheVarredura.do_ciclo(d.hoje(), tmp_path)
+    primeiro = _cliente_varredura()
+    await arp.coletar(CONFIG, d.hoje(), client=primeiro, cache_varredura=cache)
+    assert cache.caminho.is_file() and oct(cache.caminho.stat().st_mode)[-3:] == "600"
+    assert _chamadas_por_pdm(primeiro) >= 2  # 2 PDMs x ao menos 1 janela
+    segundo = _cliente_varredura()
+    cache = arp.CacheVarredura.do_ciclo(d.hoje() + timedelta(days=1), tmp_path)
+    preparado, _ = await arp.coletar(
+        CONFIG, d.hoje() + timedelta(days=1), client=segundo, cache_varredura=cache
+    )
+    assert _chamadas_por_pdm(segundo) == 0  # ciclo completo: zero requisições de varredura
+    assert preparado.contagens["varredura_completa"] == 1
+    assert preparado.decisoes[d.id_ata("10")][0]  # o cache continua alimentando as candidatas
+
+
+async def test_varredura_respeita_o_prazo_mas_todo_ciclo_avanca_um_par_por_noite(tmp_path):
+    cache = arp.CacheVarredura.do_ciclo(d.hoje(), tmp_path)
+    config = replace(CONFIG, arp_varredura_minutos=1e-9)  # prazo já vencido
+    pouco_tempo = _cliente_varredura()
+    preparado, _ = await arp.coletar(config, d.hoje(), client=pouco_tempo, cache_varredura=cache)
+    assert _chamadas_por_pdm(pouco_tempo) == 1  # só o 1º par (PDM central primeiro)
+    assert preparado.contagens["varredura_pendentes"] >= 1
+    assert preparado.contagens["varredura_completa"] == 0
+    assert preparado.decisoes[d.id_ata("10")][0]  # o PDM central é o 1º da ordem
+    assert d.id_ata("12") not in {i for i, (ti, _) in preparado.decisoes.items() if ti}
+    # Na noite seguinte há tempo: termina e fecha o ciclo.
+    retomada = _cliente_varredura()
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=retomada, cache_varredura=cache)
+    assert _chamadas_por_pdm(retomada) == 1  # só o par que faltava
+    assert preparado.contagens["varredura_pendentes"] == 0
+    assert preparado.decisoes[d.id_ata("12")][0]
+    assert '"completa": true' in cache.caminho.read_text(encoding="utf-8")
+
+
+async def test_prazo_vale_no_meio_de_um_par_paginado_depois_do_primeiro_par(monkeypatch):
+    cliente = d.ClienteFalso([], {}, pdms=[8435, 283], tamanho=2)  # cada resposta tem 2 registros
+    dia = d.hoje() - timedelta(days=30)
+    cliente.lote = [_lote_pdm(str(n), "1", pdm, dia) for n in range(8) for pdm in (8435, 283)]
+    concluidos = []
+    # O 1º par roda sem prazo; o 2º estoura depois da sua 1ª requisição e não pode ser gravado.
+    relogio = iter([0.0, 10_000.0])
+    monkeypatch.setattr(arp, "time", SimpleNamespace(monotonic=lambda: next(relogio, 10_000.0)))
+    varredura = await arp.varrer_pdm(
+        cliente,
+        arp._Orcamento(1000.0, 1000),
+        [8435, 283],
+        arp.janelas_do_ciclo(d.hoje(), 1),
+        ao_concluir=lambda pdm, *a: concluidos.append(pdm),
+        prazo=1.0,
+    )
+    assert concluidos == [8435] and varredura.pendentes == 1
+    assert {p for _, itens in varredura.itens.items() for p, _ in itens} == {8435}
+
+
+async def test_varredura_parcial_retoma_so_os_pares_que_faltam(tmp_path):
+    cache = arp.CacheVarredura.do_ciclo(d.hoje(), tmp_path)
+    cliente = _cliente_varredura()
+    original = cliente.list_resource
+    falhou = {"uma_vez": False}
+
+    async def uma_falha(rota, **kw):
+        if rota == arp.ROTA_ITENS_LOTE and kw.get("codigoPdm") == 8435 and not falhou["uma_vez"]:
+            falhou["uma_vez"] = True
+            raise ComprasServerError("HTTP 503")
+        return await original(rota, **kw)
+
+    cliente.list_resource = uma_falha
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente, cache_varredura=cache)
+    assert preparado.contagens["varredura_falhas"] == 1
+    assert '"completa"' not in cache.caminho.read_text(encoding="utf-8")  # ciclo incompleto
+    segundo = _cliente_varredura()
+    await arp.coletar(CONFIG, d.hoje(), client=segundo, cache_varredura=cache)
+    pares = {
+        f["codigoPdm"] for r, f in segundo.filtros if r == arp.ROTA_ITENS_LOTE and "codigoPdm" in f
+    }
+    assert pares == {8435}  # só o PDM que falhou volta a ser consultado
+    assert '"completa": true' in cache.caminho.read_text(encoding="utf-8")
+
+
+async def test_varredura_que_falha_nao_derruba_a_carga(tmp_path):
+    cache = arp.CacheVarredura.do_ciclo(d.hoje(), tmp_path)
+    cliente = _cliente_varredura()
+    original = cliente.list_resource
+
+    async def sem_lote_por_pdm(rota, **kw):
+        if rota == arp.ROTA_ITENS_LOTE and "codigoPdm" in kw:
+            raise ComprasServerError("HTTP 503")
+        return await original(rota, **kw)
+
+    cliente.list_resource = sem_lote_por_pdm
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente, cache_varredura=cache)
+    assert preparado.contagens["varredura_falhas"] > 0
+    assert preparado.contagens["atas_unicas"] == 3  # a carga segue; só as candidatas diminuem
+
+
+async def test_varredura_parcial_nao_derruba_ata_que_ja_era_candidata():
+    """Revisão do Codex: sem varredura, quem já tinha itens na carga anterior continua avaliada."""
+    cliente = _cliente_varredura()
+    itens_anteriores = [arp.mapear_item(i) for i in cliente.itens[d.id_ata("10")]]
+    atas, _, _ = _cenario_varredura()
+    versao = atas[0]["dataHoraAtualizacao"]
+    anteriores = {d.id_ata("10"): (versao, itens_anteriores)}
+    config = replace(CONFIG, arp_varredura_minutos=1e-9)  # varredura sem tempo algum
+    preparado, _ = await arp.coletar(
+        config, d.hoje(), client=cliente, anteriores=anteriores, cache_varredura=None
+    )
+    assert preparado.decisoes[d.id_ata("10")][0]  # segue TI pelo PDM central dos itens anteriores
+
+
+async def test_contagem_da_listagem_divergente_nao_perde_ata_porque_o_corte_usa_itens_reais():
+    """Revisão do Codex: 1 de 2 itens reais, mas a listagem diz 5 itens: não há pré-corte pela
+    contagem da listagem, então a ata é conferida e passa no corte real de 1/2."""
+    atas = [d.ata("20", "Insumos gerais")]
+    atas[0]["quantidadeItens"] = 5
+    itens = {
+        d.id_ata("20"): [d.item("20", "1", "Teclado", pdm=283), d.item("20", "2", "Caneta", pdm=77)]
+    }
+    cliente = d.ClienteFalso(atas, itens, pdms=[283, 8435])
+    cliente.lote = [_lote_pdm("20", "1", 283, d.hoje() - timedelta(days=30))]
+    preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente)
+    assert preparado.decisoes[d.id_ata("20")][0]
+    assert preparado.decisoes[d.id_ata("20")][1].endswith(":prop1de2")
+
+
+async def test_janela_que_pagina_e_partida_ate_caber_numa_pagina(tmp_path):
+    cliente = _cliente_varredura()
+    cliente.tamanho = 3
+    inicio = d.hoje() - timedelta(days=40)
+    cliente.lote = [  # 6 itens de um PDM em dias diferentes: uma janela só paginaria e perderia
+        _lote_pdm(str(30 + n), "1", 8435, inicio + timedelta(days=n * 6)) for n in range(6)
+    ]
+    cliente.atas = [d.ata(str(30 + n), "Insumos gerais") for n in range(6)]
+    varredura = await arp.varrer_pdm(
+        cliente,
+        arp._Orcamento(1000.0, 1000),
+        [8435],
+        arp.janelas_do_ciclo(d.hoje(), 1),
+    )
+    assert len(varredura.itens) == 6  # nenhum perdido na fronteira de página
+    assert varredura.incompletas == 0
+
+
+async def test_janela_de_um_dia_que_ainda_pagina_fica_marcada_como_incompleta():
+    cliente = _cliente_varredura()
+    cliente.tamanho = 2
+    dia = d.hoje() - timedelta(days=10)
+    cliente.lote = [_lote_pdm(str(40 + n), "1", 8435, dia) for n in range(5)]  # tudo no mesmo dia
+    varredura = await arp.varrer_pdm(
+        cliente, arp._Orcamento(1000.0, 1000), [8435], arp.janelas_do_ciclo(d.hoje(), 1)
+    )
+    assert varredura.incompletas >= 1
+    assert varredura.itens  # o que veio fica; o relatório mostra a lacuna
+
+
+def test_cache_cola_nova_linha_depois_de_cauda_truncada_e_nao_aceita_completa_sem_pares(tmp_path):
+    cache = arp.CacheVarredura.do_ciclo(d.hoje(), tmp_path)
+    cache.iniciar("v1", d.hoje(), 1)
+    cache.gravar_par(8435, 0, [(d.id_ata("10"), "1")], "NOTEBOOK", False)
+    with cache.caminho.open("a", encoding="utf-8") as arquivo:
+        arquivo.write('{"pdm": 283, "k"')  # queda no meio da escrita, sem quebra de linha
+    cache.gravar_par(283, 0, [(d.id_ata("11"), "1")], "MOUSE", False)  # não pode colar na cauda
+    _, _, feitos, progresso, _ = cache.ler("v1")
+    assert feitos == {(8435, 0), (283, 0)}
+    assert progresso.nomes == {8435: "NOTEBOOK", 283: "MOUSE"}
+
+
+def test_cache_de_outra_versao_do_catalogo_ou_corrompido_recomeca(tmp_path):
+    cache = arp.CacheVarredura.do_ciclo(d.hoje(), tmp_path)
+    cache.iniciar("catalogo-antigo", d.hoje(), 3)
+    cache.gravar_par(8435, 0, [(d.id_ata("10"), "1")], "NOTEBOOK", True)
+    assert cache.ler("catalogo-novo") is None
+    ancora, janelas, feitos, progresso, completa = cache.ler("catalogo-antigo")
+    assert (ancora, janelas, feitos, completa) == (d.hoje(), 3, {(8435, 0)}, False)
+    assert progresso.itens == {d.id_ata("10"): {(8435, "1")}} and progresso.incompletas == 1
+    cache.caminho.write_text("lixo", encoding="utf-8")
+    assert cache.ler("catalogo-antigo") is None
+
+
+def test_ciclo_incompleto_atravessa_a_semana_e_completo_so_recomeca_depois_de_7_dias(tmp_path):
+    hoje = d.hoje()
+    primeiro = arp.CacheVarredura.do_ciclo(hoje, tmp_path)
+    primeiro.iniciar("v1", hoje, 2)
+    # Incompleto: continua o mesmo arquivo mesmo semanas depois (o progresso não se perde).
+    assert (
+        arp.CacheVarredura.do_ciclo(hoje + timedelta(days=20), tmp_path).caminho == primeiro.caminho
+    )
+    primeiro.marcar_completa()
+    assert (
+        arp.CacheVarredura.do_ciclo(hoje + timedelta(days=6), tmp_path).caminho == primeiro.caminho
+    )
+    novo = arp.CacheVarredura.do_ciclo(hoje + timedelta(days=7), tmp_path)
+    assert novo.caminho != primeiro.caminho and novo.caminho.name.startswith("varredura-")
+
+
+def test_completa_sem_todos_os_pares_nao_vale(tmp_path):
+    """O marcador `completa` sozinho (par perdido por truncamento) não fecha o ciclo."""
+    cache = arp.CacheVarredura.do_ciclo(d.hoje(), tmp_path)
+    cache.iniciar("v1", d.hoje(), 1)
+    cache.marcar_completa()
+    ancora, janelas, feitos, _, completa = cache.ler("v1")
+    esperados = {(p, k) for p in (283, 8435) for k in range(janelas)}
+    assert completa and not esperados <= feitos
+
+
+def test_cache_nao_segue_link_simbolico(tmp_path):
+    alvo = tmp_path / "alheio.txt"
+    alvo.write_text("nao mexer", encoding="utf-8")
+    cache = arp.CacheVarredura(tmp_path / "varredura-2026-10-16.jsonl")
+    cache.caminho.symlink_to(alvo)
+    with pytest.raises(OSError):
+        cache.iniciar("v1", d.hoje(), 1)
+    assert alvo.read_text(encoding="utf-8") == "nao mexer"
+
+
+def test_janelas_do_ciclo_nao_sobrepoem_e_cobrem_ate_o_inicio_mais_antigo():
+    ancora = d.hoje()
+    janelas = arp.janelas_do_ciclo(ancora, 3)
+    assert janelas[0][2] == ancora + timedelta(days=6)
+    for (_, ini_a, _), (_, _, fim_b) in zip(janelas, janelas[1:], strict=False):
+        assert fim_b == ini_a - timedelta(days=1)
+    assert all((fim - ini).days == 364 for _, ini, fim in janelas)
+    antigo = ancora - timedelta(days=500)
+    n = arp.quantidade_de_janelas(ancora, antigo)
+    assert arp.janelas_do_ciclo(ancora, n)[-1][1] <= antigo
+    assert arp.quantidade_de_janelas(ancora, None) == 1
+
+
+async def test_falha_na_primeira_tentativa_nao_desliga_o_prazo_das_seguintes(monkeypatch):
+    """Revisão do Codex: com a API fora, só a 1ª tentativa ignora o prazo; as outras o respeitam."""
+    cliente = d.ClienteFalso([], {}, pdms=[8435, 283, 239])
+    original = cliente.list_resource
+    consultas = []
+
+    async def sempre_fora(rota, **kw):
+        if rota == arp.ROTA_ITENS_LOTE and "codigoPdm" in kw:
+            consultas.append(kw["codigoPdm"])
+            raise ComprasServerError("HTTP 503")
+        return await original(rota, **kw)
+
+    cliente.list_resource = sempre_fora
+    monkeypatch.setattr(arp, "time", SimpleNamespace(monotonic=lambda: 10_000.0))  # prazo vencido
+    varredura = await arp.varrer_pdm(
+        cliente,
+        arp._Orcamento(1000.0, 1000),
+        [8435, 283, 239],
+        arp.janelas_do_ciclo(d.hoje(), 1),
+        prazo=1.0,
+    )
+    assert consultas == [8435]  # só a 1ª tentativa; as outras ficam pendentes
+    assert varredura.falhas == 1 and varredura.pendentes == 2

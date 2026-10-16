@@ -10,18 +10,19 @@ banco; escreve `evals/arp_<data>.md`.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import random
 from collections import defaultdict
 from collections.abc import Mapping
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import structlog
 from compras_mcp.clients.dados_abertos import DadosAbertosClient
-from compras_mcp.errors import ComprasError
 
 from pncp_ti.config import get_settings
 from pncp_ti.db import conectar
@@ -29,29 +30,17 @@ from pncp_ti.fontes.arp import (
     FONTE,
     TENTATIVAS_HTTP,
     URL_BASE,
+    CacheVarredura,
     _Orcamento,
-    _pagina,
     carregar_catalogo,
+    obter_varredura,
 )
-from pncp_ti.fontes.arp_dados import validar_pagina
-from pncp_ti.fontes.siga_csv import ErroValidacao
+from pncp_ti.fontes.arp_regra import REGRA_PADRAO
 from pncp_ti.privacy import sanitizar
 
-ROTA_ITENS = "/modulo-arp/2_consultarARPItem"
-JANELA_DIAS = 365
-ANOS_MAXIMOS = 5
 RAIZ_EVALS = Path(__file__).resolve().parents[3] / "evals"
 
 log = structlog.get_logger()
-
-
-def _janelas(inicio: date, fim: date) -> list[tuple[date, date]]:
-    resultado = []
-    while inicio <= fim:
-        final = min(inicio + timedelta(days=JANELA_DIAS), fim)
-        resultado.append((inicio, final))
-        inicio = final + timedelta(days=1)
-    return resultado
 
 
 def no_universo(ata: Mapping[str, Any], hoje: date) -> bool:
@@ -62,20 +51,24 @@ def no_universo(ata: Mapping[str, Any], hoje: date) -> bool:
     )
 
 
+def _nomes_pdm(varredura: Any, ata: str) -> str:
+    return ", ".join(sorted(varredura.nomes.get(p) or f"pdm {p}" for p in varredura.pdms(ata)))
+
+
 def _celula(texto: str | None, limite: int = 90) -> str:
     # Texto de terceiros vai para `evals/` (versionado): CPF mascarado antes de tudo.
     texto = " ".join(str(sanitizar(texto or "")).split()).replace("|", "/")
     return texto if len(texto) <= limite else texto[: limite - 1] + "…"
 
 
-async def principal() -> int:
+async def principal(minutos: float | None = None) -> int:
     settings = get_settings()
     hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
     conn = await conectar(settings)
     try:
         cur = await conn.execute(
             "SELECT a.id_origem, a.is_ti, a.motivo_ti, a.objeto, a.link_origem, a.inicio, "
-            "a.fim, a.vigente_na_origem, c.data_referencia, c.contagens "
+            "a.fim, a.vigente_na_origem, a.quantidade_itens, c.data_referencia, c.contagens "
             "FROM cargas c JOIN atas a ON a.carga_id = c.id WHERE c.fonte = %s AND c.ativa",
             (FONTE,),
         )
@@ -103,48 +96,44 @@ async def principal() -> int:
         await conn.close()
 
     vigentes = {i: a for i, a in atas.items() if no_universo(a, hoje)}
-    inicios = [a["inicio"] for a in vigentes.values() if a["inicio"]]
-    primeiro = max(min(inicios), hoje - timedelta(days=365 * ANOS_MAXIMOS))
+    # Mesma varredura e mesmo progresso semanal da carga: se ela já completou a semana, a
+    # auditoria não gasta nenhuma requisição (sem prazo: termina a varredura que faltar).
+    como_ata = {
+        i: SimpleNamespace(inicio=a["inicio"], quantidade_itens=a["quantidade_itens"])
+        for i, a in vigentes.items()
+    }
     orcamento = _Orcamento(settings.arp_requests_per_second, settings.arp_max_requisicoes)
-    com_item_ti: dict[str, set[str]] = defaultdict(set)  # ata -> nomes de PDM de TI
-    falhas = paginadas = 0
     async with DadosAbertosClient(
         base_url=URL_BASE, timeout=90.0, max_retries=TENTATIVAS_HTTP
     ) as client:
         catalogo = await carregar_catalogo(client, orcamento)
-        for pdm in sorted(catalogo.pdms):
-            for minimo, maximo in _janelas(primeiro, hoje):
-                filtros = {
-                    "codigoPdm": pdm,
-                    "dataVigenciaInicialMin": minimo.isoformat(),
-                    "dataVigenciaInicialMax": maximo.isoformat(),
-                }
-                pagina = 1
-                try:
-                    while True:
-                        resposta = await _pagina(client, orcamento, ROTA_ITENS, pagina, **filtros)
-                        registros, _, paginas = validar_pagina(resposta, pagina)
-                        for r in registros:
-                            ata = r.get("numeroControlePncpAta")
-                            if ata in vigentes and r.get("itemExcluido") is not True:
-                                com_item_ti[ata].add(str(r.get("nomePdm") or pdm))
-                        if pagina >= paginas:
-                            break
-                        pagina += 1
-                    paginadas += pagina > 1
-                except ErroValidacao as exc:
-                    if exc.tipo == "teto_requisicoes":
-                        raise
-                    falhas += 1
-                    log.warning("auditoria_falha", pdm=pdm, erro=exc.tipo)
-                except ComprasError as exc:
-                    falhas += 1
-                    log.warning("auditoria_falha", pdm=pdm, erro=type(exc).__name__)
+        varredura = await obter_varredura(
+            client, orcamento, catalogo, como_ata, hoje, CacheVarredura.do_ciclo(hoje), minutos
+        )
+    falhas, incompletas = varredura.falhas + varredura.pendentes, varredura.incompletas
 
+    quantidades = como_ata
+    regra = REGRA_PADRAO
     ti = {i for i, a in vigentes.items() if a["is_ti"]}
-    achadas = set(com_item_ti)
-    perdidas = sorted(achadas - ti)
-    recall = len(achadas & ti) / len(achadas) if achadas else 0.0
+    # Quem já tem linha na carga foi avaliado com os itens reais (TI ou incidental); só o que a
+    # carga ainda não avaliou usa o corte aproximado pela contagem de itens da listagem.
+    achadas = set(varredura.itens) & set(quantidades)
+    avaliadas = {i for i in achadas if itens_banco.get(i)}  # a carga buscou os itens da ata
+    ti_avaliadas = avaliadas & ti
+    incidentais = {i for i in avaliadas if atas[i]["motivo_ti"] == "catalogo_incidental"}
+    nao_avaliadas = {
+        ata
+        for ata in achadas - avaliadas
+        if regra.passa(
+            len(varredura.itens[ata]),
+            quantidades[ata].quantidade_itens or 0,
+            any(pdm in regra.pdms_centrais for pdm, _ in varredura.itens[ata]),
+        )
+    }
+    no_corte = ti_avaliadas | nao_avaliadas
+    perdidas = sorted(nao_avaliadas)
+    recall = len(ti_avaliadas) / len(no_corte) if no_corte else 0.0
+    recall_bruto = len(achadas & ti) / len(achadas) if achadas else 0.0
     sorteio = random.Random(hoje.toordinal()).sample(sorted(ti), min(10, len(ti)))
     contagens = next(iter(atas.values()))["contagens"]
     data_carga = next(iter(atas.values()))["data_referencia"]
@@ -169,18 +158,30 @@ async def principal() -> int:
         "## Recall por PDM de TI (CATMAT grupo 70)",
         "",
         f"- Atas vigentes com ao menos um item de PDM de TI (endpoint em lote): **{len(achadas)}**",
-        f"- Dessas, classificadas como TI pela carga: **{len(achadas & ti)}**",
+        f"  - já avaliadas pela carga com os itens reais: {len(avaliadas)} "
+        f"(TI: {len(ti_avaliadas)}; **incidentais**, item de TI sem passar no corte: "
+        f"{len(incidentais)})",
+        f"  - ainda não avaliadas (carga anterior à varredura ou ciclo incompleto): "
+        f"{len(achadas - avaliadas)}, das quais {len(nao_avaliadas)} passariam no corte pela "
+        "contagem de itens da listagem (aproximação)",
+        f"  - sem corte, classificadas como TI pela carga: {len(achadas & ti)} "
+        f"({recall_bruto:.1%})",
+        f"- Corte (proporção >= {regra.limiar_proporcao:.0%} dos itens ou PDM central, "
+        f"`insumos/regra_ti_arp.json`, versão `{regra.versao()}`)",
         (
-            f"- **Recall medido: {recall:.1%}**; falsos negativos: **{len(perdidas)}**"
+            f"- **Recall medido pelo critério: {recall:.1%}** (TI avaliadas contra TI avaliadas "
+            f"mais as que passariam e a carga ainda não avaliou); falsos negativos: "
+            f"**{len(perdidas)}**"
             if not falhas
-            else f"- **INCONCLUSIVO**: {falhas} consultas falharam; recall parcial {recall:.1%}, "
-            f"falsos negativos vistos: {len(perdidas)}"
+            else f"- **INCONCLUSIVO**: {falhas} consultas falharam ou ficaram pendentes; recall "
+            f"parcial {recall:.1%}, falsos negativos vistos: {len(perdidas)}"
         ),
-        f"- Consultas com falha: {falhas}; janelas paginadas: {paginadas} (a paginação da API "
-        "pode omitir registros, então o número de achadas é um piso)",
+        f"- Consultas com falha ou pendentes: {falhas}; janelas de 1 dia ainda paginadas: "
+        f"{incompletas} (a API perde 1 registro por fronteira de página, então o número de "
+        "achadas é um piso)",
         "",
         "Mede só o recall de material de TI pelo catálogo; serviços de TI e atas cujo item não",
-        "tem PDM ficam fora. Não é recall nacional.",
+        "tem PDM ficam fora. O corte usa `quantidadeItens` da listagem. Não é recall nacional.",
         "",
         "### Falsos negativos (até 50)",
         "",
@@ -188,7 +189,7 @@ async def principal() -> int:
         "|---|---|---|---|",
         *(
             f"| `{i}` | {_celula(vigentes[i]['objeto'])} | "
-            f"{_celula(', '.join(sorted(com_item_ti[i])), 60)} | {vigentes[i]['link_origem']} |"
+            f"{_celula(_nomes_pdm(varredura, i), 60)} | {vigentes[i]['link_origem']} |"
             for i in perdidas[:50]
         ),
         "",
@@ -217,7 +218,11 @@ async def principal() -> int:
 
 
 def main() -> None:
-    raise SystemExit(asyncio.run(principal()))
+    parser = argparse.ArgumentParser(description="Auditoria de recall da carga ARP por PDM.")
+    parser.add_argument(
+        "--minutos", type=float, help="orçamento de tempo da varredura; o progresso é guardado"
+    )
+    raise SystemExit(asyncio.run(principal(parser.parse_args().minutos)))
 
 
 if __name__ == "__main__":

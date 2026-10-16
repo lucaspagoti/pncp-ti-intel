@@ -16,6 +16,7 @@ from typing import Any
 
 from pncp_ti.classificar.in05 import Decisao, classificar_ata, normalizar
 from pncp_ti.classificar.regra import objeto_ata_tem_sinal_ti
+from pncp_ti.fontes.arp_regra import REGRA_PADRAO, RegraArp
 from pncp_ti.fontes.siga_csv import ErroValidacao
 from pncp_ti.privacy import identificar_fornecedor, sanitizar
 
@@ -272,21 +273,35 @@ def _ti_por_catalogo(item: ItemArp, catalogo: CatalogoTI) -> str | None:
     return None
 
 
-def decidir_ata(objeto: str, itens: Sequence[ItemArp], catalogo: CatalogoTI) -> Decisao:
-    """TI = anexo da IN PRODERJ 05 (objeto e nome do PDM) OU catálogo (CATMAT 70 / CATSER).
+def decidir_ata(
+    objeto: str,
+    itens: Sequence[ItemArp],
+    catalogo: CatalogoTI,
+    regra: RegraArp = REGRA_PADRAO,
+) -> Decisao:
+    """TI = anexo da IN PRODERJ 05 (objeto e nome do PDM) OU catálogo com corte (R2.1).
 
     O `motivo_ti` registra qual regra decidiu; o anexo vale primeiro para manter o
-    comportamento do SIGA, e o catálogo só acrescenta atas de TI quando a regra do anexo
-    não achou sinal algum. Exclusões explícitas do anexo (nobreak, drone) não são revertidas.
+    comportamento do SIGA. O catálogo só acrescenta atas de TI quando o anexo não achou
+    sinal algum **e** a ata passa no corte: proporção de itens de TI >= `limiar_proporcao`
+    ou um item de PDM central (`insumos/regra_ti_arp.json`). Exclusões explícitas do anexo
+    (nobreak, drone) não são revertidas.
     """
     decisao = classificar_ata(objeto, sorted({i.nome_pdm for i in itens if i.nome_pdm}))
     if decisao.is_ti or decisao.motivo != "sem_sinal":
         return decisao
-    for item in itens:
-        motivo = _ti_por_catalogo(item, catalogo)
-        if motivo:
-            return Decisao(True, motivo)
-    return decisao
+    decisivos = [(i, m) for i in itens if (m := _ti_por_catalogo(i, catalogo))]
+    if not decisivos:
+        return decisao
+    # Um item com vários fornecedores vira várias linhas: conta-se por `id_item`.
+    itens_ti = {i.id_item for i, _ in decisivos}
+    itens_total = {i.id_item for i in itens}
+    central = next(((i, m) for i, m in decisivos if i.codigo_pdm in regra.pdms_centrais), None)
+    if not regra.passa(len(itens_ti), len(itens_total), central is not None):
+        return Decisao(False, "catalogo_incidental")
+    if central:
+        return Decisao(True, f"{central[1]}:central")
+    return Decisao(True, f"{decisivos[0][1]}:prop{len(itens_ti)}de{len(itens_total)}")
 
 
 __all__ = [

@@ -1,6 +1,7 @@
 [Unit]
 Description=Web local pncp-ti-intel (somente leitura, 127.0.0.1:8000)
 After=network-online.target
+OnFailure=pncp-ti-falha@%n.service
 
 [Service]
 Type=simple
