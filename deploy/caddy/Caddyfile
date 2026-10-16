@@ -1,0 +1,39 @@
+# Proxy reverso da web pncp-ti (R5, ADR 0023): TLS + autenticação na frente, web só em loopback.
+# Variáveis (arquivo deploy/caddy/caddy.env, fora do Git; ver README.md desta pasta):
+#   PNCP_SITE_ADDRESS  endereço servido, ex.: 127.0.0.1:8443 (padrão) ou atas.example.com
+#   PNCP_BIND          interface de escuta (padrão 127.0.0.1; só mude ao expor de propósito)
+#   PNCP_TLS           internal (CA local do Caddy, padrão) ou o e-mail para Let's Encrypt
+#   PNCP_AUTH_USER / PNCP_AUTH_HASH  usuário e hash bcrypt (caddy hash-password)
+{
+	admin off
+}
+
+{$PNCP_SITE_ADDRESS:127.0.0.1:8443} {
+	bind {$PNCP_BIND:127.0.0.1}
+	tls {$PNCP_TLS:internal}
+
+	# Nada chega à web sem credencial: a autenticação vem antes de qualquer rota.
+	basic_auth {
+		{$PNCP_AUTH_USER} {$PNCP_AUTH_HASH}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	request_body {
+		max_size 64KB
+	}
+
+	reverse_proxy 127.0.0.1:8000 {
+		header_up Host 127.0.0.1
+		header_up -X-Forwarded-For
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

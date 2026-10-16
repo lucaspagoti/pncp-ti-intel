@@ -145,6 +145,10 @@ demonstração dele. Limite conhecido: esfera e UF não existem para as atas do 
 **Critério de aceite**
 - Acesso externo funciona só com credencial e recusa sem ela.
 
+**Status (16/10/2026):** configuração pronta e demonstrada **só em loopback** (401 sem credencial ou
+com senha errada, 200 com credencial). Não foi exposta: a escolha entre Cloudflare Tunnel + Access
+e Caddy com Let's Encrypt é do Lucas (ADR 0024, proposta; checklist em `docs/owasp-web.md`).
+
 ## R6 · Operação
 
 **Entregas**

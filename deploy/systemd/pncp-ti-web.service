@@ -1,0 +1,19 @@
+[Unit]
+Description=Web local pncp-ti-intel (somente leitura, 127.0.0.1:8000)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projetos/pncp-ti-intel
+ExecStart=%h/.local/bin/uv run python -m pncp_ti.web
+Restart=on-failure
+RestartSec=5
+# Endurecimento básico (unit de usuário)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=%h/projetos/pncp-ti-intel/.venv
+Environment=WEB_ALLOWED_HOSTS=127.0.0.1,localhost
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,21 @@
+# Caddy como porta de entrada autenticada da web pncp-ti (ADR 0023).
+# network_mode host: alcança a web em 127.0.0.1:8000 e escuta só no endereço do Caddyfile.
+services:
+  caddy:
+    image: caddy@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17 # 2.8.4-alpine
+    container_name: pncp_ti_caddy
+    restart: unless-stopped
+    network_mode: host
+    env_file: caddy.env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  caddy_data:
