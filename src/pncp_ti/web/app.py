@@ -94,7 +94,9 @@ def criar_app(dsn: str | None = None) -> FastAPI:
 
     templates = Jinja2Templates(directory=BASE / "templates")
     templates.env.autoescape = True
-    templates.env.filters.update(brl=_brl, data=_data, numero=_numero, url_segura=_url_segura)
+    templates.env.filters.update(
+        brl=_brl, data=_data, numero=_numero, url_segura=_url_segura, preco_br=consultas.como_texto
+    )
     templates.env.globals.update(FONTES=consultas.FONTES, ESFERAS=consultas.ESFERAS)
 
     @app.middleware("http")

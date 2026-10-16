@@ -230,3 +230,12 @@ async def test_faixa_de_preco_exige_um_item_dentro_da_faixa(cliente, conn_ingest
     assert "notebooks" not in titulos(r.text)
     r = await cliente.get("/", params={"preco_min": "20", "preco_max": "50"})
     assert "notebooks" in titulos(r.text)
+
+
+async def test_campo_de_preco_do_formulario_sobrevive_a_ida_e_volta(cliente):
+    r = await cliente.get("/", params={"preco_max": "0,125", "preco_min": "1.234,50"})
+    assert 'name="preco_max" inputmode="decimal" value="0,125"' in r.text
+    assert 'name="preco_min" inputmode="decimal" value="1234,50"' in r.text
+    r2 = await cliente.get("/", params={"preco_max": "0,125"})
+    assert consultas.ler_filtros({"preco_max": "0,125"}).preco_max == consultas.Decimal("0.125")
+    assert r2.status_code == 200

@@ -28,7 +28,7 @@ FONTES = {"siga_rj": "SIGA RJ", "compras_arp": "Compras.gov.br", "pncp_busca": "
 ESFERAS = ("Federal", "Estadual", "Municipal", "Distrital")
 
 
-def _como_texto(valor: Decimal | None) -> str:
+def como_texto(valor: Decimal | None) -> str:
     """Formato pt-BR sem milhar, para o link devolver o mesmo valor ao ser lido de novo."""
     return "" if valor is None else format(valor, "f").replace(".", ",")
 
@@ -55,8 +55,8 @@ class Filtros:
             "uf": self.uf,
             "orgao": self.orgao,
             "vence_ate": self.vence_ate.isoformat() if self.vence_ate else "",
-            "preco_min": _como_texto(self.preco_min),
-            "preco_max": _como_texto(self.preco_max),
+            "preco_min": como_texto(self.preco_min),
+            "preco_max": como_texto(self.preco_max),
             "ordem": self.ordem if self.ordem != "relevancia" else "",
         }
         return {k: v for k, v in bruto.items() if v}

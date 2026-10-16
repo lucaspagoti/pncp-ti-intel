@@ -19,8 +19,8 @@
   </label>
   <label>Órgão contém<input name="orgao" value="{{ f.orgao }}" maxlength="200"></label>
   <label>Vence até<input type="date" name="vence_ate" value="{{ f.vence_ate or '' }}"></label>
-  <label>Preço unitário mín. (R$)<input name="preco_min" inputmode="decimal" value="{{ f.preco_min or '' }}"></label>
-  <label>Preço unitário máx. (R$)<input name="preco_max" inputmode="decimal" value="{{ f.preco_max or '' }}"></label>
+  <label>Preço unitário mín. (R$)<input name="preco_min" inputmode="decimal" value="{{ f.preco_min | preco_br }}"></label>
+  <label>Preço unitário máx. (R$)<input name="preco_max" inputmode="decimal" value="{{ f.preco_max | preco_br }}"></label>
   <label>Ordenar por
     <select name="ordem">
       {% for o, nome in (('relevancia','Relevância'),('vencimento','Vencimento'),('novas','Mais novas'),('preco','Menor preço')) %}
