@@ -689,7 +689,7 @@ async def varrer_pdm(
     """
     varredura = Varredura()
     parado = False
-    for pdm in sorted(pdms):
+    for pdm in pdms:  # a ordem é de quem chama: os PDMs centrais primeiro rendem mais cedo
         for k, minimo, maximo in janelas:
             if (pdm, k) in feitos:
                 continue
@@ -848,6 +848,7 @@ async def obter_varredura(
     hoje: date,
     cache: CacheVarredura | None,
     minutos: float | None = None,
+    regra: RegraArp = REGRA_PADRAO,
 ) -> Varredura:
     """Varredura por PDM retomável: continua o ciclo em andamento e respeita o prazo da noite."""
     inicios = [a.inicio for a in atas.values() if a.inicio]
@@ -871,10 +872,12 @@ async def obter_varredura(
             resultado.completa = True
             return resultado
     prazo = time.monotonic() + minutos * 60 if minutos else None
+    # Centrais primeiro: com a API lenta o ciclo leva várias noites, e eles valem mais.
+    ordem = sorted(catalogo.pdms, key=lambda p: (p not in regra.pdms_centrais, p))
     nova = await varrer_pdm(
         client,
         orcamento,
-        catalogo.pdms,
+        ordem,
         janelas_do_ciclo(ancora, janelas),
         feitos,
         cache.gravar_par if cache else None,
@@ -1300,7 +1303,7 @@ async def _coletar_com(
     catalogo = await carregar_catalogo(client, orcamento)
     do_objeto = {i for i, a in atas.items() if e_candidata(a.objeto)}
     varredura = await obter_varredura(
-        client, orcamento, catalogo, atas, hoje, cache_varredura, minutos_varredura
+        client, orcamento, catalogo, atas, hoje, cache_varredura, minutos_varredura, regra
     )
     da_varredura, incidentais = candidatas_da_varredura(varredura, atas, regra)
     # Quem já tinha itens na carga anterior continua candidata: varredura parcial não derruba TI.

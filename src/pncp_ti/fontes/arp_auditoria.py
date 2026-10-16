@@ -10,6 +10,7 @@ banco; escreve `evals/arp_<data>.md`.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import random
 from collections import defaultdict
@@ -61,7 +62,7 @@ def _celula(texto: str | None, limite: int = 90) -> str:
     return texto if len(texto) <= limite else texto[: limite - 1] + "…"
 
 
-async def principal() -> int:
+async def principal(minutos: float | None = None) -> int:
     settings = get_settings()
     hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
     conn = await conectar(settings)
@@ -108,9 +109,9 @@ async def principal() -> int:
     ) as client:
         catalogo = await carregar_catalogo(client, orcamento)
         varredura = await obter_varredura(
-            client, orcamento, catalogo, como_ata, hoje, CacheVarredura.do_ciclo(hoje)
+            client, orcamento, catalogo, como_ata, hoje, CacheVarredura.do_ciclo(hoje), minutos
         )
-    falhas, paginadas = varredura.falhas, varredura.paginadas
+    falhas, paginadas = varredura.falhas + varredura.pendentes, varredura.paginadas
 
     # O mesmo pré-corte da carga: proporção pelo `quantidadeItens` ou PDM central (R2.1).
     quantidades = como_ata
@@ -158,7 +159,7 @@ async def principal() -> int:
             else f"- **INCONCLUSIVO**: {falhas} consultas falharam; recall parcial {recall:.1%}, "
             f"falsos negativos vistos: {len(perdidas)}"
         ),
-        f"- Consultas com falha: {falhas}; janelas paginadas: {paginadas} (a paginação da API "
+        f"- Consultas com falha ou pendentes: {falhas}; janelas paginadas: {paginadas} (a paginação da API "
         "pode omitir registros, então o número de achadas é um piso)",
         "",
         "Mede só o recall de material de TI pelo catálogo; serviços de TI e atas cujo item não",
@@ -199,7 +200,11 @@ async def principal() -> int:
 
 
 def main() -> None:
-    raise SystemExit(asyncio.run(principal()))
+    parser = argparse.ArgumentParser(description="Auditoria de recall da carga ARP por PDM.")
+    parser.add_argument(
+        "--minutos", type=float, help="orçamento de tempo da varredura; o progresso é guardado"
+    )
+    raise SystemExit(asyncio.run(principal(parser.parse_args().minutos)))
 
 
 if __name__ == "__main__":
