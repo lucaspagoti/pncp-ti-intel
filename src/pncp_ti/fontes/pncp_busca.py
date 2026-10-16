@@ -18,6 +18,7 @@ import hashlib
 import json
 import re
 import time
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -109,6 +110,26 @@ def ler_termos(caminho: Path = ARQUIVO_TERMOS) -> list[str]:
     if not termos:
         raise ErroValidacao("contrato", f"{caminho.name} não tem nenhum termo")
     return termos
+
+
+def _sem_acento(texto: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", texto.lower()) if unicodedata.category(c) != "Mn"
+    )
+
+
+def casa_termo(objeto: str, termo: str) -> bool:
+    """O termo inteiro, como sequência de palavras, aparece no objeto (sem acento nem caixa).
+
+    O portal casa por palavra solta (`equipamentos de informatica` devolve 32 mil atas, a
+    maioria de mobiliário e obras). Sem este filtro a carga publicaria ruído como "TI".
+    A última palavra aceita sufixo (notebook → notebooks).
+    """
+    palavras = [re.escape(p) for p in _sem_acento(termo).split()]
+    if not palavras:
+        return False
+    padrao = r"\b" + r"\W+".join(palavras) + r"\w*"
+    return re.search(padrao, _sem_acento(objeto)) is not None
 
 
 def _texto(valor: Any) -> str:
@@ -234,6 +255,46 @@ async def buscar_termo(
         pagina += 1
 
 
+async def _coletar_termo(
+    client: httpx.AsyncClient,
+    limitador: LimitadorTaxa,
+    termo: str,
+    hoje: date,
+    atas: dict[str, AtaBusca],
+    contagens: dict[str, int],
+    sem_resultado: list[str],
+) -> bool:
+    """Busca um termo e acumula as atas que o casam; `False` se o portal não respondeu."""
+    try:
+        itens, total = await buscar_termo(client, limitador, termo)
+    except _TermoFalhou as exc:
+        log.warning("pncp_busca_termo_falhou_tentativa", termo=termo, motivo=str(exc))
+        return False
+    contagens["itens_lidos"] += len(itens)
+    if total > LIMITE_JANELA:
+        contagens["termos_truncados"] += 1
+        log.warning("pncp_busca_termo_truncado", termo=termo, total=total)
+    if total == 0:
+        contagens["termos_sem_resultado"] += 1
+        sem_resultado.append(termo)
+        log.warning("pncp_busca_termo_sem_resultado", termo=termo)
+    aceitos = 0
+    for item in itens:
+        ata = mapear(item, termo, hoje)
+        if ata is None:
+            contagens["itens_descartados"] += 1
+        elif not casa_termo(ata.objeto, termo):
+            contagens["itens_sem_termo"] += 1
+        elif ata.id_origem in atas:
+            atas[ata.id_origem].termos.add(termo)
+            aceitos += 1
+        else:
+            atas[ata.id_origem] = ata
+            aceitos += 1
+    log.info("pncp_busca_termo", termo=termo, total=total, lidos=len(itens), aceitos=aceitos)
+    return True
+
+
 @dataclass(slots=True)
 class Coleta:
     atas: dict[str, AtaBusca]
@@ -257,33 +318,24 @@ async def coletar(
         "termos_truncados": 0,
         "itens_lidos": 0,
         "itens_descartados": 0,
+        "itens_sem_termo": 0,
+        "termos_recuperados": 0,
     }
     sem_resultado: list[str] = []
     try:
+        falhos: list[str] = []
         for termo in termos:
-            try:
-                itens, total = await buscar_termo(client, limitador, termo)
-            except _TermoFalhou as exc:
+            if not await _coletar_termo(
+                client, limitador, termo, hoje, atas, contagens, sem_resultado
+            ):
+                falhos.append(termo)
+        # Segunda chance: o portal falha de forma intermitente e costuma voltar minutos depois.
+        for termo in falhos:
+            if await _coletar_termo(client, limitador, termo, hoje, atas, contagens, sem_resultado):
+                contagens["termos_recuperados"] += 1
+            else:
                 contagens["termos_falhos"] += 1
-                log.warning("pncp_busca_termo_falhou", termo=termo, motivo=str(exc))
-                continue
-            contagens["itens_lidos"] += len(itens)
-            if total > LIMITE_JANELA:
-                contagens["termos_truncados"] += 1
-                log.warning("pncp_busca_termo_truncado", termo=termo, total=total)
-            if total == 0:
-                contagens["termos_sem_resultado"] += 1
-                sem_resultado.append(termo)
-                log.warning("pncp_busca_termo_sem_resultado", termo=termo)
-            for item in itens:
-                ata = mapear(item, termo, hoje)
-                if ata is None:
-                    contagens["itens_descartados"] += 1
-                elif ata.id_origem in atas:
-                    atas[ata.id_origem].termos.add(termo)
-                else:
-                    atas[ata.id_origem] = ata
-            log.info("pncp_busca_termo", termo=termo, total=total, lidos=len(itens))
+                log.warning("pncp_busca_termo_falhou", termo=termo)
     finally:
         if proprio:
             await client.aclose()

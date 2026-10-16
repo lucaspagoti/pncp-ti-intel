@@ -135,7 +135,9 @@ async def test_retry_em_queda_de_conexao_e_termo_falho_nao_derruba():
         tentativas["n"] += 1
         if tentativas["n"] == 1:
             return httpx.Response(200, content=b"")  # corpo vazio intermitente do portal
-        return httpx.Response(200, json={"items": [item()], "total": 1})
+        termo = req.url.params["q"]
+        corpo = {"items": [item(description=f"Aquisição de {termo}")], "total": 1}
+        return httpx.Response(200, json=corpo)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
         coleta = await b.coletar(["bom", "ruim", "bom2", "bom3", "bom4", "bom5"], HOJE, c)
@@ -231,3 +233,53 @@ async def test_view_prefere_o_arp_na_mesma_ata_e_mantem_a_busca_no_resto(conn_in
     ]
     busca = next(r for r in linhas if r["fonte"] == "pncp_busca")
     assert (busca["esfera"], busca["uf"]) == ("Federal", "RJ")
+
+
+@pytest.mark.parametrize(
+    ("objeto", "termo", "esperado"),
+    [
+        ("Aquisição de Notebooks para a escola", "notebook", True),
+        ("EQUIPAMENTOS DE INFORMÁTICA E PERIFÉRICOS", "equipamentos de informatica", True),
+        (
+            "Aquisição de equipamentos de escritório e informática",
+            "equipamentos de informatica",
+            False,
+        ),
+        ("Mobiliário e equipamentos diversos", "equipamentos de informatica", False),
+        ("Licença de uso de software", "licenca de software", False),
+        ("Contratação de nuvem pública", "nuvem", True),
+        ("Anuvem", "nuvem", False),  # início de palavra, não meio
+        ("qualquer coisa", "   ", False),
+    ],
+)
+def test_casa_termo_exige_a_frase_inteira(objeto, termo, esperado):
+    assert b.casa_termo(objeto, termo) is esperado
+
+
+async def test_coletar_descarta_o_que_o_portal_devolve_por_palavra_solta():
+    respostas = {
+        "equipamentos de informatica": [
+            item(ID_A, description="EQUIPAMENTOS DE INFORMÁTICA E PERIFÉRICOS"),
+            item(ID_B, description="Mobiliário e equipamentos diversos"),
+        ]
+    }
+    async with cliente(respostas) as c:
+        coleta = await b.coletar(["equipamentos de informatica"], HOJE, c)
+    assert list(coleta.atas) == [ID_A]
+    assert coleta.contagens["itens_sem_termo"] == 1
+
+
+async def test_termo_que_falha_ganha_segunda_chance():
+    chamadas = {"n": 0}
+
+    def tratar(req: httpx.Request) -> httpx.Response:
+        chamadas["n"] += 1
+        if chamadas["n"] <= b.TENTATIVAS:  # esgota as tentativas do 1º termo, depois volta
+            raise httpx.ReadError("queda")
+        return httpx.Response(200, json={"items": [item()], "total": 1})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        coleta = await b.coletar(["notebook"], HOJE, c)
+    assert coleta.contagens["termos_falhos"] == 0
+    assert coleta.contagens["termos_recuperados"] == 1
+    assert ID_A in coleta.atas

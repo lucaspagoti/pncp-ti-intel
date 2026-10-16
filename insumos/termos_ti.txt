@@ -1,5 +1,7 @@
 # Termos de TI da busca PNCP (R3, ADR 0016). Uma consulta por linha; '#' comenta.
 # Lista inicial proposta pelo Claude em 16/10/2026: o Lucas revisa (remove ruído, inclui o que faltar).
+# Só entra a ata cujo objeto contém o termo inteiro (frase, sem acento); o portal casa por palavra solta.
+# Evite termos genéricos ("equipamentos de informatica" devolve 32 mil atas, quase todas ruído).
 # Termo de uma palavra casa por radical no portal; prefira expressões quando a palavra for ambígua.
 notebook
 microcomputador
@@ -33,15 +35,11 @@ hospedagem
 data center
 banco de dados
 suporte tecnico em informatica
-manutencao de equipamentos de informatica
-desenvolvimento de sistemas
+manutencao de desenvolvimento de sistemas
 fabrica de software
 tecnologia da informacao
 solucao de tic
 servicos de tic
-equipamentos de informatica
-material de informatica
-suprimentos de informatica
 toner
 cartucho de impressora
 cabeamento estruturado
