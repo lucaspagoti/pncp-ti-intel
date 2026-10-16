@@ -45,29 +45,45 @@ async def test_auditoria_gera_relatorio_com_falso_negativo_e_nao_quebra(
     from pncp_ti.fontes import arp, arp_auditoria
 
     config = replace(get_settings(), arp_requests_per_second=1000.0, arp_max_requisicoes=5000)
-    atas = [d.ata("70", "Insumos gerais"), d.ata("71", "Aquisição de notebooks")]
+    atas = [
+        d.ata("70", "Insumos gerais"),  # central, mas a carga publicada não a avaliou
+        d.ata("71", "Aquisição de notebooks"),
+        d.ata("72", "Material diverso"),  # 1 de 6 itens de TI: incidental, avaliada pela carga
+    ]
     atas[0]["quantidadeItens"] = 1
+    atas[2]["quantidadeItens"] = 1  # a listagem erra a contagem: 1/1 pareceria uma perda
     itens = {
         d.id_ata("70"): [d.item("70", "1", "Notebook", pdm=8435, nome_pdm="PRODUTO CENTRAL")],
         d.id_ata("71"): [d.item("71", "1", "Notebook", nome_pdm="NOTEBOOK", pdm=None)],
+        d.id_ata("72"): [
+            d.item("72", "1", "Teclado", pdm=283),
+            *(d.item("72", str(n), "Caneta", pdm=77) for n in range(2, 7)),
+        ],
     }
     inicio = (d.hoje() - timedelta(days=30)).isoformat()
-    lote = [
-        {
-            **d.item("70", "1", "Notebook", pdm=8435, nome_pdm="PRODUTO CENTRAL"),
-            "dataVigenciaInicial": inicio,
-        }
-    ]
 
-    # Carga publicada SEM varredura: a ata 70 (objeto genérico) fica de fora, é falso negativo.
-    sem_varredura = d.ClienteFalso(atas, itens, pdms=[8435])
-    preparado, geracao = await arp.coletar(config, d.hoje(), client=sem_varredura)
+    def lote_de(*numeros):
+        pdms = {"70": (8435, "PRODUTO CENTRAL"), "72": (283, "PRODUTO")}
+        return [
+            {
+                **d.item(n, "1", "x", pdm=pdms[n][0], nome_pdm=pdms[n][1]),
+                "dataVigenciaInicial": inicio,
+            }
+            for n in numeros
+        ]
+
+    # Carga publicada com varredura que só viu a ata 72: a 70 nunca foi avaliada (falso negativo)
+    # e a 72 foi avaliada com os itens reais e é incidental (não é perda).
+    publicada = d.ClienteFalso(atas, itens, pdms=[8435, 283])
+    publicada.lote = lote_de("72")
+    preparado, geracao = await arp.coletar(config, d.hoje(), client=publicada)
     await arp._publicar(conn_ingest, preparado, geracao, __import__("uuid").uuid4(), d.hoje())
     await conn_ingest.commit()
-    assert not preparado.decisoes[d.id_ata("70")][0]  # sem varredura, objeto genérico fica fora
+    assert not preparado.decisoes[d.id_ata("70")][0]
+    assert preparado.decisoes[d.id_ata("72")][1] == "catalogo_incidental"
 
-    com_varredura = d.ClienteFalso(atas, itens, pdms=[8435])
-    com_varredura.lote = lote
+    com_varredura = d.ClienteFalso(atas, itens, pdms=[8435, 283])
+    com_varredura.lote = lote_de("70", "72")
 
     class Contexto:
         async def __aenter__(self):
@@ -94,3 +110,6 @@ async def test_auditoria_gera_relatorio_com_falso_negativo_e_nao_quebra(
     relatorio = next(tmp_path.glob("arp_*.md")).read_text(encoding="utf-8")
     assert "Recall medido pelo critério" in relatorio
     assert "PRODUTO CENTRAL" in relatorio  # a ata perdida lista o nome do PDM
+    assert "incidentais**, item de TI sem passar no corte: 1" in relatorio
+    assert "falsos negativos: **1**" in relatorio  # só a 70; a incidental 72 não é perda
+    assert d.id_ata("72") not in relatorio.split("### Falsos negativos")[1].split("## Amostra")[0]

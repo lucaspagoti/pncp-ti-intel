@@ -685,12 +685,12 @@ async def varrer_pdm(
     Falha de uma consulta conta em `falhas`, não derruba a carga e deixa o par para a próxima
     execução (a varredura só acrescenta candidatas). O teto de requisições, esse sim, sobe.
     `prazo` (instante de `time.monotonic()`) interrompe também no meio de um par, mas só depois
-    do primeiro par concluído na execução: o par interrompido não é gravado e, com os
+    da primeira tentativa da execução: o par interrompido não é gravado e, com os
     seguintes, vira `pendentes`.
     """
     varredura = Varredura()
     parado = False
-    concluidos = 0
+    tentou = False
     for pdm in pdms:  # a ordem é de quem chama: os PDMs centrais primeiro rendem mais cedo
         for k, minimo, maximo in janelas:
             if (pdm, k) in feitos:
@@ -699,10 +699,12 @@ async def varrer_pdm(
                 varredura.pendentes += 1
                 continue
             try:
-                # O 1º par da execução ignora o prazo: assim todo ciclo avança ao menos um par por
-                # noite, mesmo que um par sozinho leve mais que o orçamento.
+                # A 1ª tentativa da execução ignora o prazo: todo ciclo avança ao menos um par por
+                # noite, mesmo que um par sozinho leve mais que o orçamento. Só a 1ª: se ela falha
+                # (API fora), as seguintes já respeitam o prazo.
+                primeira, tentou = not tentou, True
                 achados, nome, incompleto = await _consultar(
-                    client, orcamento, pdm, minimo, maximo, prazo if concluidos else None
+                    client, orcamento, pdm, minimo, maximo, None if primeira else prazo
                 )
             except _PrazoEsgotado:
                 parado = True
@@ -723,7 +725,6 @@ async def varrer_pdm(
                 varredura.adicionar(ata, pdm, numero)
             if nome:
                 varredura.nomes[pdm] = nome
-            concluidos += 1
             if ao_concluir:
                 ao_concluir(pdm, k, achados, nome, incompleto)
     return varredura

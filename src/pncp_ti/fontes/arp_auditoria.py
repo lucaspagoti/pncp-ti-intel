@@ -112,25 +112,27 @@ async def principal(minutos: float | None = None) -> int:
         )
     falhas, incompletas = varredura.falhas + varredura.pendentes, varredura.incompletas
 
-    # O mesmo pré-corte da carga: proporção pelo `quantidadeItens` ou PDM central (R2.1).
     quantidades = como_ata
     regra = REGRA_PADRAO
     ti = {i for i, a in vigentes.items() if a["is_ti"]}
-    achadas = set(varredura.itens)
-    # Corte da regra pela contagem de itens da listagem (aproximação: a carga usa os itens reais).
-    no_corte = {
+    # Quem já tem linha na carga foi avaliado com os itens reais (TI ou incidental); só o que a
+    # carga ainda não avaliou usa o corte aproximado pela contagem de itens da listagem.
+    achadas = set(varredura.itens) & set(quantidades)
+    avaliadas = {i for i in achadas if itens_banco.get(i)}  # a carga buscou os itens da ata
+    ti_avaliadas = avaliadas & ti
+    incidentais = {i for i in avaliadas if atas[i]["motivo_ti"] == "catalogo_incidental"}
+    nao_avaliadas = {
         ata
-        for ata, itens in varredura.itens.items()
-        if ata in quantidades
-        and regra.passa(
-            len(itens),
+        for ata in achadas - avaliadas
+        if regra.passa(
+            len(varredura.itens[ata]),
             quantidades[ata].quantidade_itens or 0,
-            any(pdm in regra.pdms_centrais for pdm, _ in itens),
+            any(pdm in regra.pdms_centrais for pdm, _ in varredura.itens[ata]),
         )
     }
-    incidentais = len(achadas & set(quantidades)) - len(no_corte)
-    perdidas = sorted(no_corte - ti)
-    recall = len(no_corte & ti) / len(no_corte) if no_corte else 0.0
+    no_corte = ti_avaliadas | nao_avaliadas
+    perdidas = sorted(nao_avaliadas)
+    recall = len(ti_avaliadas) / len(no_corte) if no_corte else 0.0
     recall_bruto = len(achadas & ti) / len(achadas) if achadas else 0.0
     sorteio = random.Random(hoje.toordinal()).sample(sorted(ti), min(10, len(ti)))
     contagens = next(iter(atas.values()))["contagens"]
@@ -156,18 +158,23 @@ async def principal(minutos: float | None = None) -> int:
         "## Recall por PDM de TI (CATMAT grupo 70)",
         "",
         f"- Atas vigentes com ao menos um item de PDM de TI (endpoint em lote): **{len(achadas)}**",
+        f"  - já avaliadas pela carga com os itens reais: {len(avaliadas)} "
+        f"(TI: {len(ti_avaliadas)}; **incidentais**, item de TI sem passar no corte: "
+        f"{len(incidentais)})",
+        f"  - ainda não avaliadas (carga anterior à varredura ou ciclo incompleto): "
+        f"{len(achadas - avaliadas)}, das quais {len(nao_avaliadas)} passariam no corte pela "
+        "contagem de itens da listagem (aproximação)",
         f"  - sem corte, classificadas como TI pela carga: {len(achadas & ti)} "
-        f"({recall_bruto:.1%}); a diferença inclui atas de outro assunto com item incidental",
-        f"  - **incidentais** (item de TI sem passar no corte): {incidentais}",
-        f"- Atas que passam no corte (proporção >= {regra.limiar_proporcao:.0%} dos itens ou PDM "
-        f"central, `insumos/regra_ti_arp.json`, versão `{regra.versao()}`): **{len(no_corte)}**",
-        f"- Dessas, classificadas como TI pela carga: **{len(no_corte & ti)}**",
+        f"({recall_bruto:.1%})",
+        f"- Corte (proporção >= {regra.limiar_proporcao:.0%} dos itens ou PDM central, "
+        f"`insumos/regra_ti_arp.json`, versão `{regra.versao()}`)",
         (
-            f"- **Recall medido pelo critério: {recall:.1%}**; falsos negativos: "
+            f"- **Recall medido pelo critério: {recall:.1%}** (TI avaliadas contra TI avaliadas "
+            f"mais as que passariam e a carga ainda não avaliou); falsos negativos: "
             f"**{len(perdidas)}**"
             if not falhas
-            else f"- **INCONCLUSIVO**: {falhas} consultas falharam; recall parcial {recall:.1%}, "
-            f"falsos negativos vistos: {len(perdidas)}"
+            else f"- **INCONCLUSIVO**: {falhas} consultas falharam ou ficaram pendentes; recall "
+            f"parcial {recall:.1%}, falsos negativos vistos: {len(perdidas)}"
         ),
         f"- Consultas com falha ou pendentes: {falhas}; janelas de 1 dia ainda paginadas: "
         f"{incompletas} (a API perde 1 registro por fronteira de página, então o número de "

@@ -1038,3 +1038,28 @@ def test_janelas_do_ciclo_nao_sobrepoem_e_cobrem_ate_o_inicio_mais_antigo():
     n = arp.quantidade_de_janelas(ancora, antigo)
     assert arp.janelas_do_ciclo(ancora, n)[-1][1] <= antigo
     assert arp.quantidade_de_janelas(ancora, None) == 1
+
+
+async def test_falha_na_primeira_tentativa_nao_desliga_o_prazo_das_seguintes(monkeypatch):
+    """Revisão do Codex: com a API fora, só a 1ª tentativa ignora o prazo; as outras o respeitam."""
+    cliente = d.ClienteFalso([], {}, pdms=[8435, 283, 239])
+    original = cliente.list_resource
+    consultas = []
+
+    async def sempre_fora(rota, **kw):
+        if rota == arp.ROTA_ITENS_LOTE and "codigoPdm" in kw:
+            consultas.append(kw["codigoPdm"])
+            raise ComprasServerError("HTTP 503")
+        return await original(rota, **kw)
+
+    cliente.list_resource = sempre_fora
+    monkeypatch.setattr(arp, "time", SimpleNamespace(monotonic=lambda: 10_000.0))  # prazo vencido
+    varredura = await arp.varrer_pdm(
+        cliente,
+        arp._Orcamento(1000.0, 1000),
+        [8435, 283, 239],
+        arp.janelas_do_ciclo(d.hoje(), 1),
+        prazo=1.0,
+    )
+    assert consultas == [8435]  # só a 1ª tentativa; as outras ficam pendentes
+    assert varredura.falhas == 1 and varredura.pendentes == 2
