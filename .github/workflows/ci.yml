@@ -31,6 +31,7 @@ jobs:
       POSTGRES_ADMIN_PASSWORD: ci-postgres-password
       PNCP_TI_INGEST_PASSWORD: ci-ingest-password
       PNCP_TI_READER_PASSWORD: ci-reader-password
+      PNCP_TI_WEB_PASSWORD: ci-web-password
     steps:
       - uses: actions/checkout@v4
 

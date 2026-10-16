@@ -31,6 +31,7 @@ class Settings:
     postgres_admin_password: str | None
     ingest_password: str | None
     reader_password: str | None
+    web_password: str | None
     requests_per_second: float
     arp_requests_per_second: float
     arp_max_requisicoes: int
@@ -57,6 +58,7 @@ def get_settings() -> Settings:
         postgres_admin_password=os.environ.get("POSTGRES_ADMIN_PASSWORD"),
         ingest_password=os.environ.get("PNCP_TI_INGEST_PASSWORD"),
         reader_password=os.environ.get("PNCP_TI_READER_PASSWORD"),
+        web_password=os.environ.get("PNCP_TI_WEB_PASSWORD"),
         requests_per_second=float(os.environ.get("PNCP_REQUESTS_PER_SECOND", "2")),
         arp_requests_per_second=float(os.environ.get("ARP_REQUESTS_PER_SECOND", "1.5")),
         arp_max_requisicoes=int(os.environ.get("ARP_MAX_REQUISICOES", "20000")),
@@ -102,6 +104,17 @@ def reader_dsn(settings: Settings) -> str:
     return make_conninfo(
         user="mcp_reader",
         password=exigir(settings.reader_password, "PNCP_TI_READER_PASSWORD"),
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        dbname=settings.postgres_db,
+    )
+
+
+def web_dsn(settings: Settings) -> str:
+    """Conninfo do papel web_reader (SELECT só nas views da web, ADR 0018)."""
+    return make_conninfo(
+        user="web_reader",
+        password=exigir(settings.web_password, "PNCP_TI_WEB_PASSWORD"),
         host=settings.postgres_host,
         port=settings.postgres_port,
         dbname=settings.postgres_db,

@@ -39,7 +39,8 @@ foi abandonado em 13/10/2026.
 - **Carga diária** às 03:00 por systemd timer (`scripts/carga_diaria.sh`, `docs/operacao-timer.md`):
   SIGA e depois ARP. A ARP é incremental (reaproveita os itens das atas sem mudança).
 
-`make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente. O banco local está na migração 0007.
+`make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
+(`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, ADR 0024). O banco local está na migração 0008.
 
 ## Como rodar
 
