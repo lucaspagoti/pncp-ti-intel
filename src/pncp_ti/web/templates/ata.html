@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block titulo %}Ata {{ a.numero }}{% endblock %}
+{% block conteudo %}
+<p><a href="/" class="btn sec">‹ Busca</a></p>
+<h1>{{ a.objeto }}</h1>
+<div class="card"><dl>
+  <dt>Fonte</dt><dd>{{ FONTES.get(a.fonte, a.fonte) }}</dd>
+  <dt>Órgão</dt><dd>{{ a.orgao or '—' }}{% if a.unidade_gerenciadora %} · {{ a.unidade_gerenciadora }}{% endif %}</dd>
+  <dt>Ata</dt><dd>{{ a.numero }}</dd>
+  <dt>Vigência</dt><dd>{{ a.inicio | data }} a {{ a.fim | data }}</dd>
+  {% if a.esfera or a.uf %}<dt>Local</dt><dd>{{ a.esfera or '' }} {{ a.uf or '' }} {{ a.municipio or '' }}</dd>{% endif %}
+  {% if a.licitacao %}<dt>Licitação</dt><dd>{{ a.licitacao }}</dd>{% endif %}
+  {% if a.processos %}<dt>Processo(s)</dt><dd>{{ a.processos | join(', ') }}</dd>{% endif %}
+  {% if a.valor_total is not none %}<dt>Valor total</dt><dd>{{ a.valor_total | brl }}</dd>{% endif %}
+  <dt>Critério de TI</dt><dd>{{ a.motivo_ti or '—' }}</dd>
+  <dt>Primeira vez vista</dt><dd>{{ a.primeira_vez_vista | data }}</dd>
+  {% if a.link_origem | url_segura %}<dt>Origem</dt><dd><a href="{{ a.link_origem | url_segura }}" rel="noopener noreferrer" target="_blank">Abrir no portal</a></dd>{% else %}<dt>Origem</dt><dd>sem link público por ata (SIGA RJ: consultar o processo SEI)</dd>{% endif %}
+</dl></div>
+<h2>Itens</h2>
+{% if itens %}
+<div class="tab"><table>
+<tr><th>Item</th><th>Descrição</th><th>Fornecedor</th><th class="n">Qtd.</th><th class="n">Preço unitário</th></tr>
+{% for i in itens %}<tr>
+  <td>{{ i.id_item }}</td><td>{{ i.descricao }}{% if i.nome_catalogo %}<br><span class="meta">{{ i.nome_catalogo }}</span>{% endif %}</td>
+  <td>{{ i.fornecedor or '—' }}</td><td class="n">{{ i.quantidade | numero }}</td><td class="n">{{ i.valor_unitario | brl }}</td>
+</tr>{% endfor %}
+</table></div>
+{% else %}<p>Esta fonte não traz itens para esta ata.</p>{% endif %}
+{% if consumo %}
+<h2>Participantes: demandado × consumido</h2>
+<div class="tab"><table>
+<tr><th>Item</th><th>Unidade</th><th class="n">Demandado</th><th class="n">Consumido</th></tr>
+{% for c in consumo %}<tr><td>{{ c.item }}</td><td>{{ c.unidade_participante }}</td><td class="n">{{ c.qtd_demandada | numero }}</td><td class="n">{{ c.qtd_consumida | numero }}</td></tr>{% endfor %}
+</table></div>
+<p class="meta">Não é saldo disponível: há linhas com consumo maior que a demanda na origem.</p>
+{% endif %}
+{% endblock %}

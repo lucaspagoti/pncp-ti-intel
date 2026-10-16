@@ -1,0 +1,25 @@
+<div class="resumo">
+  <span>{{ p.total }} ata{{ '' if p.total == 1 else 's' }} · página {{ p.pagina }} de {{ p.paginas }}</span>
+  <a class="btn sec" href="/exportar.csv?{{ qs(f) }}">Exportar CSV</a>
+</div>
+{% for a in p.linhas %}
+<article class="card">
+  <h2><a href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}">{{ a.objeto | truncate(220) }}</a></h2>
+  <div class="meta">
+    <span class="tag">{{ FONTES.get(a.fonte, a.fonte) }}</span>
+    <span>{{ a.orgao or a.unidade_gerenciadora or '—' }}</span>
+    {% if a.esfera or a.uf %}<span>{{ a.esfera or '' }}{{ ' · ' if a.esfera and a.uf }}{{ a.uf or '' }}</span>{% endif %}
+    <span>Ata {{ a.numero }}</span>
+    <span>Vigência até {{ a.fim | data }}</span>
+    {% if a.n_itens %}<span>{{ a.n_itens }} iten{{ 's' if a.n_itens != 1 else '' }}{% if a.preco_min is not none %} · {{ a.preco_min | brl }}{% if a.preco_max != a.preco_min %} a {{ a.preco_max | brl }}{% endif %}{% endif %}</span>{% else %}<span>sem itens/preços nesta fonte</span>{% endif %}
+  </div>
+</article>
+{% else %}
+<p>Nenhuma ata encontrada para esses filtros.</p>
+{% endfor %}
+{% if p.paginas > 1 %}
+<nav class="pag">
+  {% if p.pagina > 1 %}<a class="btn sec" href="/?{{ qs(f, pagina=p.pagina - 1) }}">‹ Anterior</a>{% endif %}
+  {% if p.pagina < p.paginas %}<a class="btn sec" href="/?{{ qs(f, pagina=p.pagina + 1) }}">Próxima ›</a>{% endif %}
+</nav>
+{% endif %}

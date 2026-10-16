@@ -1,4 +1,4 @@
-.PHONY: up down test migrate ingest backup restore amostra eval
+.PHONY: up down test migrate ingest web backup restore amostra eval
 
 up: ## Sobe o Postgres local (porta só em 127.0.0.1).
 	@test -f .env || (echo "Falta o .env. Copie .env.example para .env e preencha antes de rodar 'make up'." && exit 1)
@@ -23,6 +23,9 @@ FONTE ?= siga
 ingest: ## Carga de uma fonte: make ingest FONTE=siga|arp|pncp_busca [ARGS=--validar].
 	@case "$(FONTE)" in siga|arp|pncp_busca) ;; *) echo "FONTE=$(FONTE) desconhecida (siga|arp|pncp_busca)." >&2; exit 1;; esac
 	uv run python -m pncp_ti.fontes.$(FONTE) $(ARGS)
+
+web: ## Web local em 127.0.0.1:8000 (papel web_reader; precisa de PNCP_TI_WEB_PASSWORD).
+	uv run python -m pncp_ti.web
 
 backup: ## pg_dump do Postgres local para backups/ (fora do Git).
 	./scripts/backup_postgres.sh

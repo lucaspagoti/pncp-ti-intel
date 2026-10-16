@@ -131,6 +131,10 @@ que não foi feita: o recall da lista de termos **não está demonstrado**.
 - O Lucas pesquisa "outsourcing de impressão", "notebook" e "licença Microsoft" e vê atas vigentes
   federais, estaduais (incluindo RJ) e municipais, com preços quando a fonte traz itens.
 
+**Status (16/10/2026):** implementada em `feat/r4-web` (ADR 0023, migração 0008, `make web`). Com os
+dados reais, as três buscas devolvem 325, 58 e 81 atas em ~1,5 s. Falta o Lucas fazer a
+demonstração dele. Limite conhecido: esfera e UF não existem para as atas do ARP.
+
 ## R5 · Exposição no domínio
 
 **Entregas**

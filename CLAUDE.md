@@ -71,6 +71,7 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo. Sem Windows/W
 - `make migrate` — aplica as migrações do Alembic (schema, papéis, views).
 - `make ingest FONTE=siga|arp|pncp_busca [ARGS=--validar]` — carga do SIGA RJ (R1), do Compras ARP
   (R2) ou da busca PNCP por termos (R3, `insumos/termos_ti.txt`).
+- `make web` — web local em `127.0.0.1:8000` (R4); proxy autenticado em `deploy/caddy/` (R5, ADR 0024).
 - `scripts/carga_diaria.sh` — o que o timer systemd roda às 03:00 (`docs/operacao-timer.md`).
 - `make backup` — `pg_dump` do container para `backups/` (fora do Git).
 - `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.
