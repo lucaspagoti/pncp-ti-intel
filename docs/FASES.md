@@ -100,6 +100,21 @@ que não viram candidatas (`evals/arp_20261014.md`). Timer diário instalado no 
 
 **Status:** concluída (PR #7).
 
+## R2.1 · Varredura por PDM e corte de precisão
+
+**Entregas** (ADR 0025)
+- `varrer_pdm` em `fontes/arp.py`: segunda fonte de candidatas (semanal com cache, mais os últimos
+  14 dias todo dia).
+- `insumos/regra_ti_arp.json` + `fontes/arp_regra.py`: ata só vira TI por itens de catálogo se
+  ≥ 50% dos itens forem de TI ou tiver PDM central; `catalogo_incidental` marca o resto.
+- Auditoria mede o recall pelo critério.
+
+**Critério de aceite**
+- Testes verdes e carga real com o corte; relatório em `evals/` com recall pelo critério e a
+  contagem de incidentais; Lucas revisa a lista de PDMs centrais.
+
+**Status:** implementada em `feat/r2-1-varredura-pdm`; aguarda carga real e revisão.
+
 ## R3 · Busca PNCP por termos de TI
 
 **Entregas**

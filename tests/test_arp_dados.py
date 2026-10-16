@@ -17,6 +17,7 @@ from pncp_ti.fontes.arp_dados import (
     validar_contrato,
     validar_pagina,
 )
+from pncp_ti.fontes.arp_regra import RegraArp
 from pncp_ti.fontes.siga_csv import ErroValidacao
 
 CATALOGO = CatalogoTI(pdms=frozenset({239, 283}), servicos={1260: 8713})
@@ -101,9 +102,10 @@ def test_anexo_decide_primeiro_e_motivo_registra_a_regra():
 def test_catalogo_acrescenta_ata_sem_sinal_no_objeto():
     itens = [mapear_item(d.item("1", "1", "Teclado", pdm=239, nome_pdm="XPTO"))]
     decisao = decidir_ata("Material diverso de consumo", itens, CATALOGO)
-    assert decisao.is_ti and decisao.motivo == "catmat70:pdm239@item"
+    assert decisao.is_ti and decisao.motivo.startswith("catmat70:pdm239@item")
     servico = [mapear_item(d.item("1", "2", "Reparo", tipo="Serviço", codigo=1260, pdm=None))]
-    assert decidir_ata("Serviços gerais", servico, CATALOGO).motivo == "catser8713:servico1260@item"
+    motivo = decidir_ata("Serviços gerais", servico, CATALOGO).motivo
+    assert motivo.startswith("catser8713:servico1260@item")
 
 
 def test_catalogo_nao_reverte_exclusao_explicita_do_anexo():
@@ -159,3 +161,33 @@ def test_entre_repetidas_no_mesmo_estado_fica_a_mais_recente():
     nova = mapear_ata(d.ata("9", "Notebooks", atualizado="2026-02-01T00:00:00"), d.hoje())
     assert escolher(velha, nova) is nova
     assert escolher(nova, velha) is nova
+
+
+REGRA = RegraArp(limiar_proporcao=0.5, pdms_centrais=frozenset({8435}))
+
+
+def _itens(*pdms: int):
+    return [mapear_item(d.item("1", str(n), f"Item {n}", pdm=p)) for n, p in enumerate(pdms, 1)]
+
+
+def test_item_de_ti_incidental_nao_classifica_a_ata():
+    itens = _itens(239, 1, 2, 3)  # 1 de 4 itens de TI, nenhum central
+    decisao = decidir_ata("Material de expediente", itens, CATALOGO, REGRA)
+    assert not decisao.is_ti and decisao.motivo == "catalogo_incidental"
+
+
+def test_proporcao_no_limiar_classifica_e_motivo_registra_a_conta():
+    decisao = decidir_ata("Material diverso", _itens(239, 283, 1, 2), CATALOGO, REGRA)
+    assert decisao.is_ti and decisao.motivo.endswith(":prop2de4")
+    assert not decidir_ata("Material diverso", _itens(239, 1, 2, 3, 4), CATALOGO, REGRA).is_ti
+
+
+def test_pdm_central_classifica_mesmo_com_um_item_entre_muitos():
+    catalogo = CatalogoTI(pdms=frozenset({239, 283, 8435}), servicos={1260: 8713})
+    itens = _itens(8435, *range(1, 10))
+    decisao = decidir_ata("Material diverso", itens, catalogo, REGRA)
+    assert decisao.is_ti and decisao.motivo.endswith(":central")
+
+
+def test_objeto_de_ti_vale_mesmo_sem_item_de_ti():
+    assert decidir_ata("Aquisição de notebooks", _itens(1, 2, 3), CATALOGO, REGRA).is_ti

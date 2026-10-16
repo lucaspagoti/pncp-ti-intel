@@ -1,0 +1,143 @@
+{
+ "versao": 1,
+ "descricao": "Regra de TI do ARP pelo catálogo (R2.1, ADR 0025). A ata só vira TI por itens de catálogo se pelo menos `limiar_proporcao` dos itens for de TI OU tiver um item de PDM central. Revisado pelo Lucas; mudanças viram PR.",
+ "limiar_proporcao": 0.5,
+ "pdms_centrais": [
+  {
+   "codigo": 223,
+   "nome": "IMPRESSORA JATO TINTA"
+  },
+  {
+   "codigo": 224,
+   "nome": "IMPRESSORA LASER"
+  },
+  {
+   "codigo": 226,
+   "nome": "IMPRESSORA MULTIFUNCIONAL"
+  },
+  {
+   "codigo": 237,
+   "nome": "ROTEADOR"
+  },
+  {
+   "codigo": 238,
+   "nome": "SCANNER"
+  },
+  {
+   "codigo": 239,
+   "nome": "SERVIDOR IMPRESSÃO"
+  },
+  {
+   "codigo": 5521,
+   "nome": "COMPUTADOR"
+  },
+  {
+   "codigo": 5522,
+   "nome": "SWITCH"
+  },
+  {
+   "codigo": 6484,
+   "nome": "MICROCOMPUTADOR ALL IN ONE"
+  },
+  {
+   "codigo": 6661,
+   "nome": "MICROCOMPUTADOR"
+  },
+  {
+   "codigo": 6727,
+   "nome": "MICROCOMPUTADOR"
+  },
+  {
+   "codigo": 7086,
+   "nome": "ESTAÇÃO TRABALHO PROCESSAMENTO DE DADOS"
+  },
+  {
+   "codigo": 8435,
+   "nome": "NOTEBOOK"
+  },
+  {
+   "codigo": 9725,
+   "nome": "MICROCOMPUTADOR PESSOAL TIPO LAPTOP"
+  },
+  {
+   "codigo": 9726,
+   "nome": "MICROCOMPUTADOR PESSOAL NOTEBOOK"
+  },
+  {
+   "codigo": 10293,
+   "nome": "SERVIDOR"
+  },
+  {
+   "codigo": 12050,
+   "nome": "SERVIDOR DE REDE"
+  },
+  {
+   "codigo": 13153,
+   "nome": "SERVIDOR"
+  },
+  {
+   "codigo": 13156,
+   "nome": "MICROCOMPUTADOR NOTEBOOK"
+  },
+  {
+   "codigo": 13167,
+   "nome": "MICRO-COMPUTADOR"
+  },
+  {
+   "codigo": 13811,
+   "nome": "COMPUTADOR - ESTAÇÃO TRABALHO"
+  },
+  {
+   "codigo": 14081,
+   "nome": "MODEM ROTEADOR"
+  },
+  {
+   "codigo": 14176,
+   "nome": "MICROCOMPUTADOR"
+  },
+  {
+   "codigo": 14177,
+   "nome": "COMUTADOR REDE"
+  },
+  {
+   "codigo": 14786,
+   "nome": "MICROCOMPUTADOR PRODUÇÃO"
+  },
+  {
+   "codigo": 14796,
+   "nome": "MICROCOMPUTADOR PESSOAL - HANDHELD"
+  },
+  {
+   "codigo": 14811,
+   "nome": "SERVIDOR ARQUIVO"
+  },
+  {
+   "codigo": 15089,
+   "nome": "CONJUNTO COMPUTACIONAL INTEGRADO"
+  },
+  {
+   "codigo": 15218,
+   "nome": "APLLIANCE FIREWALL"
+  },
+  {
+   "codigo": 15287,
+   "nome": "IMPRESSORA MONOCROMÁTICA"
+  },
+  {
+   "codigo": 17186,
+   "nome": "COMPUTADOR"
+  },
+  {
+   "codigo": 17652,
+   "nome": "SERVIDOR APLICATIVO"
+  },
+  {
+   "codigo": 18374,
+   "nome": "FIREWALL"
+  },
+  {
+   "codigo": 19246,
+   "nome": "TABLET"
+  }
+ ]
+}

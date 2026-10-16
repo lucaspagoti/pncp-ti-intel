@@ -144,6 +144,16 @@ class ClienteFalso:
                     if f["dataAssinaturaInicial"] <= a["dataAssinatura"] <= f["dataAssinaturaFinal"]
                 ]
             return self._fatiar(do_periodo, pagina)
+        if rota.endswith("2_consultarARPItem") and "codigoPdm" in f:  # varredura por PDM (R2.1)
+            do_pdm = [
+                i
+                for i in self.lote
+                if i["codigoPdm"] == f["codigoPdm"]
+                and f["dataVigenciaInicialMin"]
+                <= i["dataVigenciaInicial"]
+                <= f["dataVigenciaInicialMax"]
+            ]
+            return self._fatiar(do_pdm, pagina)
         if rota.endswith("2_consultarARPItem"):
             do_grupo = [
                 i
