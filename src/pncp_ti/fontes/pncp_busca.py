@@ -242,6 +242,7 @@ async def buscar_termo(
 ) -> tuple[list[dict[str, Any]], int]:
     """Todas as páginas de um termo; devolve (itens, total declarado)."""
     itens: list[dict[str, Any]] = []
+    total = 0
     pagina = 1
     while True:
         corpo = await _pegar(
@@ -255,7 +256,9 @@ async def buscar_termo(
                 "pagina": pagina,
             },
         )
-        da_pagina, total = validar_pagina(corpo)
+        da_pagina, total_pagina = validar_pagina(corpo)
+        if pagina == 1:
+            total = total_pagina  # o total da 1ª página é a referência; as seguintes não o mudam
         itens.extend(da_pagina)
         esperado = min(total, LIMITE_JANELA)
         if len(itens) >= esperado:

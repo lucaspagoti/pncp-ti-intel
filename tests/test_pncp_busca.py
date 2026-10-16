@@ -331,3 +331,14 @@ async def test_termo_que_nunca_volta_conta_como_falho_depois_das_passadas():
         coleta = await b.coletar(["notebook"], HOJE, c)
     assert chamadas["n"] == b.TENTATIVAS * (1 + b.PASSADAS_EXTRA)
     assert coleta.contagens["termos_falhos"] == 1
+
+
+async def test_pagina_vazia_com_total_zerado_no_meio_nao_vira_fim_de_lista():
+    def tratar(req: httpx.Request) -> httpx.Response:
+        if int(req.url.params["pagina"]) == 1:
+            return httpx.Response(200, json={"items": [item()], "total": 3})
+        return httpx.Response(200, json={"items": [], "total": 0})  # o portal "zerou" no meio
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        with pytest.raises(b._TermoFalhou):
+            await b.buscar_termo(c, b.LimitadorTaxa(1000), "notebook")
