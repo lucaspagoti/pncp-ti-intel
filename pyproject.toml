@@ -36,6 +36,7 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["rede: usa a rede externa; só roda com PNCP_TI_TESTES_REDE=1"]
 
 [build-system]
 requires = ["hatchling"]

@@ -50,7 +50,9 @@ REQUISICOES_POR_SEGUNDO = 2.0
 TENTATIVAS = 6
 ESPERA_BASE = 2.0
 PISO_ATAS = 0.5
-LIMITE_TERMOS_FALHOS = 0.2  # fração de termos que podem esgotar as tentativas sem derrubar a carga
+PASSADAS_EXTRA = 2  # novas tentativas dos termos que falharam, depois da passada principal
+ESPERA_PASSADA = 60.0  # segundos antes de cada passada extra: o portal costuma voltar em minutos
+LIMITE_BYTES = 25 * 1024 * 1024  # uma página de 500 atas tem ~2 MB
 ID_PNCP_ATA = re.compile(r"\d{14}-\d-\d{6}/\d{4}-\d{6}")
 LIMITE_TEXTO = 4000
 CAMPOS_ITEM = (
@@ -98,7 +100,7 @@ class AtaBusca:
 class ResultadoCarga:
     carga_id: UUID
     status: str
-    contagens: dict[str, int]
+    contagens: dict[str, Any]
 
 
 def ler_termos(caminho: Path = ARQUIVO_TERMOS) -> list[str]:
@@ -213,10 +215,15 @@ async def _pegar(
     for tentativa in range(1, TENTATIVAS + 1):
         await limitador.aguardar()
         try:
-            resposta = await client.get(URL_BUSCA, params=params)
-            if resposta.status_code == 200:
-                return resposta.json()
-            ultimo = f"HTTP {resposta.status_code}"
+            async with client.stream("GET", URL_BUSCA, params=params) as resposta:
+                if resposta.status_code == 200:
+                    corpo = bytearray()
+                    async for bloco in resposta.aiter_bytes(1 << 16):
+                        corpo.extend(bloco)
+                        if len(corpo) > LIMITE_BYTES:
+                            raise ErroValidacao("contrato", "resposta da busca acima do limite")
+                    return json.loads(corpo)
+                ultimo = f"HTTP {resposta.status_code}"
             if resposta.status_code < 500 and resposta.status_code != 429:
                 raise ErroValidacao("contrato", f"busca respondeu {ultimo}")
         except (httpx.TransportError, json.JSONDecodeError) as exc:
@@ -265,8 +272,9 @@ async def _coletar_termo(
     termo: str,
     hoje: date,
     atas: dict[str, AtaBusca],
-    contagens: dict[str, int],
+    contagens: dict[str, Any],
     sem_resultado: list[str],
+    totais: dict[str, int],
 ) -> bool:
     """Busca um termo e acumula as atas que o casam; `False` se o portal não respondeu."""
     try:
@@ -274,6 +282,7 @@ async def _coletar_termo(
     except _TermoFalhou as exc:
         log.warning("pncp_busca_termo_falhou_tentativa", termo=termo, motivo=str(exc))
         return False
+    totais[termo] = total
     contagens["itens_lidos"] += len(itens)
     if total > LIMITE_JANELA:
         contagens["termos_truncados"] += 1
@@ -302,7 +311,7 @@ async def _coletar_termo(
 @dataclass(slots=True)
 class Coleta:
     atas: dict[str, AtaBusca]
-    contagens: dict[str, int]
+    contagens: dict[str, Any]
     sem_resultado: list[str]
 
 
@@ -326,30 +335,45 @@ async def coletar(
         "termos_recuperados": 0,
     }
     sem_resultado: list[str] = []
+    totais: dict[str, int] = {}
     try:
         falhos: list[str] = []
         for termo in termos:
             if not await _coletar_termo(
-                client, limitador, termo, hoje, atas, contagens, sem_resultado
+                client, limitador, termo, hoje, atas, contagens, sem_resultado, totais
             ):
                 falhos.append(termo)
         # Segunda chance: o portal falha de forma intermitente e costuma voltar minutos depois.
+        for _ in range(PASSADAS_EXTRA):
+            if not falhos:
+                break
+            await asyncio.sleep(ESPERA_PASSADA)
+            ainda: list[str] = []
+            for termo in falhos:
+                if await _coletar_termo(
+                    client, limitador, termo, hoje, atas, contagens, sem_resultado, totais
+                ):
+                    contagens["termos_recuperados"] += 1
+                else:
+                    ainda.append(termo)
+            falhos = ainda
         for termo in falhos:
-            if await _coletar_termo(client, limitador, termo, hoje, atas, contagens, sem_resultado):
-                contagens["termos_recuperados"] += 1
-            else:
-                contagens["termos_falhos"] += 1
-                log.warning("pncp_busca_termo_falhou", termo=termo)
+            contagens["termos_falhos"] += 1
+            log.warning("pncp_busca_termo_falhou", termo=termo)
     finally:
         if proprio:
             await client.aclose()
     contagens["atas_unicas"] = len(atas)
+    # Total declarado pelo portal por termo (antes do filtro de frase): o alerta da R6 lê daqui.
+    contagens["resultados_por_termo"] = totais
     return Coleta(atas, contagens, sem_resultado)
 
 
 def validar(coleta: Coleta) -> None:
     c = coleta.contagens
-    if c["termos_falhos"] > LIMITE_TERMOS_FALHOS * c["termos"]:
+    if c["termos_falhos"]:
+        # Termo perdido = atas exclusivas dele somem: não publica lista incompleta (o snapshot
+        # anterior continua visível e a carga seguinte tenta de novo).
         raise ErroValidacao(
             "termos_falhos", f"{c['termos_falhos']} de {c['termos']} termos falharam"
         )

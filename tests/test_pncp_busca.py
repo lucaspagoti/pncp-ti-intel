@@ -56,6 +56,7 @@ def cliente(respostas: dict[str, list[dict]], chamadas: list | None = None) -> h
 def sem_espera(monkeypatch):
     monkeypatch.setattr(b, "REQUISICOES_POR_SEGUNDO", 1000.0)
     monkeypatch.setattr(b, "ESPERA_BASE", 0.0)
+    monkeypatch.setattr(b, "ESPERA_PASSADA", 0.0)
 
 
 def test_mapear_aceita_ata_vigente_e_monta_link():
@@ -143,7 +144,9 @@ async def test_retry_em_queda_de_conexao_e_termo_falho_nao_derruba():
         coleta = await b.coletar(["bom", "ruim", "bom2", "bom3", "bom4", "bom5"], HOJE, c)
     assert coleta.contagens["termos_falhos"] == 1
     assert len(coleta.atas) == 1
-    b.validar(coleta)  # 1 de 6 falhos fica abaixo do limite
+    with pytest.raises(ErroValidacao) as exc:  # um termo perdido já impede a publicação
+        b.validar(coleta)
+    assert exc.value.tipo == "termos_falhos"
 
 
 async def test_validar_recusa_muitos_termos_falhos_e_coleta_vazia():
@@ -296,3 +299,35 @@ async def test_pagina_vazia_antes_do_total_declarado_falha_o_termo():
             await b.buscar_termo(c, b.LimitadorTaxa(1000), "notebook")
         coleta = await b.coletar(["notebook"], HOJE, c)
     assert coleta.contagens["termos_falhos"] == 1  # incompleto não vira lista "completa"
+
+
+async def test_registra_o_total_declarado_por_termo_para_o_alerta_da_operacao():
+    respostas = {"notebook": [item(ID_A), item(ID_B)], "vazio": []}
+    async with cliente(respostas) as c:
+        coleta = await b.coletar(["notebook", "vazio"], HOJE, c)
+    assert coleta.contagens["resultados_por_termo"] == {"notebook": 2, "vazio": 0}
+
+
+async def test_resposta_acima_do_limite_de_bytes_derruba_a_coleta(monkeypatch):
+    monkeypatch.setattr(b, "LIMITE_BYTES", 1000)
+
+    def tratar(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"x" * 5000)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        with pytest.raises(ErroValidacao) as exc:
+            await b.coletar(["notebook"], HOJE, c)
+    assert exc.value.tipo == "contrato"
+
+
+async def test_termo_que_nunca_volta_conta_como_falho_depois_das_passadas():
+    chamadas = {"n": 0}
+
+    def tratar(req: httpx.Request) -> httpx.Response:
+        chamadas["n"] += 1
+        raise httpx.ReadError("queda")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        coleta = await b.coletar(["notebook"], HOJE, c)
+    assert chamadas["n"] == b.TENTATIVAS * (1 + b.PASSADAS_EXTRA)
+    assert coleta.contagens["termos_falhos"] == 1
