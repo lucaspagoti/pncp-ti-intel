@@ -28,8 +28,10 @@ SELECT fonte, status, data_referencia, concluido_em, erro_tipo
 FROM cargas ORDER BY iniciado_em DESC LIMIT 10;
 ```
 
-## Alerta (opcional)
+## Alerta
 
 Com `KUMA_PUSH_URL` no `.env` (monitor *Push* do Uptime Kuma, intervalo de 26 h), o script faz um
 `curl` na URL quando as duas cargas dão certo. Sem sinal por 26 h, o Kuma marca o monitor como
-fora do ar. A notificação do Kuma (WhatsApp via WAHA) está pendente de configuração.
+fora do ar e avisa no WhatsApp. A notificação do Kuma sai pela bridge do homelab (a mesma do Backrest
+e do Diun), que repassa ao WAHA; o Kuma não fala direto com o WAHA. Detalhes em
+`/opt/homelab/docs`.
