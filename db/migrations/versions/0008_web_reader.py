@@ -8,7 +8,8 @@ Create Date: 2026-10-16
   acesso às tabelas base (ADR 0018).
 - Extensão `unaccent` (busca sem acento) e `pg_trgm` (ordenação por similaridade).
 - `v_busca_atas`: as atas de TI vigentes com o texto de busca (objeto, órgão e itens) e o
-  resumo de preço unitário. Lê `ata_itens` direto (a view roda com os privilégios do dono).
+  resumo de preço unitário (mín., máx. e a lista de preços válidos, para o filtro de faixa).
+  Lê `ata_itens` direto (a view roda com os privilégios do dono).
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ def upgrade() -> None:
                COALESCE(i.n_itens, 0) AS n_itens,
                i.preco_min,
                i.preco_max,
+               COALESCE(i.precos, '{}') AS precos,
                unaccent(lower(concat_ws(' ', v.objeto, v.orgao, v.unidade_gerenciadora, v.numero,
                                         i.textos))) AS texto_busca
         FROM v_atas_ti_vigentes v
@@ -44,6 +46,7 @@ def upgrade() -> None:
             SELECT count(*)::int AS n_itens,
                    min(it.valor_unitario) FILTER (WHERE it.valor_valido) AS preco_min,
                    max(it.valor_unitario) FILTER (WHERE it.valor_valido) AS preco_max,
+                   array_agg(it.valor_unitario) FILTER (WHERE it.valor_valido) AS precos,
                    string_agg(concat_ws(' ', it.descricao, it.nome_catalogo), ' ') AS textos
             FROM ata_itens it
             WHERE it.carga_id = v.carga_id AND it.ata_id_origem = v.id_ata

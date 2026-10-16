@@ -7,13 +7,14 @@
 **R3, busca PNCP**
 - Uma consulta por termo de `insumos/termos_ti.txt` (`tipos_documento=ata`, `status=vigente`,
   500 por página), 2 requisições/s, retry com backoff (o portal derruba conexões e devolve corpo
-  vazio de forma intermitente). Termo que esgota as tentativas é contado e registrado; mais de 20%
-  de termos falhos derruba a carga. Mudança de contrato (`items`/`total`/campos) falha alto.
+  vazio de forma intermitente; página vazia antes do total declarado conta como falha). Termo que esgota as tentativas ganha duas passadas extras no fim; se ainda
+  falhar, **a carga não publica** (o snapshot anterior continua visível): uma lista incompleta some com as
+  atas exclusivas do termo perdido. Respostas são lidas em streaming com teto de 25 MB.
+  Mudança de contrato (`items`/`total`/campos) falha alto.
 - **Filtro de precisão local:** o portal casa por palavra solta (`equipamentos de informatica`
   devolveu 32 mil atas, quase todas mobiliário e obras; a primeira carga real publicou 20 mil atas
   falsas de TI). Só entra a ata cujo objeto contém o **termo inteiro como frase** (sem acento nem
-  caixa, última palavra com sufixo). Termos genéricos saíram da lista. Termo que falha ganha uma
-  segunda passada no fim da carga.
+  caixa, última palavra com sufixo). Termos genéricos saíram da lista.
 - A busca não traz itens nem preço. Toda ata achada entra com `is_ti = true` e
   `motivo_ti = termo_pncp:<termos>`. É recall por termo: **a precisão depende da lista de termos**,
   que o Lucas revisa. Nenhum recall nacional é alegado (ADR 0016, D6).
@@ -30,6 +31,7 @@
 - Papel `web_reader` (migração 0008, senha `PNCP_TI_WEB_PASSWORD`): SELECT só em
   `v_atas_ti_vigentes`, `v_ata_itens_ti`, `v_ata_consumo_item` e `v_busca_atas`. Conexões
   somente leitura, `statement_timeout` de 8 s.
+- Filtro de preço: um mesmo item válido precisa caber na faixa (`precos numeric[]` na view).
 - Busca: `to_tsvector('portuguese')` sobre `unaccent(lower(objeto + órgão + itens))` com
   `websearch_to_tsquery`. Consultas fixas e parametrizadas; ordenação e filtros vêm de listas
   fechadas. O `LIKE` do órgão escapa `%`, `_` e `\`.

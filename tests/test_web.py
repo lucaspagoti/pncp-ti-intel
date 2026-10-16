@@ -222,3 +222,11 @@ def test_preco_aceita_formatos_e_sobrevive_a_ida_e_volta_pelo_link(texto, espera
     if esperado is not None:
         volta = consultas.ler_filtros(f.como_dict())
         assert volta.preco_min == f.preco_min
+
+
+async def test_faixa_de_preco_exige_um_item_dentro_da_faixa(cliente, conn_ingest):
+    # S1 tem itens de R$ 4.500 e R$ 30: a faixa 100–1.000 não tem item dentro, só extremos fora.
+    r = await cliente.get("/", params={"preco_min": "100", "preco_max": "1000"})
+    assert "notebooks" not in titulos(r.text)
+    r = await cliente.get("/", params={"preco_min": "20", "preco_max": "50"})
+    assert "notebooks" in titulos(r.text)

@@ -149,12 +149,17 @@ def _where(f: Filtros) -> tuple[str, dict[str, Any]]:
     if f.vence_ate:
         cond.append("fim <= %(vence_ate)s")
         p["vence_ate"] = f.vence_ate
-    if f.preco_min is not None:
-        cond.append("preco_max >= %(preco_min)s")
-        p["preco_min"] = f.preco_min
-    if f.preco_max is not None:
-        cond.append("preco_min <= %(preco_max)s")
-        p["preco_max"] = f.preco_max
+    if f.preco_min is not None or f.preco_max is not None:
+        # Um mesmo item precisa caber na faixa (mín. e máx. agregados deixariam passar uma ata
+        # com itens de R$ 100 e R$ 1.000 numa faixa de R$ 200 a R$ 500).
+        faixa = []
+        if f.preco_min is not None:
+            faixa.append("p >= %(preco_min)s")
+            p["preco_min"] = f.preco_min
+        if f.preco_max is not None:
+            faixa.append("p <= %(preco_max)s")
+            p["preco_max"] = f.preco_max
+        cond.append(f"EXISTS (SELECT 1 FROM unnest(precos) AS p WHERE {' AND '.join(faixa)})")
     return " AND ".join(cond), p
 
 
