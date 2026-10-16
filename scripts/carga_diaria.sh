@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Carga diária (ADR 0017 e 0020): SIGA RJ e Compras ARP, cada uma independente da outra.
-# Só avisa o Uptime Kuma (KUMA_PUSH_URL no .env, opcional) quando as duas deram certo.
+# Carga diária (ADR 0017 e 0020): SIGA RJ, Compras ARP e busca PNCP, cada uma independente da outra.
+# Só avisa o Uptime Kuma (KUMA_PUSH_URL no .env, opcional) quando todas deram certo.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
 status=0
-for fonte in siga arp; do
+for fonte in siga arp pncp_busca; do
     echo "== carga $fonte: $(date -Is)"
     uv run python -m "pncp_ti.fontes.$fonte"
     saida=$?

@@ -1,0 +1,59 @@
+# Termos de TI da busca PNCP (R3, ADR 0016). Uma consulta por linha; '#' comenta.
+# Lista inicial proposta pelo Claude em 16/10/2026: o Lucas revisa (remove ruído, inclui o que faltar).
+# Termo de uma palavra casa por radical no portal; prefira expressões quando a palavra for ambígua.
+notebook
+microcomputador
+computador desktop
+estacao de trabalho
+workstation
+servidor de rede
+servidor de dados
+storage
+switch
+roteador
+access point
+firewall
+impressora
+outsourcing de impressao
+locacao de impressoras
+scanner
+monitor de video
+tablet
+licenca de software
+licenciamento de software
+software
+sistema operacional
+microsoft
+antivirus
+solucao de seguranca
+backup
+nuvem
+computacao em nuvem
+hospedagem
+data center
+banco de dados
+suporte tecnico em informatica
+manutencao de equipamentos de informatica
+desenvolvimento de sistemas
+fabrica de software
+tecnologia da informacao
+solucao de tic
+servicos de tic
+equipamentos de informatica
+material de informatica
+suprimentos de informatica
+toner
+cartucho de impressora
+cabeamento estruturado
+rede de dados
+link de internet
+acesso a internet
+telefonia
+central telefonica
+videoconferencia
+videomonitoramento
+cftv
+certificado digital
+assinatura eletronica
+digitalizacao
+gestao de documentos
