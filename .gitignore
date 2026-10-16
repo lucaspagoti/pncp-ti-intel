@@ -32,3 +32,6 @@ docs/referencias/mcp-security-best-practices.md
 Thumbs.db
 .vscode/
 .idea/
+
+# Segredos do proxy
+deploy/caddy/caddy.env
