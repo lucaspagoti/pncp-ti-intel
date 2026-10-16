@@ -59,6 +59,8 @@ async def conn_ingest(nome_banco_teste: str):
     # Cada teste começa isolado; este DSN sempre aponta para o banco UUID efêmero.
     await conn.execute("DELETE FROM cargas")  # cascata: atas, itens e participantes
     await conn.execute("DELETE FROM atas_vistas")
+    await conn.execute("DELETE FROM digest_atas")
+    await conn.execute("DELETE FROM notificacoes")
     await conn.commit()
     yield conn
     await conn.close()

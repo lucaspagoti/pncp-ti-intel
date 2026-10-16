@@ -9,11 +9,24 @@ visível (troca atômica, ADR 0019 e 0020). Logs no journald; estado de cada exe
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cp deploy/systemd/pncp-ti-carga.* ~/.config/systemd/user/
+cp deploy/systemd/pncp-ti-* ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now pncp-ti-carga.timer
+systemctl --user enable --now pncp-ti-operacao.timer pncp-ti-backup.timer
 sudo loginctl enable-linger "$USER"   # o timer roda sem sessão aberta
 ```
+
+Os comandos acima são instruções para instalação pelo operador: a entrega R6 não os
+executa. Antes, configure `.env`, valide backup/restauração e aplique a migração 0009.
+As units usam `%h/projetos/pncp-ti-intel` e `%h/.local/bin/uv`; ajuste os arquivos copiados
+se a instalação estiver em outro caminho. Para atualizar uma unit já instalada, copie-a
+novamente e rode `daemon-reload`; não é necessário instalar uma segunda carga timer.
+
+A operação roda às **08:30** e o backup às **09:00**, em `America/Sao_Paulo`, com
+`Persistent=true`. Os três serviços têm `OnFailure=pncp-ti-falha@%n.service`, que envia
+texto pela bridge WhatsApp sem depender do banco. A unit de falha não tem `OnFailure`
+recursivo. A operação tem timer independente da carga e não deixa de rodar se ARP falhar.
+Ela repete a fila pendente na próxima execução; reenvio manual está no runbook.
 
 ## Operar
 
@@ -35,3 +48,9 @@ Com `KUMA_PUSH_URL` no `.env` (monitor *Push* do Uptime Kuma, intervalo de 26 h)
 fora do ar e avisa no WhatsApp. A notificação do Kuma sai pela bridge do homelab (a mesma do Backrest
 e do Diun), que repassa ao WAHA; o Kuma não fala direto com o WAHA. Detalhes em
 `/opt/homelab/docs`.
+
+R6 acrescenta `PNCP_TI_NOTIFY_URL` no `.env` para a bridge existente (`POST /notify/text`,
+texto puro, exige `{"ok": true}`). Sem URL, publicação falha explicitamente e conserva
+a fila; não marca mensagem como entregue. SIGA parado >48h, falha/idade ARP e gancho PNCP
+geram alertas separados do Push. Instalação, recuperação, limites de entrega, configuração
+do termo PNCP e MCP: [manual-operacao.md](manual-operacao.md), ADR 0022.

@@ -38,6 +38,14 @@ foi abandonado em 13/10/2026.
   59% (atas com objeto genérico escapam; ver `evals/arp_20261014.md`).
 - **Carga diária** às 03:00 por systemd timer (`scripts/carga_diaria.sh`, `docs/operacao-timer.md`):
   SIGA e depois ARP. A ARP é incremental (reaproveita os itens das atas sem mudança).
+- **R6 — Operação preparada para instalação** (ADR 0022): `OnFailure`, timer diário de
+  backup com restore temporário antes de publicar, alertas de frescor e digest WhatsApp
+  pela bridge existente. Fila persistente para reenvio e preservação de `primeira_vez_vista`.
+  Units entregues sem ativação; uma semana sem intervenção ainda precisa ser demonstrada.
+- **Backlog implementado:** view `v_ata_precos_ti` com unidades explícitas conservadoras,
+  MCP próprio stdio (`make mcp`) com consultas fixas e papel `mcp_reader`, e
+  [manual/runbook](docs/manual-operacao.md). Migração nova: **0009**, após a 0008;
+  coordenar numeração com as branches paralelas R3/R4 do Claude antes de integrar.
 
 `make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
 (`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, ADR 0024). O banco local está na migração 0008.
@@ -69,18 +77,14 @@ itens válidos, mas fazem o job retornar código não zero. Logs não incluem pa
 ## Backup diário e restauração segura
 
 O backup usa `pg_dump` dentro do container Postgres (mesma versão do servidor), valida o
-arquivo e publica o nome final por rename atômico. Arquivos têm permissão `0600`; falhas
+arquivo, restaura em banco temporário e consulta as views antes de publicar o nome final
+por rename atômico. Arquivos têm permissão `0600`; falhas
 removem somente o arquivo parcial. O `.env` nunca é executado pelo shell.
 
-Para agendar diariamente às 03:00 no fuso do servidor, adicione manualmente ao `crontab -e`
-(agendamento documentado, não ativado por estes scripts):
-
-```cron
-0 3 * * * cd /home/lucas/projetos/pncp-ti-intel && ./scripts/backup_postgres.sh >> backups/cron.log 2>&1
-```
-
-Crie antes o diretório `backups` com permissão `0700`, proteja o log e garanta que `docker`
-e `uv` estejam no PATH do cron. Defina uma política de retenção conforme o espaço disponível.
+Agendamento entregue por systemd: backup às 09:00 e operação às 08:30, em Brasília.
+Instalação manual em [docs/operacao-timer.md](docs/operacao-timer.md). Se havia cron de backup,
+substitua-o pelo timer para evitar duplicidade. Defina retenção e cópia externa conforme o
+espaço disponível; a entrega não altera os agendamentos reais.
 
 Teste o restore em um banco **novo**, sem apagar volume ou dados atuais:
 
@@ -97,6 +101,13 @@ restaurar. Guarde também uma cópia cifrada do `.env` separada do dump: a
 nas próximas ingestões e deve ser preservada entre servidores. Papéis já existentes preservam suas senhas. Uma falha nunca apaga o banco atual;
 o novo destino fica disponível para diagnóstico. Verifique contagens e consultas no novo
 banco antes de considerar uma troca, que deve ser feita separadamente.
+
+Para o digest, configure `PNCP_TI_NOTIFY_URL` no `.env` com a bridge local `/notify/text`.
+`make operacao` prepara e publica; `uv run python -m pncp_ti.operacao reenviar` tenta apenas
+pendências. Não envia o acervo inicial nem transforma recargas em atas novas. O gancho
+`PNCP_TI_PNCP_TERMO` fica vazio até a R3 preencher `contagens.resultados_por_termo`.
+Limites de reenvio, recuperação e uso do MCP estão no manual. Anexos/RAG, outros sistemas
+estaduais e renomeação continuam pendentes de decisão do Lucas.
 
 ## Finalidade do tratamento de dados (LGPD)
 

@@ -74,9 +74,33 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo. Sem Windows/W
 - `make web` — web local em `127.0.0.1:8000` (R4); proxy autenticado em `deploy/caddy/` (R5, ADR 0024).
 - `scripts/carga_diaria.sh` — o que o timer systemd roda às 03:00 (`docs/operacao-timer.md`).
 - `make backup` — `pg_dump` do container para `backups/` (fora do Git).
+  R6 valida restauração em banco temporário antes de publicar o dump.
 - `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.
 - `make amostra` — exporta `insumos/rotulagem_siga.csv` (censo das atas vigentes) para rotular TI.
 - `make eval ROT=<csv>` — precisão e recall do filtro de TI contra o rótulo final (`evals/`).
+- `make operacao` — frescor por fonte + digest de hoje em Brasília, com fila persistente.
+- `uv run python -m pncp_ti.operacao reenviar` — tenta somente notificações pendentes.
+- `make mcp` — servidor próprio stdio, SDK oficial, SQL fixo, papel `mcp_reader` só views.
+
+## Operação R6 (ADR 0022)
+
+Units em `deploy/systemd/`: carga 03:00, operação 08:30 e backup 09:00 (Brasília), com
+`OnFailure` para a bridge WhatsApp existente (`PNCP_TI_NOTIFY_URL` só no `.env`). Não chama
+Hermes/LLM. Instalação e runbook: `docs/operacao-timer.md`, `docs/manual-operacao.md`.
+Nunca ativar units nem alterar o homelab sem instrução do Lucas. Entrega de código não
+comprova o aceite de uma semana sem intervenção.
+
+Migração R6 **0009**, depois da 0008: outbox `notificacoes`, `digest_atas` e
+`v_ata_precos_ti`. Coordenar colisões de numeração com R3/R4 antes de integrar. Preserve
+`atas_vistas` e histórico de cargas; o digest suprime o primeiro dia por fonte e só prepara
+atas cuja primeira observação seja hoje. Confirmação de envio exige JSON `ok: true`;
+timeout após aceitação pode duplicar no reenvio (a bridge não oferece idempotência).
+
+Gancho PNCP opcional: `PNCP_TI_PNCP_TERMO` seleciona chave exata de
+`cargas.contagens.resultados_por_termo`. Deixe vazio até integrar R3. Normalização de preço
+é conservadora: somente descrição integral como unidade explícita, sem converter anual
+em mensal nem atribuir preço de franquia a página. RAG/anexos, outras fontes estaduais e
+renomeação seguem dependendo de decisão do Lucas.
 
 ## Insumos fornecidos pelo Lucas
 

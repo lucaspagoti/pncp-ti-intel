@@ -155,18 +155,32 @@ e Caddy com Let's Encrypt é do Lucas (ADR 0024, proposta; checklist em `docs/ow
 - systemd timer + `OnFailure`; backup diário.
 - Alerta de frescor por fonte (SIGA parado há mais de 48h, termo estável da busca PNCP com 0
   resultados, carga ARP falhando).
-- Digest de novas atas de TI (`primeira_vez_vista = hoje`, em `America/Sao_Paulo`) no Hermes.
+- Digest de novas atas de TI (`primeira_vez_vista = hoje`, em `America/Sao_Paulo`) pela bridge
+  WhatsApp/WAHA existente, sem chamar Hermes/LLM (ADR 0022).
   Preservar essa data entre trocas de snapshot por chave lógica; uma recarga não transforma
   atas conhecidas em novas. Testar publicação, falha e reprocessamento.
 
 **Critério de aceite**
 - Uma semana sem intervenção manual.
 
+**Status R6:** implementação entregue neste worktree (ADR 0022), instalação e aceite
+operacional pendentes. Units com `OnFailure`, operação 08:30 e backup 09:00; o backup só
+publica depois de restaurar em banco temporário. Digest usa outbox, suprime carga inicial
+e preserva datas entre snapshots. Gancho R3 opcional via
+`contagens.resultados_por_termo` + `PNCP_TI_PNCP_TERMO`; ainda depende da integração R3.
+Migração **0009**, seguinte à 0008; pode precisar renumeração na integração com
+Claude. Testes de integração/restore real dependem de ambiente com Docker/Postgres
+acessíveis; não confundir testes simulados com demonstração do critério de aceite.
+
 ## Backlog
 
-- Normalização de unidades de preço (licença/mês, usuário/ano, página impressa).
+- [x] Normalização conservadora de unidades explícitas (licença/mês, usuário/ano, página
+  impressa) em `v_ata_precos_ti`, sem inferir unidade de pacotes/franquias (ADR 0022).
 - Anexos e RAG (TR/ETP pelos links PNCP); retoma D3 e D4.
-- Servidor MCP sobre as mesmas views (stdio, SQL fixo).
+- [x] Servidor MCP sobre as mesmas views (stdio, SQL fixo, `mcp_reader`, SDK oficial).
 - Outros sistemas estaduais com CSV próprio (BEC-SP, Compras MG...).
 - Renomear o pacote `pncp_ti` e o repositório.
-- Manual de operação e runbook (antiga F7).
+- [x] Manual de operação e runbook em `docs/manual-operacao.md` (antiga F7).
+
+Anexos/RAG, outros sistemas estaduais e renomeação não foram feitos: dependem da decisão
+do Lucas. O pacote continua `pncp_ti`.
