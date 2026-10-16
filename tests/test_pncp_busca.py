@@ -283,3 +283,16 @@ async def test_termo_que_falha_ganha_segunda_chance():
     assert coleta.contagens["termos_falhos"] == 0
     assert coleta.contagens["termos_recuperados"] == 1
     assert ID_A in coleta.atas
+
+
+async def test_pagina_vazia_antes_do_total_declarado_falha_o_termo():
+    def tratar(req: httpx.Request) -> httpx.Response:
+        pagina = int(req.url.params["pagina"])
+        itens = [item()] if pagina == 1 else []
+        return httpx.Response(200, json={"items": itens, "total": 3})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        with pytest.raises(b._TermoFalhou):
+            await b.buscar_termo(c, b.LimitadorTaxa(1000), "notebook")
+        coleta = await b.coletar(["notebook"], HOJE, c)
+    assert coleta.contagens["termos_falhos"] == 1  # incompleto não vira lista "completa"

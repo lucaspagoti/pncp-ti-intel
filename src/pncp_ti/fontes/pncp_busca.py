@@ -250,8 +250,12 @@ async def buscar_termo(
         )
         da_pagina, total = validar_pagina(corpo)
         itens.extend(da_pagina)
-        if not da_pagina or len(itens) >= min(total, LIMITE_JANELA):
+        esperado = min(total, LIMITE_JANELA)
+        if len(itens) >= esperado:
             return itens, total
+        if not da_pagina:
+            # Resposta vazia antes do total declarado: o portal falhou; não é fim de lista.
+            raise _TermoFalhou(f"página vazia com {len(itens)} de {esperado} itens")
         pagina += 1
 
 
