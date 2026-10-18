@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Executado pelo Orca somente em tarefas que autorizem iniciar revisão.
+set -euo pipefail
+
+if (( $# != 0 )); then
+    printf '%s\n' 'review-agent não aceita argumentos: sandbox e aprovação são fixos.' >&2
+    exit 64
+fi
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
+exec codex --cd "$repo_root" --sandbox read-only --ask-for-approval never \
+    -c 'features.multi_agent=false'
