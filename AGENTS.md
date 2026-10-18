@@ -89,6 +89,10 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo. Sem Windows/W
 - `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.
 - `make amostra` — exporta `insumos/rotulagem_siga.csv` (censo das atas vigentes) para rotular TI.
 - `make eval ROT=<csv>` — precisão e recall do filtro de TI contra o rótulo final (`evals/`).
+- `uv run python -m pncp_ti.fontes.arp_auditoria` — recall da ARP pelo critério da R2.1
+  (`evals/arp_<data>.md`); sem `--minutos`, termina o ciclo da varredura por PDM que faltar.
+- `uv run python -m pncp_ti.fontes.pncp_busca_auditoria` — cobertura da busca PNCP contra o
+  ARP e concordância por termo (`evals/pncp_busca_<data>.md`); só lê o banco.
 - `make operacao` — alertas de incidente por fonte, com fila persistente (sem digest de atas, ADR 0027).
 - `uv run python -m pncp_ti.operacao reenviar` — tenta somente notificações pendentes.
 - `make mcp` — servidor próprio stdio, SDK oficial, SQL fixo, papel `mcp_reader` só views.

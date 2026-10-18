@@ -76,6 +76,9 @@ ASSINATURA_PASSO_MAXIMO = 4000
 ALVO_PAGINA = 0.9  # fração de uma página que a caminhada adaptativa mira por consulta
 CONCORRENCIA = 2
 TENTATIVAS_HTTP = 6  # o 429 da API pede ~36 s de espera; o cliente respeita o Retry-After
+# Na varredura, um par que não responde volta na noite seguinte: em 17/10/2026 um único par deu
+# 7 timeouts de 90 s e gastou 36 dos 45 min do orçamento. Duas novas tentativas bastam.
+TENTATIVAS_VARREDURA = 2
 PISO_ATAS = 0.5
 PISO_ITENS = 0.7
 ID_PNCP_ATA = re.compile(r"\d{14}-\d-\d{6}/\d{4}-\d{6}")  # CNPJ-1-compra/ano-ata
@@ -645,7 +648,9 @@ async def _consultar(
         "dataVigenciaInicialMax": maximo.isoformat(),
     }
     conferir_prazo()
-    resposta = await _pagina(client, orcamento, ROTA_ITENS_LOTE, 1, **filtros)
+    resposta = await _pagina(
+        client, orcamento, ROTA_ITENS_LOTE, 1, max_retries=TENTATIVAS_VARREDURA, **filtros
+    )
     registros, _, paginas = validar_pagina(resposta, 1)
     if paginas > 1 and minimo < maximo:
         meio = minimo + (maximo - minimo) // 2
@@ -667,7 +672,9 @@ async def _consultar(
             return achados, nome, paginas > 1
         pagina += 1
         conferir_prazo()
-        resposta = await _pagina(client, orcamento, ROTA_ITENS_LOTE, pagina, **filtros)
+        resposta = await _pagina(
+            client, orcamento, ROTA_ITENS_LOTE, pagina, max_retries=TENTATIVAS_VARREDURA, **filtros
+        )
         registros, _, paginas = validar_pagina(resposta, pagina)
 
 

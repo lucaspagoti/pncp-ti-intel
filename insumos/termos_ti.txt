@@ -3,6 +3,18 @@
 # Só entra a ata cujo objeto contém o termo inteiro (frase, sem acento); o portal casa por palavra solta.
 # Evite termos ambíguos ("hospedagem" pega hotel) e genéricos ("equipamentos de informatica" devolve 32 mil atas, quase todas ruído).
 # Termo de uma palavra casa por radical no portal; prefira expressões quando a palavra for ambígua.
+# Incluídos em 17/10/2026 pelo Claude a partir de evals/pncp_busca_20261017.md (cobertura de 38%
+# contra o ARP; as frases abaixo cobrem ~1.200 atas de TI perdidas). O Lucas revisa no PR.
+# Ficaram fora: "informatica" sozinha (casa com mobiliário e curso de informática), qualquer
+# termo terminado em "tic" (o sufixo aceita "ticket", "ticketagem") e "infraestrutura de rede"
+# (casa com redes de água e esgoto). Termo com mais de 10 mil resultados no portal é truncado.
+materiais de informatica
+material de informatica
+equipamentos de informatica
+suprimentos de informatica
+perifericos de informatica
+microinformatica
+computadores
 notebook
 microcomputador
 computador desktop

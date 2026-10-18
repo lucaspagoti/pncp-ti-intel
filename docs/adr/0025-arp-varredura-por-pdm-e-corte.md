@@ -49,6 +49,17 @@ notebook e microcomputador, parque tecnológico, manutenção de equipamentos) p
 5. Os parâmetros ficam em arquivo, e não no código, para poderem ser calibrados com rótulos
    (ADR 0026, curadoria assistida pelo Hermes). Mudar limiar ou lista de PDMs centrais é PR.
 
+6. **Desistir cedo de par lento** (17/10/2026): na primeira noite um único par deu 7 timeouts de
+   90 s e consumiu 36 dos 45 min do orçamento (34 de 1.788 pares feitos). As consultas da
+   varredura usam 2 novas tentativas (`TENTATIVAS_VARREDURA`), e não 6; o par que falha volta na
+   noite seguinte. O limite do cliente vale também para o 429: três 429 seguidos agora derrubam
+   o par (antes eram seis). Aceitável porque a varredura já respeita o limite de taxa e o par
+   não gravado no checkpoint é repetido. De dia a API responde em ~2 s: o ciclo inteiro (1.770 consultas) fechou em
+   35 min rodando a auditoria sem prazo. De madrugada foram ~20 s por par: com 45 min, um ciclo
+   leva cerca de duas semanas de noites. Se a entrada de atas genéricas precisar ser mais
+   rápida, a opção é subir `ARP_VARREDURA_MINUTOS` no `.env` (a carga inteira levou 80 min e
+   a unit aceita 5 h) ou rodar a auditoria de dia; fica a critério do Lucas.
+
 ## Consequências
 
 - A base ganha as atas de objeto genérico com TI relevante; perde as que só eram TI por item
