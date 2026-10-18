@@ -114,7 +114,15 @@ que não viram candidatas (`evals/arp_20261014.md`). Timer diário instalado no 
 - Testes verdes e carga real com o corte; relatório em `evals/` com recall pelo critério e a
   contagem de incidentais; Lucas revisa a lista de PDMs centrais.
 
-**Status:** implementada em `feat/r2-1-varredura-pdm`; aguarda carga real e revisão.
+**Status (17/10/2026):** mergeada (PR #13) e com carga real. A primeira noite fez só 34 de
+1.788 pares: um par deu 7 timeouts e gastou o orçamento; a varredura agora desiste depois de 2
+novas tentativas (ADR 0025, item 6). O ciclo foi fechado de dia pela auditoria e a carga
+`4ee904bf` publicou **7.762** atas de TI vigentes (eram 6.222), com 343 incidentais; recall
+pelo critério 100% (`evals/arp_20261017.md`). Falta o Lucas revisar a lista de PDMs centrais e
+decidir o furo de precisão da ata por fornecedor (632 atas TI só pela proporção, várias com
+1 item de mouse pad, ribbon ou caixa de som; propostas no relatório). De madrugada a API leva
+~20 s por par: um ciclo de 45 min/noite leva ~2 semanas (subir `ARP_VARREDURA_MINUTOS` é
+decisão dele).
 
 ## R3 · Busca PNCP por termos de TI
 
@@ -179,7 +187,14 @@ e Caddy com Let's Encrypt é do Lucas (ADR 0024, proposta; checklist em `docs/ow
 **Critério de aceite**
 - Uma semana sem intervenção manual.
 
-**Status R6:** implementação entregue neste worktree (ADR 0022), instalação e aceite
+**Status R6 (17/10/2026):** instalada no homelab; os três timers rodam e terminaram com
+sucesso desde 15/10 (as 8 falhas da ARP foram em 14/10). O digest de 17/10 saiu em 5 mensagens
+(20 atas) e o outbox não tem pendência. A semana sem intervenção conta de 15/10 e fecha em
+22/10; as cargas manuais de 17/10 (R2.1 e R3) foram trabalho de entrega, não correção.
+Ruído visto no digest: o termo `impressora` traz pulseira hospitalar com impressora em
+comodato e filme de raio X (revisar na lista de termos da R3).
+
+Histórico: implementação entregue neste worktree (ADR 0022), instalação e aceite
 operacional pendentes. Units com `OnFailure`, operação 08:30 e backup 09:00; o backup só
 publica depois de restaurar em banco temporário. Digest usa outbox, suprime carga inicial
 e preserva datas entre snapshots. Gancho R3 opcional via

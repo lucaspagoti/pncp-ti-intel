@@ -967,6 +967,23 @@ async def test_janela_de_um_dia_que_ainda_pagina_fica_marcada_como_incompleta():
     assert varredura.itens  # o que veio fica; o relatório mostra a lacuna
 
 
+async def test_varredura_desiste_cedo_de_par_que_nao_responde():
+    """Em 17/10/2026 um par deu 7 timeouts de 90 s e gastou quase todo o orçamento da noite."""
+    cliente = _cliente_varredura()
+    cliente.tamanho = 3
+    inicio = d.hoje() - timedelta(days=40)
+    cliente.lote = [
+        _lote_pdm(str(30 + n), "1", 8435, inicio + timedelta(days=n * 6)) for n in range(6)
+    ]
+    await arp.varrer_pdm(
+        cliente, arp._Orcamento(1000.0, 1000), [8435], arp.janelas_do_ciclo(d.hoje(), 1)
+    )
+    da_varredura = [f for r, f in cliente.filtros if r == arp.ROTA_ITENS_LOTE and "codigoPdm" in f]
+    assert len(da_varredura) > 1  # inclui as subjanelas da janela partida
+    assert all(f["max_retries"] == arp.TENTATIVAS_VARREDURA for f in da_varredura)
+    assert arp.TENTATIVAS_VARREDURA < arp.TENTATIVAS_HTTP
+
+
 def test_cache_cola_nova_linha_depois_de_cauda_truncada_e_nao_aceita_completa_sem_pares(tmp_path):
     cache = arp.CacheVarredura.do_ciclo(d.hoje(), tmp_path)
     cache.iniciar("v1", d.hoje(), 1)
