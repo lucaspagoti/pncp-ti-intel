@@ -1,5 +1,5 @@
 [Unit]
-Description=Alertas de frescor e digest de novas atas de TI
+Description=Alertas de incidente (frescor e falha por fonte)
 After=network-online.target
 OnFailure=pncp-ti-falha@%n.service
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Frescor e digest pncp-ti-intel às 08:30 (Brasília)
+Description=Alertas de incidente pncp-ti-intel às 08:30 (Brasília)
 
 [Timer]
 OnCalendar=*-*-* 08:30:00 America/Sao_Paulo
