@@ -39,8 +39,8 @@ foi abandonado em 13/10/2026.
 - **Carga diária** às 03:00 por systemd timer (`scripts/carga_diaria.sh`, `docs/operacao-timer.md`):
   SIGA e depois ARP. A ARP é incremental (reaproveita os itens das atas sem mudança).
 - **R6 — Operação preparada para instalação** (ADR 0022): `OnFailure`, timer diário de
-  backup com restore temporário antes de publicar, alertas de frescor e digest WhatsApp
-  pela bridge existente. Fila persistente para reenvio e preservação de `primeira_vez_vista`.
+  backup com restore temporário antes de publicar, alertas de incidente no WhatsApp
+  pela bridge existente (sem digest de atas, ADR 0027). Fila persistente para reenvio e preservação de `primeira_vez_vista`.
   Units entregues sem ativação; uma semana sem intervenção ainda precisa ser demonstrada.
 - **Backlog implementado:** view `v_ata_precos_ti` com unidades explícitas conservadoras,
   MCP próprio stdio (`make mcp`) com consultas fixas e papel `mcp_reader`, e
@@ -102,9 +102,9 @@ nas próximas ingestões e deve ser preservada entre servidores. Papéis já exi
 o novo destino fica disponível para diagnóstico. Verifique contagens e consultas no novo
 banco antes de considerar uma troca, que deve ser feita separadamente.
 
-Para o digest, configure `PNCP_TI_NOTIFY_URL` no `.env` com a bridge local `/notify/text`.
+Para os alertas de incidente, configure `PNCP_TI_NOTIFY_URL` no `.env` com a bridge local `/notify/text`.
 `make operacao` prepara e publica; `uv run python -m pncp_ti.operacao reenviar` tenta apenas
-pendências. Não envia o acervo inicial nem transforma recargas em atas novas. O gancho
+pendências (digests antigos nunca são enviados). O gancho
 `PNCP_TI_PNCP_TERMO` fica vazio até a R3 preencher `contagens.resultados_por_termo`.
 Limites de reenvio, recuperação e uso do MCP estão no manual. Anexos/RAG, outros sistemas
 estaduais e renomeação continuam pendentes de decisão do Lucas.

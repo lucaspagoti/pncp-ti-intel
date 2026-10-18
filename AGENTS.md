@@ -89,7 +89,7 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo. Sem Windows/W
 - `make restore DUMP=... DATABASE=...` — restaura em banco novo, preservando o banco atual.
 - `make amostra` — exporta `insumos/rotulagem_siga.csv` (censo das atas vigentes) para rotular TI.
 - `make eval ROT=<csv>` — precisão e recall do filtro de TI contra o rótulo final (`evals/`).
-- `make operacao` — frescor por fonte + digest de hoje em Brasília, com fila persistente.
+- `make operacao` — alertas de incidente por fonte, com fila persistente (sem digest de atas, ADR 0027).
 - `uv run python -m pncp_ti.operacao reenviar` — tenta somente notificações pendentes.
 - `make mcp` — servidor próprio stdio, SDK oficial, SQL fixo, papel `mcp_reader` só views.
 
@@ -103,8 +103,8 @@ comprova o aceite de uma semana sem intervenção.
 
 Migração R6 **0009**, depois da 0008: outbox `notificacoes`, `digest_atas` e
 `v_ata_precos_ti`. Coordenar colisões de numeração com R3/R4 antes de integrar. Preserve
-`atas_vistas` e histórico de cargas; o digest suprime o primeiro dia por fonte e só prepara
-atas cuja primeira observação seja hoje. Confirmação de envio exige JSON `ok: true`;
+`atas_vistas`, `digest_atas` e histórico de cargas. WhatsApp é só para incidentes: o digest
+de atas novas está desativado (ADR 0027) e não volta sem decisão do Lucas. Confirmação de envio exige JSON `ok: true`;
 timeout após aceitação pode duplicar no reenvio (a bridge não oferece idempotência).
 
 Gancho PNCP opcional: `PNCP_TI_PNCP_TERMO` seleciona chave exata de

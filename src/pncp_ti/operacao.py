@@ -1,10 +1,9 @@
-"""Alertas por fonte e digest durável, independente das fontes (ADR 0022)."""
+"""Alertas de incidente por fonte, com fila durável (ADR 0022 e 0027)."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
 import os
 import re
 from datetime import datetime, time, timedelta
@@ -16,7 +15,6 @@ from psycopg.rows import dict_row
 
 from pncp_ti.config import get_settings, ingest_dsn
 from pncp_ti.notificar import publicar
-from pncp_ti.privacy import sanitizar
 
 SP = ZoneInfo("America/Sao_Paulo")
 
@@ -81,55 +79,15 @@ async def enfileirar(conn, agora: datetime, termo: str | None = None) -> None:
             "INSERT INTO notificacoes (chave, corpo) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (f"alerta:{hoje}:{codigo}", corpo),
         )
-    candidatas = await (
-        await conn.execute(
-            """
-        WITH novas AS (
-            SELECT v.*, COALESCE('pncp:' || NULLIF(numero_controle_pncp, ''),
-                                fonte || ':' || id_ata) AS identidade
-            FROM v_atas_ti_vigentes v
-            WHERE primeira_vez_vista = %s
-              AND primeira_vez_vista > (
-                  SELECT min((concluido_em AT TIME ZONE 'America/Sao_Paulo')::date)
-                  FROM cargas c WHERE c.fonte = v.fonte
-                    AND c.status IN ('concluida', 'substituida')
-              )
-        )
-        SELECT DISTINCT ON (identidade) identidade, fonte, id_ata, numero, objeto
-        FROM novas n WHERE NOT EXISTS (
-            SELECT 1 FROM digest_atas d WHERE d.identidade = n.identidade
-        )
-        ORDER BY identidade, CASE WHEN fonte = 'compras_arp' THEN 0 ELSE 1 END, fonte
-    """,
-            (hoje,),
-        )
-    ).fetchall()
-    # Quatro atas por mensagem para respeitar os 1.200 caracteres da bridge.
-    for inicio in range(0, len(candidatas), 4):
-        grupo = candidatas[inicio : inicio + 4]
-        identidades = [a["identidade"] for a in grupo]
-        chave = "digest:" + hashlib.sha256("\n".join(identidades).encode()).hexdigest()
-        corpo = f"Novas atas de TI — {hoje} (Brasília)\n" + "\n".join(
-            f"{a['fonte']}: {a['numero'][:35]} [id {a['id_ata'][:65]}] — "
-            f"{' '.join(a['objeto'].split())[:100]}"
-            for a in grupo
-        )
-        await conn.execute(
-            "INSERT INTO notificacoes (chave, corpo) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (chave, sanitizar(corpo)),
-        )
-        for identidade in identidades:
-            await conn.execute(
-                "INSERT INTO digest_atas VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                (identidade, chave),
-            )
+    # Digest de atas novas desativado (ADR 0027): WhatsApp só para incidentes.
 
 
 async def entregar(conn, client: httpx.AsyncClient) -> int:
     pendentes = await (
         await conn.execute(
+            # Digests antigos ainda pendentes nunca saem (ADR 0027).
             "SELECT chave, corpo FROM notificacoes WHERE enviado_em IS NULL "
-            "ORDER BY criado_em, chave"
+            "AND chave NOT LIKE 'digest:%%' ORDER BY criado_em, chave"
         )
     ).fetchall()
     falhas = 0

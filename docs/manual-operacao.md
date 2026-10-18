@@ -34,11 +34,10 @@ Ausência da métrica com monitoramento configurado alerta; não é interpretada
 ## Rotina diária
 
 Às 03:00, SIGA e ARP executam de forma independente. Às 08:30, a operação consulta o
-frescor e prepara o digest das atas vistas hoje em Brasília. Às 09:00, o backup restaura
+frescor e falhas por fonte; só incidentes vão ao WhatsApp (sem digest de atas, ADR 0027). Às 09:00, o backup restaura
 o dump em um banco temporário e consulta as views antes de publicar o arquivo final.
 A operação tem timer próprio para continuar funcionando mesmo após falha da ingestão.
-As agendas são independentes: se uma carga exceder 08:30, o digest pode usar o snapshot
-anterior. Após concluir uma carga tardia, rode a operação ainda no mesmo dia.
+As agendas são independentes: se uma carga exceder 08:30, o frescor usa o snapshot anterior.
 
 ```bash
 systemctl --user list-timers 'pncp-ti-*'
@@ -78,17 +77,16 @@ segredos. Não execute textos do objeto das atas como comandos ou prompts admini
 uv run python -m pncp_ti.operacao reenviar
 ```
 
-Esse comando envia apenas a fila pendente. `make operacao` também prepara alertas e atas
-de hoje. Os comandos publicam mensagens reais quando a URL está configurada. A confirmação
+Esse comando envia apenas a fila pendente. `make operacao` também prepara os alertas de
+incidente de hoje. Os comandos publicam mensagens reais quando a URL está configurada. A confirmação
 da bridge significa aceitação por `send_text`, não prova de leitura pelo destinatário.
 Um timeout após aceitação pode causar duplicação no reenvio (ADR 0022). `OnFailure`
 publica diretamente para funcionar sem banco; se a bridge também estiver fora, consulte
 o journald da instância `pncp-ti-falha@...`, e o alarme independente do Kuma.
 
-A carga inicial de cada fonte é suprimida. Se a operação não rodou num determinado dia,
-as novidades daquele dia não são recuperadas automaticamente; só a fila já preparada é
-reenviada. Para investigar, consulte `atas_vistas.primeira_vez_vista`, sem atualizar datas
-nem apagar o registro `digest_atas` para forçar reenvios.
+O digest de atas novas está desativado (ADR 0027); entradas `digest:` antigas da fila
+não são enviadas. Novidades se consultam pela web ou em `atas_vistas.primeira_vez_vista`,
+sem atualizar datas nem apagar `digest_atas`.
 
 ## Backup e recuperação
 
@@ -138,6 +136,6 @@ há base segura para comparar automaticamente; consulte a descrição e a fonte 
 ## Aceite da semana
 
 Após instalação autorizada, registre sete dias seguidos: execução das fontes, frescor,
-status do backup/restauração e entrega do digest/alertas. Nenhuma unit foi ativada nesta
+status do backup/restauração e entrega dos alertas. Nenhuma unit foi ativada nesta
 implementação, portanto o aceite de uma semana permanece pendente. Os testes de publicação
 usam transporte HTTP simulado e não enviam WhatsApp real.
