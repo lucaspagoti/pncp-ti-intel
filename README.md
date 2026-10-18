@@ -11,6 +11,7 @@ Plano: `docs/PLANO.md`. Fases: `docs/FASES.md`. Decisões: `docs/adr/`.
 | Caminho | Para quê | Quem usa |
 | --- | --- | --- |
 | `CLAUDE.md` | Regras e contexto que o Claude Code lê em toda sessão | Claude Code |
+| `.claude/settings.json`, `.caveman.json` | Plugins do projeto (Superpowers, Caveman, UI UX Pro Max) e modo padrão do Caveman | Claude Code |
 | `docs/PLANO.md` | Escopo, fontes, arquitetura, segurança, riscos | Você e o Claude Code |
 | `docs/adr/` | Decisões de arquitetura | Claude Code |
 | `docs/FASES.md` | Entregas, critérios de aceite e prompt de abertura de cada fase | Você |
