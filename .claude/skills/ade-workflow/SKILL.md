@@ -112,6 +112,35 @@ Após settlement aceito, liberar o worker com `worker-release` e só então reco
 a Delivery. Guardar relatório e IDs antes de liberar; saída arquivada permanece
 consultável. Não deixar terminal retido por conveniência.
 
+### Fallback temporário: `codex exec` (sandbox x socket do Orca)
+
+Comprovado com Codex CLI 0.163.0: o sandbox `read-only` bloqueia `connect()` no socket
+Unix do Orca (`EPERM`), então o worker supervisionado não consegue enviar `check` nem
+`worker_done` (`runtime_unavailable`). Liberar o socket exige `network.enabled=true`, que
+abre toda a rede; o modo proxy impede até criar o socket. Nenhuma das duas é aceitável.
+A revisão supervisionada acima continua preferencial; use o fallback enquanto essa
+incompatibilidade existir ou quando o Lucas o autorizar.
+
+```text
+bash .claude/skills/ade-workflow/scripts/review-exec SNAPSHOT_ID PROMPT_FILE OUT_DIR ARQUIVO...
+```
+
+- `OUT_DIR` fica fora do repositório (scratchpad). `PROMPT_FILE` leva o pacote mínimo e o
+  contrato obrigatório da seção anterior, além de exigir JSON conforme
+  `references/parecer.schema.json` (veredito, achados P0–P3, arquivos analisados,
+  verificações, limitações, `snapshot_id`).
+- O launcher fixa `--sandbox read-only`, `approval_policy="never"`, `features.multi_agent=false`
+  e `--ephemeral`, com timeout de 900 s. Não usa rede extra, `danger-full-access` nem bypass.
+- Só aceita o parecer (exit 0) se o processo terminar com código 0, o JSON validar,
+  `snapshot_id` e arquivos esperados baterem e o fingerprint da árvore (HEAD, hashes e
+  `git status`) for idêntico antes e depois. Qualquer outra saída é rejeição, sem parecer.
+- Não há Task, Dispatch nem `worker_done`: nunca simular settlement do Orca. Registrar
+  `OUT_DIR` (parecer, eventos, fingerprints) como evidência. Os limites de P0–P3 e de duas
+  rodadas de correção valem igualmente; revisão do delta usa um novo `SNAPSHOT_ID`.
+- Dispatch preso por falha desse tipo: `worker-stop`; se o terminal for externo,
+  `worker-abandon`, fechar o terminal criado pelo coordenador e nunca `worker-release`
+  sem settlement aceito.
+
 ## 3. Corrigir, com limite explícito
 
 - Revisão inicial é R0. Após `CHANGES_REQUESTED`, Claude corrige os bloqueantes,

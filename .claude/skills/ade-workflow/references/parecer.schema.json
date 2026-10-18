@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["snapshot_id", "veredito", "arquivos_analisados", "verificacoes", "limitacoes", "achados"],
+  "properties": {
+    "snapshot_id": {"type": "string"},
+    "veredito": {"type": "string", "enum": ["APPROVED", "CHANGES_REQUESTED"]},
+    "arquivos_analisados": {"type": "array", "items": {"type": "string"}},
+    "verificacoes": {"type": "array", "items": {"type": "string"}},
+    "limitacoes": {"type": "array", "items": {"type": "string"}},
+    "achados": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "gravidade", "arquivo_linha", "evidencia", "impacto", "correcao"],
+        "properties": {
+          "id": {"type": "string"},
+          "gravidade": {"type": "string", "enum": ["P0", "P1", "P2", "P3"]},
+          "arquivo_linha": {"type": "string"},
+          "evidencia": {"type": "string"},
+          "impacto": {"type": "string"},
+          "correcao": {"type": "string"}
+        }
+      }
+    }
+  }
+}
