@@ -28,6 +28,9 @@ docs/referencias/*.htm
 docs/referencias/compras-mcp-*.md
 docs/referencias/mcp-security-best-practices.md
 
+# Configuração local do Claude Code (a do projeto, .claude/settings.json, é versionada)
+.claude/settings.local.json
+
 # SO / editores
 .DS_Store
 Thumbs.db
