@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Fallback de revisão: `codex exec` somente leitura, sem aprovação nem subagentes.
+# Uso: review-exec SNAPSHOT_ID PROMPT_FILE OUT_DIR ARQUIVO_ESPERADO...
+# OUT_DIR fica fora do repositório. O parecer só é aceito (exit 0) se o processo
+# terminar bem, o JSON validar contra o schema e a árvore não mudar durante a revisão.
+set -euo pipefail
+
+if (( $# < 4 )); then
+    printf '%s\n' 'uso: review-exec SNAPSHOT_ID PROMPT_FILE OUT_DIR ARQUIVO...' >&2
+    exit 64
+fi
+snapshot_id=$1 prompt=$2 out=$3
+shift 3
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
+schema="$repo_root/.claude/skills/ade-workflow/references/parecer.schema.json"
+mkdir -p "$out"
+
+fingerprint() {
+    (cd "$repo_root" && git rev-parse HEAD \
+        && { git ls-files -co --exclude-standard -z | xargs -0 -r sha256sum; } | sort)
+    git -C "$repo_root" status --porcelain
+}
+fingerprint | sha256sum | cut -d' ' -f1 > "$out/tree.before"
+
+set +e
+timeout 900 codex exec --cd "$repo_root" --sandbox read-only \
+    -c 'approval_policy="never"' -c 'features.multi_agent=false' \
+    --ephemeral --json --output-schema "$schema" \
+    -o "$out/parecer.json" - < "$prompt" > "$out/events.jsonl" 2> "$out/stderr.log"
+rc=$?
+set -e
+
+fingerprint | sha256sum | cut -d' ' -f1 > "$out/tree.after"
+cmp -s "$out/tree.before" "$out/tree.after" \
+    || { echo 'REJEITADO: a árvore mudou durante a revisão' >&2; exit 2; }
+(( rc == 0 )) || { echo "REJEITADO: codex exec terminou com código $rc" >&2; exit 3; }
+
+python3 -I - "$out/parecer.json" "$snapshot_id" "$@" <<'PY'
+import json, sys
+
+caminho, snapshot, *esperados = sys.argv[1:]
+p = json.load(open(caminho, encoding="utf-8"))
+erros = []
+if p.get("snapshot_id") != snapshot:
+    erros.append("snapshot_id diverge")
+if p.get("veredito") not in ("APPROVED", "CHANGES_REQUESTED"):
+    erros.append("veredito inválido")
+faltam = [f for f in esperados if f not in p.get("arquivos_analisados", [])]
+if faltam:
+    erros.append(f"arquivos esperados não analisados: {faltam}")
+graves = [a for a in p.get("achados", []) if a.get("gravidade") in ("P0", "P1")]
+if p.get("veredito") == "APPROVED" and graves:
+    erros.append("APPROVED com achado P0/P1")
+if erros:
+    sys.exit("REJEITADO: " + "; ".join(erros))
+print(f"ACEITO: {p['veredito']} ({len(p['achados'])} achados) snapshot={snapshot}")
+PY
