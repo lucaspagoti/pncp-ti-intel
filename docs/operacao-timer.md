@@ -1,7 +1,10 @@
 # Operação: carga diária (systemd timer)
 
-A carga diária roda `scripts/carga_diaria.sh` às 03:00 (Brasília): SIGA RJ e depois Compras ARP,
-cada uma independente. Uma falha em uma fonte não impede a outra, e a carga anterior continua
+A carga diária roda `scripts/carga_diaria.sh` às 03:00 (Brasília): SIGA RJ, Compras ARP e busca
+PNCP, cada uma independente. A janela é a madrugada, das 03:00 às 06:00. O SIGA leva ~1 min, a
+busca PNCP ~45 min e a ARP o que sobra. A varredura por PDM da ARP tem orçamento de
+`ARP_VARREDURA_MINUTOS` (90 na produção), e o resto da ARP leva até ~35 min. Assim a carga
+termina por volta das 05:50 (ADR 0025, item 7). Uma falha em uma fonte não impede a outra, e a carga anterior continua
 visível (troca atômica, ADR 0019 e 0020). Logs no journald; estado de cada execução na tabela
 `cargas`.
 

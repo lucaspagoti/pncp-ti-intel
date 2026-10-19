@@ -17,29 +17,46 @@ def test_arquivo_versionado_carrega_e_tem_os_pdms_centrais_esperados():
 
 
 @pytest.mark.parametrize(
-    ("ti", "total", "central", "esperado"),
+    ("ti_ata", "ti_compra", "total_compra", "central", "esperado"),
     [
-        (1, 2, False, True),  # exatamente no limiar
-        (1, 3, False, False),
-        (1, 10, True, True),  # central ignora a proporção
-        (0, 10, True, False),  # central sem item de TI não existe
-        (3, 0, False, False),  # total desconhecido: só passa pelo central
-        (3, 0, True, True),
+        (1, 1, 2, False, "compra1de2"),  # exatamente no limiar
+        (1, 1, 3, False, None),
+        (1, 3, 6, False, "compra3de6"),  # a compra passa mesmo com 1 item na ata
+        (1, 1, 10, True, "central"),  # central ignora a proporção
+        (0, 0, 10, True, None),  # central sem item de TI não existe
+        (2, 2, 90, False, "ata2itens"),  # 2 itens de TI na própria ata, compra genérica
+        (1, 1, 0, False, None),  # total desconhecido e 1 item: não passa
+        (3, 3, 0, False, "ata3itens"),
+        (3, 3, 0, True, "central"),
     ],
 )
-def test_corte(ti, total, central, esperado):
-    regra = RegraArp(0.5, frozenset({1}))
-    assert regra.passa(ti, total, central) is esperado
+def test_corte(ti_ata, ti_compra, total_compra, central, esperado):
+    regra = RegraArp(0.5, frozenset({1}), minimo_itens_ata=2)
+    assert regra.motivo(ti_ata, ti_compra, total_compra, central) == esperado
+    assert regra.passa(ti_ata, ti_compra, total_compra, central) is (esperado is not None)
 
 
 def test_versao_muda_com_os_parametros():
     assert RegraArp(0.5, frozenset({1})).versao() != RegraArp(0.6, frozenset({1})).versao()
     assert RegraArp(0.5, frozenset({1})).versao() != RegraArp(0.5, frozenset({1, 2})).versao()
+    assert RegraArp(0.5, frozenset({1}), 2).versao() != RegraArp(0.5, frozenset({1}), 3).versao()
+
+
+def test_arquivo_versionado_exige_dois_itens_na_ata():
+    assert carregar_regra().minimo_itens_ata == 2
 
 
 @pytest.mark.parametrize(
     "conteudo",
-    ["{", "{}", '{"limiar_proporcao": 0, "pdms_centrais": []}', '{"limiar_proporcao": "x"}'],
+    [
+        "{",
+        "{}",
+        '{"limiar_proporcao": 0, "pdms_centrais": [], "minimo_itens_ata": 2}',
+        '{"limiar_proporcao": "x"}',
+        '{"limiar_proporcao": 0.5, "pdms_centrais": []}',
+        '{"limiar_proporcao": 0.5, "pdms_centrais": [], "minimo_itens_ata": 0}',
+        '{"limiar_proporcao": 0.5, "pdms_centrais": [], "minimo_itens_ata": 1.5}',
+    ],
 )
 def test_arquivo_invalido_falha_alto(tmp_path, conteudo):
     arquivo = tmp_path / "regra.json"

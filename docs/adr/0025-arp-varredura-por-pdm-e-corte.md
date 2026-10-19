@@ -60,6 +60,35 @@ notebook e microcomputador, parque tecnológico, manutenção de equipamentos) p
    rápida, a opção é subir `ARP_VARREDURA_MINUTOS` no `.env` (a carga inteira levou 80 min e
    a unit aceita 5 h) ou rodar a auditoria de dia; fica a critério do Lucas.
 
+7. **Proporção por compra e mínimo de itens na ata** (19/10/2026, decisão do Lucas). O ARP emite
+   **uma ata por fornecedor**, então uma compra genérica vira várias atas de 1 ou 2 itens e a
+   proporção por ata deixava passar ruído: um mouse pad sozinho na ata de um fornecedor de
+   material de expediente dava 1 de 1 (100%). O corte do item 2 passa a ser: PDM central **ou**
+   ≥ 50% dos itens **da compra** (todas as atas com o mesmo `numeroControlePncpCompra`; sem ele,
+   o id da ata sem o sequencial) **ou** ≥ `minimo_itens_ata` (2) itens de TI **na própria ata**.
+   - A compra conta itens por `id_item`, que é o número do item na compra: o item dividido entre
+     dois fornecedores conta uma vez. A ata cujos itens não foram buscados entra pela
+     `quantidadeItens` da listagem. Toda ata com item de TI de material é candidata pela
+     varredura e tem os itens buscados; serviço de TI (CATSER) não é varrido, então, numa ata
+     irmã não buscada, ele conta como item que não é de TI.
+   - `motivo_ti` passa a ser `...@item:central`, `...@item:compraKdeT` ou `...@item:ataKitens`
+     (sai o `propKdeY`).
+   - A auditoria aplica o mesmo corte, aproximado pela contagem da listagem, às atas que a
+     carga ainda não avaliou e conta as atas de TI por caminho.
+   - Efeito medido (reclassificação somente leitura da carga ativa de 19/10/2026): atas de TI
+     vigentes **7.723 → 7.387**. Saem 412, todas antes TI só pela proporção da ata (mouse pad,
+     ribbon e caixa de som em compras genéricas, mas também HD e memória sozinhos numa compra
+     genérica). Entram 76 que eram incidentais e têm ≥ 2 itens de TI. Incidentais: 343 → 678.
+   - O mínimo de 2 itens ainda deixa passar ruído, como 2 ribbons em material hospitalar. Exigir
+     2 PDMs distintos tiraria mais 94 atas, mas mistura ruído com TI real (disco removível,
+     memória, placa controladora); não foi adotado.
+   - A lista de 34 PDMs centrais foi revisada e aprovada pelo Lucas em 19/10/2026, sem mudança.
+   - A varredura passa a usar a madrugada até as 06:00: `ARP_VARREDURA_MINUTOS=90` no `.env`
+     de produção. Tempos de hoje: SIGA ~1 min e busca PNCP ~45 min. A ARP leva o orçamento da
+     varredura mais até ~35 min (17/10: 80 min com 45 de varredura). Com 90 min a carga termina
+     por volta de 05:50 e o ciclo (1.788 pares × ~20 s ≈ 600 min) cai de ~2 para ~1 semana. O
+     padrão do código continua 45 min.
+
 ## Consequências
 
 - A base ganha as atas de objeto genérico com TI relevante; perde as que só eram TI por item
@@ -68,5 +97,5 @@ notebook e microcomputador, parque tecnológico, manutenção de equipamentos) p
   noites o orçamento exigir (os PDMs centrais vão primeiro), e a busca de itens das atas novas
   (cerca de 2 mil a mais na primeira vez). Uma ata nova com objeto genérico pode levar até uma semana
   (mais as noites de varredura) para entrar; antes disso ela depende do objeto.
-- O limiar 50% e a lista de PDMs centrais são um ponto de partida, não uma verdade: serão
-  ajustados com os rótulos do Lucas.
+- O limiar 50%, o mínimo de 2 itens e a lista de PDMs centrais são um ponto de partida, não
+  uma verdade: serão ajustados com os rótulos do Lucas.

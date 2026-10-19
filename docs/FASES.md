@@ -114,15 +114,23 @@ que não viram candidatas (`evals/arp_20261014.md`). Timer diário instalado no 
 - Testes verdes e carga real com o corte; relatório em `evals/` com recall pelo critério e a
   contagem de incidentais; Lucas revisa a lista de PDMs centrais.
 
-**Status (17/10/2026):** mergeada (PR #13) e com carga real. A primeira noite fez só 34 de
-1.788 pares: um par deu 7 timeouts e gastou o orçamento; a varredura agora desiste depois de 2
-novas tentativas (ADR 0025, item 6). O ciclo foi fechado de dia pela auditoria e a carga
-`4ee904bf` publicou **7.762** atas de TI vigentes (eram 6.222), com 343 incidentais; recall
-pelo critério 100% (`evals/arp_20261017.md`). Falta o Lucas revisar a lista de PDMs centrais e
-decidir o furo de precisão da ata por fornecedor (632 atas TI só pela proporção, várias com
-1 item de mouse pad, ribbon ou caixa de som; propostas no relatório). De madrugada a API leva
-~20 s por par: um ciclo de 45 min/noite leva ~2 semanas (subir `ARP_VARREDURA_MINUTOS` é
-decisão dele).
+**Status (19/10/2026):** decisões pendentes tomadas pelo Lucas (ADR 0025, item 7).
+- A proporção agora é calculada **por compra**, somando as atas de todos os fornecedores.
+  Também passa a ata com ≥ 2 itens de TI.
+- A lista de 34 PDMs centrais foi aprovada.
+- A varredura usa a madrugada até as 06:00 (`ARP_VARREDURA_MINUTOS=90` no `.env`).
+
+Na reclassificação somente leitura da carga ativa, as atas de TI vigentes vão de 7.723 para
+7.387: saem 412 só-proporção e entram 76 com ≥ 2 itens.
+
+Falta para o aceite: a carga real com o corte novo e o relatório `evals/arp_<data>.md`.
+
+Histórico (17/10/2026): mergeada (PR #13) e com carga real.
+- A primeira noite fez só 34 de 1.788 pares: um par deu 7 timeouts e gastou o orçamento. A
+  varredura agora desiste depois de 2 novas tentativas (ADR 0025, item 6).
+- O ciclo foi fechado de dia pela auditoria. A carga `4ee904bf` publicou 7.762 atas de TI
+  vigentes (eram 6.222), com 343 incidentais e recall pelo critério de 100%
+  (`evals/arp_20261017.md`).
 
 ## R3 · Busca PNCP por termos de TI
 

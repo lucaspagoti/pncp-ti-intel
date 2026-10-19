@@ -4,7 +4,13 @@ from datetime import date, timedelta
 
 import pytest
 
-from pncp_ti.fontes.arp_auditoria import _celula, no_universo
+from pncp_ti.fontes.arp_auditoria import (
+    _celula,
+    caminho_do_motivo,
+    no_universo,
+    passariam_no_corte,
+)
+from pncp_ti.fontes.arp_regra import RegraArp
 
 HOJE = date(2026, 10, 14)
 
@@ -28,6 +34,53 @@ def test_celula_mascara_cpf_e_escapa_barra_vertical():
 def test_universo_da_auditoria_e_o_mesmo_da_view(vigente, inicio, fim, esperado):
     ata = {"vigente_na_origem": vigente, "inicio": inicio, "fim": fim}
     assert no_universo(ata, HOJE) is esperado
+
+
+def _id(compra: str, seq: int) -> str:
+    return f"00000000000191-1-{compra}/2026-{seq:06d}"
+
+
+def test_corte_aproximado_da_auditoria_usa_a_compra_e_os_itens_da_ata():
+    """ADR 0025, item 7: o mesmo corte da carga, com a contagem de itens da listagem."""
+    regra = RegraArp(0.5, frozenset({8435}), minimo_itens_ata=2)
+    itens = {
+        _id("000001", 1): {(239, "1")},  # mouse pad 1/1 numa compra de 10 itens
+        _id("000002", 1): {(239, "1")},  # compra só de TI dividida entre dois fornecedores
+        _id("000002", 2): {(283, "2")},
+        _id("000003", 1): {(239, "1"), (283, "2")},  # 2 itens de TI numa compra genérica
+        _id("000004", 1): {(8435, "1")},  # central
+    }
+    quantidades = {
+        _id("000001", 1): 1,
+        _id("000001", 2): 9,
+        _id("000002", 1): 1,
+        _id("000002", 2): 1,
+        _id("000003", 1): 2,
+        _id("000003", 2): 40,
+        _id("000004", 1): 1,
+        _id("000004", 2): 30,
+    }
+    assert passariam_no_corte(set(itens), itens, quantidades, regra) == {
+        _id("000002", 1),
+        _id("000002", 2),
+        _id("000003", 1),
+        _id("000004", 1),
+    }
+
+
+@pytest.mark.parametrize(
+    ("motivo", "esperado"),
+    [
+        ("catmat70:pdm8435@item:central", "central"),
+        ("catmat70:pdm239@item:compra3de6", "compra"),
+        ("catmat70:pdm239@item:ata2itens", "ata"),
+        ("catser1821:servico27502@item", "outro"),
+        ("geral:informatica@objeto", "outro"),
+        (None, "outro"),
+    ],
+)
+def test_caminho_do_motivo(motivo, esperado):
+    assert caminho_do_motivo(motivo) == esperado
 
 
 async def test_auditoria_gera_relatorio_com_falso_negativo_e_nao_quebra(

@@ -13,7 +13,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import random
-from collections import defaultdict
+import re
+from collections import Counter, defaultdict
 from collections.abc import Mapping
 from datetime import date, datetime
 from pathlib import Path
@@ -28,6 +29,7 @@ from pncp_ti.config import get_settings
 from pncp_ti.db import conectar
 from pncp_ti.fontes.arp import (
     FONTE,
+    SEQUENCIAL_ATA,
     TENTATIVAS_HTTP,
     URL_BASE,
     CacheVarredura,
@@ -35,9 +37,10 @@ from pncp_ti.fontes.arp import (
     carregar_catalogo,
     obter_varredura,
 )
-from pncp_ti.fontes.arp_regra import REGRA_PADRAO
+from pncp_ti.fontes.arp_regra import REGRA_PADRAO, RegraArp
 from pncp_ti.privacy import sanitizar
 
+CAMINHO_MOTIVO = re.compile(r"@item:(central|compra|ata)")
 RAIZ_EVALS = Path(__file__).resolve().parents[3] / "evals"
 
 log = structlog.get_logger()
@@ -59,6 +62,43 @@ def _celula(texto: str | None, limite: int = 90) -> str:
     # Texto de terceiros vai para `evals/` (versionado): CPF mascarado antes de tudo.
     texto = " ".join(str(sanitizar(texto or "")).split()).replace("|", "/")
     return texto if len(texto) <= limite else texto[: limite - 1] + "…"
+
+
+def caminho_do_motivo(motivo: str | None) -> str:
+    """`central`, `compra` ou `ata` para TI pelo catálogo; `outro` (objeto, anexo, serviço)."""
+    achado = CAMINHO_MOTIVO.search(motivo or "")
+    return achado.group(1) if achado else "outro"
+
+
+def passariam_no_corte(
+    pendentes: set[str],
+    itens: Mapping[str, set[tuple[int, str]]],
+    quantidades: Mapping[str, int],
+    regra: RegraArp,
+) -> set[str]:
+    """Atas que a carga ainda não avaliou e passariam no corte (aproximação, ADR 0025, item 7).
+
+    A compra é o id da ata sem o sequencial. Os itens de TI vêm da varredura (todas as atas da
+    compra); o total é a soma de `quantidadeItens` da listagem, que pode divergir dos itens
+    reais e contar duas vezes um item dividido entre fornecedores.
+    """
+    ti_compra: dict[str, set[str]] = defaultdict(set)
+    total_compra: dict[str, int] = defaultdict(int)
+    for ata, quantidade in quantidades.items():
+        compra = SEQUENCIAL_ATA.sub("", ata)
+        total_compra[compra] += quantidade
+        ti_compra[compra].update(numero for _, numero in itens.get(ata, ()))
+    passam = set()
+    for ata in pendentes:
+        compra = SEQUENCIAL_ATA.sub("", ata)
+        if regra.passa(
+            len({numero for _, numero in itens[ata]}),
+            len(ti_compra[compra]),
+            total_compra[compra],
+            any(pdm in regra.pdms_centrais for pdm, _ in itens[ata]),
+        ):
+            passam.add(ata)
+    return passam
 
 
 async def principal(minutos: float | None = None) -> int:
@@ -121,16 +161,14 @@ async def principal(minutos: float | None = None) -> int:
     avaliadas = {i for i in achadas if itens_banco.get(i)}  # a carga buscou os itens da ata
     ti_avaliadas = avaliadas & ti
     incidentais = {i for i in avaliadas if atas[i]["motivo_ti"] == "catalogo_incidental"}
-    nao_avaliadas = {
-        ata
-        for ata in achadas - avaliadas
-        if regra.passa(
-            len(varredura.itens[ata]),
-            quantidades[ata].quantidade_itens or 0,
-            any(pdm in regra.pdms_centrais for pdm, _ in varredura.itens[ata]),
-        )
-    }
+    nao_avaliadas = passariam_no_corte(
+        achadas - avaliadas,
+        varredura.itens,
+        {i: a.quantidade_itens or 0 for i, a in quantidades.items()},
+        regra,
+    )
     no_corte = ti_avaliadas | nao_avaliadas
+    caminhos = Counter(caminho_do_motivo(atas[i]["motivo_ti"]) for i in ti & set(vigentes))
     perdidas = sorted(nao_avaliadas)
     recall = len(ti_avaliadas) / len(no_corte) if no_corte else 0.0
     recall_bruto = len(achadas & ti) / len(achadas) if achadas else 0.0
@@ -166,8 +204,11 @@ async def principal(minutos: float | None = None) -> int:
         "contagem de itens da listagem (aproximação)",
         f"  - sem corte, classificadas como TI pela carga: {len(achadas & ti)} "
         f"({recall_bruto:.1%})",
-        f"- Corte (proporção >= {regra.limiar_proporcao:.0%} dos itens ou PDM central, "
-        f"`insumos/regra_ti_arp.json`, versão `{regra.versao()}`)",
+        f"- Corte (PDM central, proporção >= {regra.limiar_proporcao:.0%} dos itens da compra "
+        f"ou >= {regra.minimo_itens_ata} itens de TI na ata, `insumos/regra_ti_arp.json`, "
+        f"versão `{regra.versao()}`)",
+        "- Atas de TI vigentes por caminho do catálogo: "
+        + "; ".join(f"{caminho}: {n}" for caminho, n in sorted(caminhos.items())),
         (
             f"- **Recall medido pelo critério: {recall:.1%}** (TI avaliadas contra TI avaliadas "
             f"mais as que passariam e a carga ainda não avaliou); falsos negativos: "
@@ -181,7 +222,8 @@ async def principal(minutos: float | None = None) -> int:
         "achadas é um piso)",
         "",
         "Mede só o recall de material de TI pelo catálogo; serviços de TI e atas cujo item não",
-        "tem PDM ficam fora. O corte usa `quantidadeItens` da listagem. Não é recall nacional.",
+        "tem PDM ficam fora. Para as não avaliadas, o corte usa `quantidadeItens` da listagem.",
+        "Não é recall nacional.",
         "",
         "### Falsos negativos (até 50)",
         "",

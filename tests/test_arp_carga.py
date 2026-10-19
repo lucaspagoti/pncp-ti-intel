@@ -11,7 +11,7 @@ from compras_mcp.errors import ComprasServerError
 from psycopg.errors import InsufficientPrivilege
 
 from pncp_ti.config import get_settings
-from pncp_ti.fontes import arp
+from pncp_ti.fontes import arp, arp_dados, arp_regra
 from pncp_ti.fontes.siga_csv import ErroValidacao
 
 CONFIG = replace(get_settings(), arp_requests_per_second=1000.0, arp_max_requisicoes=1000)
@@ -803,7 +803,7 @@ async def test_varredura_acha_ata_de_objeto_generico_e_corta_a_incidental():
     preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente)
     decisoes = preparado.decisoes
     assert decisoes[d.id_ata("10")][0] and decisoes[d.id_ata("10")][1].endswith(":central")
-    assert decisoes[d.id_ata("12")][0] and decisoes[d.id_ata("12")][1].endswith(":prop1de2")
+    assert decisoes[d.id_ata("12")][0] and decisoes[d.id_ata("12")][1].endswith(":compra1de2")
     assert not decisoes[d.id_ata("11")][0]  # 1 de 6 itens, nenhum central
     assert decisoes[d.id_ata("11")][1] == "catalogo_incidental"
     assert d.id_ata("11") in cliente.buscadas()  # sem pré-corte: o corte final usa os itens reais
@@ -934,7 +934,80 @@ async def test_contagem_da_listagem_divergente_nao_perde_ata_porque_o_corte_usa_
     cliente.lote = [_lote_pdm("20", "1", 283, d.hoje() - timedelta(days=30))]
     preparado, _ = await arp.coletar(CONFIG, d.hoje(), client=cliente)
     assert preparado.decisoes[d.id_ata("20")][0]
-    assert preparado.decisoes[d.id_ata("20")][1].endswith(":prop1de2")
+    assert preparado.decisoes[d.id_ata("20")][1].endswith(":compra1de2")
+
+
+# ADR 0025, item 7: o ARP emite uma ata por fornecedor, então a proporção é da compra.
+CATALOGO_COMPRA = arp_dados.CatalogoTI(pdms=frozenset({239, 283}), servicos={})
+
+
+def _ata_da_compra(numero: str, compra: str, objeto: str = "Material de expediente", itens=2):
+    bruto = d.ata(numero, objeto)
+    bruto["numeroControlePncpCompra"] = f"00000000000191-1-{compra}/2026"
+    bruto["quantidadeItens"] = itens
+    return arp_dados.mapear_ata(bruto, d.hoje())
+
+
+def _preparar_compra(atas, itens):
+    por_id = {a.id_origem: a for a in atas}
+    itens_por_ata = {a: [arp_dados.mapear_item(i) for i in brutos] for a, brutos in itens.items()}
+    return arp.preparar(
+        por_id, itens_por_ata, sorted(itens), 0, len(por_id), CATALOGO_COMPRA, REGRA_COMPRA
+    )
+
+
+REGRA_COMPRA = arp_regra.RegraArp(0.5, frozenset({8435}), minimo_itens_ata=2)
+
+
+def test_mouse_pad_sozinho_na_ata_de_um_fornecedor_de_compra_generica_e_incidental():
+    atas = [_ata_da_compra("40", "4000"), _ata_da_compra("41", "4000")]
+    itens = {
+        d.id_ata("40"): [d.item("40", "1", "Mouse pad", pdm=239)],
+        d.id_ata("41"): [d.item("41", str(n), f"Caneta {n}", pdm=77) for n in range(2, 11)],
+    }
+    preparado = _preparar_compra(atas, itens)
+    assert preparado.decisoes[d.id_ata("40")] == (False, "catalogo_incidental")
+
+
+def test_compra_so_de_ti_dividida_entre_fornecedores_continua_ti():
+    atas = [_ata_da_compra(str(n), "5000", "Material diverso") for n in (50, 51, 52)]
+    itens = {d.id_ata(str(n)): [d.item(str(n), str(n), "Teclado", pdm=283)] for n in (50, 51, 52)}
+    preparado = _preparar_compra(atas, itens)
+    for n in (50, 51, 52):
+        assert preparado.decisoes[d.id_ata(str(n))] == (True, "catmat70:pdm283@item:compra3de3")
+
+
+def test_ata_com_dois_itens_de_ti_numa_compra_generica_continua_ti():
+    atas = [_ata_da_compra("60", "6000"), _ata_da_compra("61", "6000", itens=50)]
+    itens = {
+        d.id_ata("60"): [
+            d.item("60", "1", "Mouse pad", pdm=239),
+            d.item("60", "2", "Teclado", pdm=283),
+        ]
+    }
+    preparado = _preparar_compra(atas, itens)  # a irmã 61 não foi buscada: entra pela listagem
+    assert preparado.decisoes[d.id_ata("60")] == (True, "catmat70:pdm239@item:ata2itens")
+
+
+def test_irma_sem_itens_buscados_conta_pela_quantidade_da_listagem():
+    sozinha = [_ata_da_compra("70", "7000")]
+    item = {d.id_ata("70"): [d.item("70", "1", "Mouse pad", pdm=239)]}
+    assert _preparar_compra(sozinha, item).decisoes[d.id_ata("70")][0]  # 1 de 1: TI
+    com_irma = [*sozinha, _ata_da_compra("71", "7000", itens=3)]
+    assert _preparar_compra(com_irma, item).decisoes[d.id_ata("70")] == (
+        False,
+        "catalogo_incidental",
+    )  # 1 de 4 na compra
+
+
+def test_item_com_varios_fornecedores_na_compra_conta_uma_vez():
+    atas = [_ata_da_compra("80", "8000"), _ata_da_compra("81", "8000")]
+    itens = {  # o item 1 foi dividido entre os dois fornecedores; o item 2 não é TI
+        d.id_ata("80"): [d.item("80", "1", "Teclado", pdm=283)],
+        d.id_ata("81"): [d.item("81", "1", "Teclado", pdm=283), d.item("81", "2", "X", pdm=77)],
+    }
+    preparado = _preparar_compra(atas, itens)
+    assert preparado.decisoes[d.id_ata("80")] == (True, "catmat70:pdm283@item:compra1de2")
 
 
 async def test_janela_que_pagina_e_partida_ate_caber_numa_pagina(tmp_path):
