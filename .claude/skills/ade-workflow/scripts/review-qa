@@ -151,6 +151,7 @@ mkdir -p "$qa/qa-out"
 "$repo_root/scripts/playwright_libs.sh" > /dev/null
 
 preparar_codex_home "$codex_home"
+cp "$schema" "$codex_home/parecer-qa.schema.json"  # o worktree de trabalho não existe na caixa
 montar_caixa "$qa" "$codex_home"
 cp "$prompt" "$out/prompt.md"
 
@@ -158,7 +159,7 @@ set +e
 timeout 3600 "${caixa[@]}" codex exec --cd "$qa" --sandbox workspace-write \
     -c 'sandbox_workspace_write.network_access=true' \
     -c 'approval_policy="never"' -c 'features.multi_agent=false' \
-    --skip-git-repo-check --ephemeral --json --output-schema "$schema" \
+    --skip-git-repo-check --ephemeral --json --output-schema "$codex_home/parecer-qa.schema.json" \
     -o "$qa/qa-out/parecer.json" - < "$prompt" > "$out/events.jsonl" 2> "$out/stderr.log"
 rc=$?
 set -e
