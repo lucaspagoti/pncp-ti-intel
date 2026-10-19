@@ -251,6 +251,10 @@ async def test_view_prefere_o_arp_na_mesma_ata_e_mantem_a_busca_no_resto(conn_in
         ("Licença de uso de software", "licenca de software", False),
         ("Contratação de nuvem pública", "nuvem", True),
         ("Anuvem", "nuvem", False),  # início de palavra, não meio
+        ("Sabão em tablete", "tablet", False),  # a última palavra aceita só plural
+        ("Tablets educacionais", "tablet", True),
+        ("Roteadores wi-fi", "roteador", True),
+        ("Switches gerenciáveis", "switch", True),
         ("qualquer coisa", "   ", False),
     ],
 )

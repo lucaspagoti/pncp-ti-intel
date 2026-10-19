@@ -45,7 +45,7 @@ desenho foi substituído pelas três fontes da ADR 0016. Ficaram do trabalho: o 
 **Critério de aceite**
 - `make test` verde; documentação consistente entre si.
 
-**Status:** em andamento na branch `refactor/fontes-atas`.
+**Status:** concluída (as fases R1 a R6 partem deste replanejamento).
 
 ## R1 · Ingestão SIGA RJ
 
@@ -145,9 +145,19 @@ Histórico (17/10/2026): mergeada (PR #13) e com carga real.
 - Avaliar cobertura com referências independentes dos resultados da lista de termos (D6);
   registrar limites da amostra sem alegar recall nacional não demonstrado.
 
-**Status (16/10/2026):** implementada em `feat/r3-busca-pncp` (ADR 0023, migração 0007). Falta o
-Lucas revisar `insumos/termos_ti.txt` e a avaliação de cobertura com referência independente (D6),
-que não foi feita: o recall da lista de termos **não está demonstrado**.
+**Status (19/10/2026):** concluída (ADR 0023, 0028, migração 0007; `evals/pncp_busca_20261017.md`).
+- Termo conhecido: `notebook` no portal aceita 132 atas, e a carga ativa tem 130, todas em comum. ✅
+- Nenhuma duplicata com o ARP na view: 21.038 linhas com `numero_controle_pncp`, 21.038 distintas. ✅
+- Cobertura contra o ARP (referência independente, só na sobreposição SIASG/PNCP): 47,2%, com
+  os limites registrados. Não há alegação de recall nacional. ✅
+- Precisão rotulada: 30 de 30 na amostra só-busca, com 3 mistas contadas como TI (decisão do
+  Lucas); rótulo do Claude conferido pelo Lucas. ✅
+- Lista revisada pelo Lucas em 19/10: sai `gestao de documentos`, `impressora` e `toner` ficam
+  com ruído aceito, e a última palavra do termo aceita só plural (corrige `tablet` → "tablete"). ✅
+- Termo que o portal não responde reaproveita a carga ativa por até 3 dias (ADR 0028, PR #21).
+
+Em aberto, a critério do Lucas: `informatica` sozinha e `tic`/`ti` (cerca de 1.500 atas perdidas
+contra o ARP), que exigem regra melhor ou curadoria (ADR 0026).
 
 ## R4 · Web local
 

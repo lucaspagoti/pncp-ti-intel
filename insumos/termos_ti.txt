@@ -8,6 +8,9 @@
 # Ficaram fora: "informatica" sozinha (casa com mobiliário e curso de informática), qualquer
 # termo terminado em "tic" (o sufixo aceita "ticket", "ticketagem") e "infraestrutura de rede"
 # (casa com redes de água e esgoto). Termo com mais de 10 mil resultados no portal é truncado.
+# Revisão do Lucas em 19/10/2026: sai "gestao de documentos" (gestão documental, não TI);
+# "impressora" e "toner" ficam com ruído aceito (offset, etiqueta, cestas de consumo).
+# A última palavra do termo aceita só plural (s/es/ns).
 materiais de informatica
 material de informatica
 equipamentos de informatica
@@ -65,4 +68,3 @@ cftv
 certificado digital
 assinatura eletronica
 digitalizacao
-gestao de documentos

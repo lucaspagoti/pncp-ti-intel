@@ -142,36 +142,36 @@ Preencha a coluna Rótulo com TI ou NÃO; a precisão rotulada sai desta amostra
 
 | Ata | Esfera/UF | Objeto | Termos | Link | Rótulo |
 |---|---|---|---|---|---|
-| `03156999000150-1-000053/2025-000018` | Municipal/MS | REGISTRO DE PREÇOS FUTURA E EVENTUAL AQUISIÇÃO DE COMPONENTES/ITENS DE INFORMÁTICA E COMP… | computadores | https://pncp.gov.br/app/atas/03156999000150/2025/53/18 |  |
-| `46429379000150-1-000099/2026-000023` | Municipal/SP | REGISTRO DE PREÇO PARA AQUISIÇÃO DE SUPRIMENTOS DE INFORMÁTICA, PERIFÉRICOS, EQUIPAMENTOS… | cabeamento estruturado, suprimentos de … | https://pncp.gov.br/app/atas/46429379000150/2026/99/23 |  |
-| `29115441000110-1-000007/2025-000001` | Municipal/RJ | Aquisição de computadores do tipo deesktop e notebook, impressora, drone, rádio comunicad… | computadores, impressora, notebook, sup… | https://pncp.gov.br/app/atas/29115441000110/2025/7/1 |  |
-| `18803072000132-1-000010/2026-000001` | Municipal/MG | \[Portal de Compras Públicas\] - REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE ELE… | equipamentos de informatica | https://pncp.gov.br/app/atas/18803072000132/2026/10/1 |  |
-| `13825500000104-1-000113/2026-000006` | Municipal/BA | \[Portal de Compras Públicas\] - Registro de preços para futura e eventual Contratação de e… | materiais de informatica | https://pncp.gov.br/app/atas/13825500000104/2026/113/6 |  |
-| `48664304000180-1-000144/2025-000016` | Municipal/SP | FORNECIMENTO PARCELADO DE PECAS E EQUIPAMENTOS PARA MANUTENCAO DO PARQUE TECNOLOGICO E IN… | tecnologia da informacao | https://pncp.gov.br/app/atas/48664304000180/2025/144/16 |  |
-| `31055800000133-1-000022/2025-000003` | Municipal/PE | Registro de preço visando a aquisição de equipamentos e materiais de informática, destina… | materiais de informatica | https://pncp.gov.br/app/atas/31055800000133/2025/22/3 |  |
-| `24772162000106-1-000286/2025-000011` | Municipal/MT | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE MATERIAIS DE INFORMÁTICA (HARDWARE… | materiais de informatica | https://pncp.gov.br/app/atas/24772162000106/2025/286/11 |  |
-| `14998789000126-1-000007/2026-000001` | Municipal/RJ | Aquisicao de notebooks e computadores completos destinados a garantir o atendimento das d… | computadores | https://pncp.gov.br/app/atas/14998789000126/2026/7/1 |  |
-| `18557546000103-1-000028/2026-000008` | Municipal/MG | Registro de preços para aquisição de materiais de informática, equipamentos eletrônicos e… | materiais de informatica | https://pncp.gov.br/app/atas/18557546000103/2026/28/8 |  |
-| `18128231000140-1-000042/2026-000001` | Municipal/MG | Registro de Preços para futura e eventual aquisição de equipamentos de informática (bens … | equipamentos de informatica | https://pncp.gov.br/app/atas/18128231000140/2026/42/1 |  |
-| `85361863000147-1-000037/2026-000015` | Municipal/SC | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE EQUIPAMENTOS E SUPRIMENTOS DE INFO… | suprimentos de informatica | https://pncp.gov.br/app/atas/85361863000147/2026/37/15 |  |
-| `18363960000181-1-000050/2026-000003` | Municipal/MG | REGISTRO DE PREÇO de futura e eventual aquisição de equipamentos de informática, periféri… | equipamentos de informatica, tecnologia… | https://pncp.gov.br/app/atas/18363960000181/2026/50/3 |  |
-| `95725024000114-1-000132/2025-000012` | Municipal/PR | REGISTRO DE PRECO PARA FUTURA E EVENTUAL AQUISICAO DE ELETRO ELETRONICOS E MATERIAL DE IN… | material de informatica | https://pncp.gov.br/app/atas/95725024000114/2025/132/12 |  |
-| `01362680000156-1-000081/2026-000004` | Municipal/MT | REGISTRO DE PREÇOS, PARA FUTURA E EVENTUAL AQUISIÇÃO DE MATERIAIS DE INFORMÁTICA E MATERI… | materiais de informatica | https://pncp.gov.br/app/atas/01362680000156/2026/81/4 |  |
-| `76021450000122-1-000084/2025-000015` | Municipal/PR | Fornecimento de material de informática. | material de informatica | https://pncp.gov.br/app/atas/76021450000122/2025/84/15 |  |
-| `01613052000104-1-000008/2026-000007` | Municipal/PR | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE EQUIPAMENTOS DE INFORMÁTICA, PERIF… | equipamentos de informatica | https://pncp.gov.br/app/atas/01613052000104/2026/8/7 |  |
-| `15126437000305-1-001370/2025-000001` | Não se aplica/PB | Aquisição de câmeras de sistema de circuito fechado de TV (CFTV) por IP, licenciamento de… | cftv, software | https://pncp.gov.br/app/atas/15126437000305/2025/1370/1 |  |
-| `03277610000125-1-000380/2025-000001` | Federal/DF | Contratação do serviço de link de internet via satélite, utilizando-se terminais transpor… | link de internet | https://pncp.gov.br/app/atas/03277610000125/2025/380/1 |  |
-| `75743377000130-1-000142/2025-000028` | Municipal/PR | Aquisição de computadores, impressoras, multifuncionais e periféricos diversos de informá… | computadores, impressora, telefonia | https://pncp.gov.br/app/atas/75743377000130/2025/142/28 |  |
-| `88811948000178-1-000104/2026-000008` | Municipal/RS | \[Portal de Compras Públicas\] - Futura e eventual aquisição de equipamentos de informática… | computadores, equipamentos de informati… | https://pncp.gov.br/app/atas/88811948000178/2026/104/8 |  |
-| `18303222000149-1-000093/2025-000004` | Municipal/MG | AQUISIÇÃO DE EQUIPAMENTOS DE INFORMÁTICA, ACESSÓRIOS, PERIFÉRICOS E MATERIAIS PERMANENTES… | equipamentos de informatica | https://pncp.gov.br/app/atas/18303222000149/2025/93/4 |  |
-| `92902055000105-1-000042/2025-000001` | Municipal/RS | VALOR REF. CONTRATAÇÃO DE EMPRESA PARA FUTURA E EVENTUAL AQUISIÇÃO DE MATERIAIS E EQUIPAM… | equipamentos de informatica | https://pncp.gov.br/app/atas/92902055000105/2025/42/1 |  |
-| `02231696000192-1-000059/2026-000011` | Não se aplica/RS | \[Portal de Compras Públicas\] - REGISTRO DE PREÇOS PARA AQUISIÇÃO DE EQUIPAMENTOS DE INFOR… | equipamentos de informatica | https://pncp.gov.br/app/atas/02231696000192/2026/59/11 |  |
-| `07954605000160-1-000133/2026-000006` | Municipal/CE | AQUISIÇÕES DE MICROCOMPUTADORES, NOTEBOOKS, CÂMERAS E OUTROS | microcomputador | https://pncp.gov.br/app/atas/07954605000160/2026/133/6 |  |
-| `07684756000146-1-000046/2026-000002` | Municipal/CE | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL Contratação de uma solução de software completa… | software | https://pncp.gov.br/app/atas/07684756000146/2026/46/2 |  |
-| `18404889000138-1-000022/2026-000007` | Municipal/MG | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE EQUIPAMENTOS, MATERIAIS E COMPONEN… | videomonitoramento | https://pncp.gov.br/app/atas/18404889000138/2026/22/7 |  |
-| `75972760000160-1-000265/2026-000004` | Municipal/PR | AQUISIÇÃO DE MOVEIS, ELETRODOMÉSTICOS, FERRAMENTAS E EQUIPAMENTOS DE INFORMATICA COM ADOÇ… | equipamentos de informatica | https://pncp.gov.br/app/atas/75972760000160/2026/265/4 |  |
-| `98661366000106-1-000557/2026-000026` | Municipal/RS | Aquisição de materiais e equipamentos de informática, para todas as Secretarias Municipai… | equipamentos de informatica | https://pncp.gov.br/app/atas/98661366000106/2026/557/26 |  |
-| `75743377000130-1-000142/2025-000005` | Municipal/PR | Aquisição de computadores, impressoras, multifuncionais e periféricos diversos de informá… | computadores, impressora, telefonia | https://pncp.gov.br/app/atas/75743377000130/2025/142/5 |  |
+| `03156999000150-1-000053/2025-000018` | Municipal/MS | REGISTRO DE PREÇOS FUTURA E EVENTUAL AQUISIÇÃO DE COMPONENTES/ITENS DE INFORMÁTICA E COMP… | computadores | https://pncp.gov.br/app/atas/03156999000150/2025/53/18 | TI |
+| `46429379000150-1-000099/2026-000023` | Municipal/SP | REGISTRO DE PREÇO PARA AQUISIÇÃO DE SUPRIMENTOS DE INFORMÁTICA, PERIFÉRICOS, EQUIPAMENTOS… | cabeamento estruturado, suprimentos de … | https://pncp.gov.br/app/atas/46429379000150/2026/99/23 | TI |
+| `29115441000110-1-000007/2025-000001` | Municipal/RJ | Aquisição de computadores do tipo deesktop e notebook, impressora, drone, rádio comunicad… | computadores, impressora, notebook, sup… | https://pncp.gov.br/app/atas/29115441000110/2025/7/1 | TI |
+| `18803072000132-1-000010/2026-000001` | Municipal/MG | \[Portal de Compras Públicas\] - REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE ELE… | equipamentos de informatica | https://pncp.gov.br/app/atas/18803072000132/2026/10/1 | TI (misto) |
+| `13825500000104-1-000113/2026-000006` | Municipal/BA | \[Portal de Compras Públicas\] - Registro de preços para futura e eventual Contratação de e… | materiais de informatica | https://pncp.gov.br/app/atas/13825500000104/2026/113/6 | TI |
+| `48664304000180-1-000144/2025-000016` | Municipal/SP | FORNECIMENTO PARCELADO DE PECAS E EQUIPAMENTOS PARA MANUTENCAO DO PARQUE TECNOLOGICO E IN… | tecnologia da informacao | https://pncp.gov.br/app/atas/48664304000180/2025/144/16 | TI |
+| `31055800000133-1-000022/2025-000003` | Municipal/PE | Registro de preço visando a aquisição de equipamentos e materiais de informática, destina… | materiais de informatica | https://pncp.gov.br/app/atas/31055800000133/2025/22/3 | TI |
+| `24772162000106-1-000286/2025-000011` | Municipal/MT | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE MATERIAIS DE INFORMÁTICA (HARDWARE… | materiais de informatica | https://pncp.gov.br/app/atas/24772162000106/2025/286/11 | TI |
+| `14998789000126-1-000007/2026-000001` | Municipal/RJ | Aquisicao de notebooks e computadores completos destinados a garantir o atendimento das d… | computadores | https://pncp.gov.br/app/atas/14998789000126/2026/7/1 | TI |
+| `18557546000103-1-000028/2026-000008` | Municipal/MG | Registro de preços para aquisição de materiais de informática, equipamentos eletrônicos e… | materiais de informatica | https://pncp.gov.br/app/atas/18557546000103/2026/28/8 | TI |
+| `18128231000140-1-000042/2026-000001` | Municipal/MG | Registro de Preços para futura e eventual aquisição de equipamentos de informática (bens … | equipamentos de informatica | https://pncp.gov.br/app/atas/18128231000140/2026/42/1 | TI |
+| `85361863000147-1-000037/2026-000015` | Municipal/SC | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE EQUIPAMENTOS E SUPRIMENTOS DE INFO… | suprimentos de informatica | https://pncp.gov.br/app/atas/85361863000147/2026/37/15 | TI |
+| `18363960000181-1-000050/2026-000003` | Municipal/MG | REGISTRO DE PREÇO de futura e eventual aquisição de equipamentos de informática, periféri… | equipamentos de informatica, tecnologia… | https://pncp.gov.br/app/atas/18363960000181/2026/50/3 | TI (misto) |
+| `95725024000114-1-000132/2025-000012` | Municipal/PR | REGISTRO DE PRECO PARA FUTURA E EVENTUAL AQUISICAO DE ELETRO ELETRONICOS E MATERIAL DE IN… | material de informatica | https://pncp.gov.br/app/atas/95725024000114/2025/132/12 | TI |
+| `01362680000156-1-000081/2026-000004` | Municipal/MT | REGISTRO DE PREÇOS, PARA FUTURA E EVENTUAL AQUISIÇÃO DE MATERIAIS DE INFORMÁTICA E MATERI… | materiais de informatica | https://pncp.gov.br/app/atas/01362680000156/2026/81/4 | TI |
+| `76021450000122-1-000084/2025-000015` | Municipal/PR | Fornecimento de material de informática. | material de informatica | https://pncp.gov.br/app/atas/76021450000122/2025/84/15 | TI |
+| `01613052000104-1-000008/2026-000007` | Municipal/PR | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE EQUIPAMENTOS DE INFORMÁTICA, PERIF… | equipamentos de informatica | https://pncp.gov.br/app/atas/01613052000104/2026/8/7 | TI |
+| `15126437000305-1-001370/2025-000001` | Não se aplica/PB | Aquisição de câmeras de sistema de circuito fechado de TV (CFTV) por IP, licenciamento de… | cftv, software | https://pncp.gov.br/app/atas/15126437000305/2025/1370/1 | TI |
+| `03277610000125-1-000380/2025-000001` | Federal/DF | Contratação do serviço de link de internet via satélite, utilizando-se terminais transpor… | link de internet | https://pncp.gov.br/app/atas/03277610000125/2025/380/1 | TI |
+| `75743377000130-1-000142/2025-000028` | Municipal/PR | Aquisição de computadores, impressoras, multifuncionais e periféricos diversos de informá… | computadores, impressora, telefonia | https://pncp.gov.br/app/atas/75743377000130/2025/142/28 | TI |
+| `88811948000178-1-000104/2026-000008` | Municipal/RS | \[Portal de Compras Públicas\] - Futura e eventual aquisição de equipamentos de informática… | computadores, equipamentos de informati… | https://pncp.gov.br/app/atas/88811948000178/2026/104/8 | TI |
+| `18303222000149-1-000093/2025-000004` | Municipal/MG | AQUISIÇÃO DE EQUIPAMENTOS DE INFORMÁTICA, ACESSÓRIOS, PERIFÉRICOS E MATERIAIS PERMANENTES… | equipamentos de informatica | https://pncp.gov.br/app/atas/18303222000149/2025/93/4 | TI |
+| `92902055000105-1-000042/2025-000001` | Municipal/RS | VALOR REF. CONTRATAÇÃO DE EMPRESA PARA FUTURA E EVENTUAL AQUISIÇÃO DE MATERIAIS E EQUIPAM… | equipamentos de informatica | https://pncp.gov.br/app/atas/92902055000105/2025/42/1 | TI |
+| `02231696000192-1-000059/2026-000011` | Não se aplica/RS | \[Portal de Compras Públicas\] - REGISTRO DE PREÇOS PARA AQUISIÇÃO DE EQUIPAMENTOS DE INFOR… | equipamentos de informatica | https://pncp.gov.br/app/atas/02231696000192/2026/59/11 | TI |
+| `07954605000160-1-000133/2026-000006` | Municipal/CE | AQUISIÇÕES DE MICROCOMPUTADORES, NOTEBOOKS, CÂMERAS E OUTROS | microcomputador | https://pncp.gov.br/app/atas/07954605000160/2026/133/6 | TI |
+| `07684756000146-1-000046/2026-000002` | Municipal/CE | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL Contratação de uma solução de software completa… | software | https://pncp.gov.br/app/atas/07684756000146/2026/46/2 | TI |
+| `18404889000138-1-000022/2026-000007` | Municipal/MG | REGISTRO DE PREÇOS PARA FUTURA E EVENTUAL AQUISIÇÃO DE EQUIPAMENTOS, MATERIAIS E COMPONEN… | videomonitoramento | https://pncp.gov.br/app/atas/18404889000138/2026/22/7 | TI |
+| `75972760000160-1-000265/2026-000004` | Municipal/PR | AQUISIÇÃO DE MOVEIS, ELETRODOMÉSTICOS, FERRAMENTAS E EQUIPAMENTOS DE INFORMATICA COM ADOÇ… | equipamentos de informatica | https://pncp.gov.br/app/atas/75972760000160/2026/265/4 | TI (misto) |
+| `98661366000106-1-000557/2026-000026` | Municipal/RS | Aquisição de materiais e equipamentos de informática, para todas as Secretarias Municipai… | equipamentos de informatica | https://pncp.gov.br/app/atas/98661366000106/2026/557/26 | TI |
+| `75743377000130-1-000142/2025-000005` | Municipal/PR | Aquisição de computadores, impressoras, multifuncionais e periféricos diversos de informá… | computadores, impressora, telefonia | https://pncp.gov.br/app/atas/75743377000130/2025/142/5 | TI |
 
 ## Leitura (17/10/2026, R3)
 
@@ -201,3 +201,27 @@ aceita "ticket"/"ticketagem") e `infraestrutura de rede` (redes de água e esgot
 depende de o Lucas preencher a amostra de 30 atas acima. Ruído já visto no digest de 17/10:
 `impressora` traz pulseira hospitalar com impressora em comodato e filme de raio X; `toner` tem
 a menor concordância entre os termos grandes (77%).
+
+## Fechamento (19/10/2026, R3)
+
+**Precisão rotulada:** 30 de 30 atas da amostra só-busca são TI (100%). Rótulo aplicado pelo
+Claude sobre o objeto completo e conferido pelo Lucas, seguindo o anexo da IN 05 (como no SIGA,
+ADR 0019). Três atas são mistas (TI junto com eletrodomésticos, móveis ou artigos diversos) e,
+por decisão do Lucas, contam como TI. A amostra é pequena (30) e só cobre atas fora do ARP;
+não mede o ruído dos termos dentro da sobreposição, que aparece na concordância acima.
+
+**Ruído conferido nas atas que o ARP não classifica como TI:**
+- `tablet` casava "tablete" (sabão, pastilhas de cloro): o filtro de frase passou a aceitar só
+  plural na última palavra (s/es/ns). Por termo, deixam de casar 17 objetos com "tablete" e 8
+  com grafia errada ("informaticaa", "impressorae"). Somada a saída de `gestao de documentos` e
+  descontadas as atas que outro termo mantém, a carga ativa perde 19 de 17.075 atas únicas.
+- `gestao de documentos`: gestão documental pública, não TI. Saiu da lista.
+- `impressora` (offset, etiqueta, ribbon) e `toner` (cestas de consumo): ruído aceito pelo Lucas,
+  porque o volume de TI real é grande.
+- `estacao de trabalho` (mobiliário), `scanner` (body scanner, scanner de parede ou
+  odontológico) e `digitalizacao` (gestão documental, reprografia) ficam, com ruído conhecido.
+- `videoconferencia`: o desacordo é do ARP; as atas conferidas são de TI.
+
+**Critério 1:** `notebook` no portal aceita 132 atas, e a carga ativa de 17/10 tem 130, todas em
+comum (as 2 a mais são novas). A view `v_atas_ti_vigentes` tem 21.038 linhas com
+`numero_controle_pncp` e 21.038 valores distintos: nenhuma duplicata entre ARP e busca.

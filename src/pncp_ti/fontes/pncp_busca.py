@@ -127,12 +127,13 @@ def casa_termo(objeto: str, termo: str) -> bool:
 
     O portal casa por palavra solta (`equipamentos de informatica` devolve 32 mil atas, a
     maioria de mobiliário e obras). Sem este filtro a carga publicaria ruído como "TI".
-    A última palavra aceita sufixo (notebook → notebooks).
+    A última palavra aceita só plural (notebook → notebooks, roteador → roteadores): sufixo
+    livre fazia `tablet` casar "tablete".
     """
     palavras = [re.escape(p) for p in _sem_acento(termo).split()]
     if not palavras:
         return False
-    padrao = r"\b" + r"\W+".join(palavras) + r"\w*"
+    padrao = r"\b" + r"\W+".join(palavras) + r"(?:s|es|ns)?\b"
     return re.search(padrao, _sem_acento(objeto)) is not None
 
 
