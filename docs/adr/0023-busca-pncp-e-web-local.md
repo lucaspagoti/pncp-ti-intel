@@ -15,7 +15,8 @@
 - **Filtro de precisão local:** o portal casa por palavra solta (`equipamentos de informatica`
   devolveu 32 mil atas, quase todas mobiliário e obras; a primeira carga real publicou 20 mil atas
   falsas de TI). Só entra a ata cujo objeto contém o **termo inteiro como frase** (sem acento nem
-  caixa, última palavra com sufixo). Termos genéricos saíram da lista.
+  caixa; a última palavra aceita só plural, s/es/ns, desde 19/10/2026: com sufixo livre,
+  `tablet` casava "tablete"). Termos genéricos saíram da lista.
 - A busca não traz itens nem preço. Toda ata achada entra com `is_ti = true` e
   `motivo_ti = termo_pncp:<termos>`. É recall por termo: **a precisão depende da lista de termos**,
   que o Lucas revisa. Nenhum recall nacional é alegado (ADR 0016, D6).
