@@ -29,7 +29,8 @@ Para o gancho R3, configure `PNCP_TI_PNCP_TERMO` somente quando a fonte preenche
 
 Essa estrutura é `cargas.contagens`, em uma carga `fonte = 'pncp_busca'`, com
 `concluido_em` preenchido. O termo deve ser estável e corresponder exatamente à chave.
-Ausência da métrica com monitoramento configurado alerta; não é interpretada como zero.
+Ausência da métrica não alerta: é termo que não respondeu no dia e reaproveitou a carga
+(ADR 0028); total zero alerta (ADR 0030).
 
 Termo da busca PNCP que o portal não responde fica em `contagens.termos_pendentes`
 (`{termo: data da primeira falha}`) e reaproveita as atas da carga ativa. A carga só falha,
@@ -43,7 +44,8 @@ SELECT contagens->'termos_pendentes' FROM cargas WHERE fonte = 'pncp_busca' AND 
 ## Rotina diária
 
 Às 03:00, SIGA e ARP executam de forma independente. Às 08:30, a operação consulta o
-frescor e falhas por fonte; só incidentes vão ao WhatsApp (sem digest de atas, ADR 0027). Às 09:00, o backup restaura
+frescor por fonte; só incidentes vão ao WhatsApp, numa frase por dia e sem repetir a falha
+da madrugada que o `OnFailure` já avisou (ADR 0027 e 0030). Às 09:00, o backup restaura
 o dump em um banco temporário e consulta as views antes de publicar o arquivo final.
 A operação tem timer próprio para continuar funcionando mesmo após falha da ingestão.
 As agendas são independentes: se uma carga exceder 08:30, o frescor usa o snapshot anterior.

@@ -52,7 +52,7 @@ async def test_atas_novas_nao_geram_digest_e_pendente_antigo_nao_sai(
     assert [m["chave"] for m in await fila(conn_ingest)] == ["digest:legado"]
     assert not await (await conn_ingest.execute("SELECT 1 FROM digest_atas")).fetchall()
     # Só o SIGA foi carregado: a ausência do ARP é um incidente e precisa sair.
-    chave_alerta = f"alerta:{datetime.now(SP).date()}:compras_arp:ausente"
+    chave_alerta = f"alerta:{datetime.now(SP).date()}:resumo"
 
     chamadas = []
 
@@ -62,7 +62,9 @@ async def test_atas_novas_nao_geram_digest_e_pendente_antigo_nao_sai(
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(ok)) as client:
         assert await entregar(conn_ingest, client) == 0
-    assert "compras_arp: nenhuma carga ativa." in chamadas
+    # Todos os avisos do dia numa mensagem só.
+    assert len(chamadas) == 1
+    assert chamadas[0].startswith("Atas de TI: ") and "Compras.gov.br sem dados" in chamadas[0]
     assert all("Novas atas" not in c for c in chamadas)
     alerta = await (
         await conn_ingest.execute("SELECT * FROM notificacoes WHERE chave = %s", (chave_alerta,))
