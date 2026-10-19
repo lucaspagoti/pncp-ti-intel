@@ -1,0 +1,28 @@
+/* Extensões do projeto sobre tokens.css. Cobrem lacunas do design system de referência sem
+   valor novo: todo token aqui é derivado de um token do DS. Carregar depois de tokens.css. */
+:root {
+  /* Tinta sobre navy e navy-dark. O DS usava branco literal em Band e Controls. */
+  --on-navy: var(--panel);
+
+  /* Borda de controle a 3:1. --border mede 1,4:1 sobre o painel; --muted mede 5,47:1. */
+  --control-border: var(--muted);
+
+  /* Chip warn legível. Com warn a 13% de fundo, o texto mede 4,11:1; com panel, 4,87:1. */
+  --chip-warn-fg: var(--warn);
+  --chip-warn-bg: var(--panel);
+  --chip-warn-border: var(--warn);
+
+  /* Crachá da Band: branco a 12% sobre navy-dark, sem rgba literal. */
+  --band-badge-bg: color-mix(in srgb, var(--on-navy) 12%, transparent);
+
+  /* Marcadores com a cor por referência, e não com o hex embutido. */
+  --shadow-marker-left: inset 3px 0 0 var(--navy);
+  --shadow-marker-bottom: inset 0 -3px 0 var(--navy);
+
+  /* Prazo restante de vigência: reaproveita a rampa de envelhecimento, com as tintas medidas.
+     prazo-1 tem mais tempo; prazo-4 vence logo. */
+  --prazo-1: var(--age1);  --prazo-1-ink: var(--age1-ink);
+  --prazo-2: var(--age2);  --prazo-2-ink: var(--age2-ink);
+  --prazo-3: var(--age3);  --prazo-3-ink: var(--age3-ink);
+  --prazo-4: var(--age4);  --prazo-4-ink: var(--age4-ink);
+}
