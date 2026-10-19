@@ -19,12 +19,16 @@ uv_bin="$(readlink -f "$(command -v uv)")"
 navegadores="${PLAYWRIGHT_BROWSERS_PATH:-$cache/ms-playwright}"
 
 # Monta o comando bwrap em `caixa` por lista de permissão: só /usr e /etc (ro), /tmp vazio e um
-# $HOME vazio, onde voltam o worktree de QA (rw), o CODEX_HOME temporário (rw) e os binários e
+# $HOME vazio, onde voltam o clone de QA (rw), o CODEX_HOME temporário (rw) e os binários e
 # caches necessários (ro). /opt, /srv, /var, /mnt e o resto do $HOME não existem na caixa.
 # Rede compartilhada (Postgres de QA e API do Codex); sem socket do Docker, do Orca ou do SSH.
+# A caixa é a fronteira: o AppArmor do Ubuntu não deixa o bwrap do Codex criar namespace aqui
+# dentro, então o Codex roda com `danger-full-access` (ADR 0029).
 montar_caixa() {
     local qa=$1 codex_home=$2
-    caixa=(bwrap --die-with-parent --new-session --unshare-pid
+    caixa=(bwrap --die-with-parent --new-session
+        --unshare-user --disable-userns --unshare-pid --unshare-ipc --unshare-uts
+        --unshare-cgroup-try --cap-drop ALL
         --ro-bind /usr /usr --ro-bind /etc /etc
         --symlink usr/bin /bin --symlink usr/sbin /sbin
         --symlink usr/lib /lib --symlink usr/lib64 /lib64
@@ -92,11 +96,17 @@ if [[ ${1:-} == isolamento ]]; then
             echo "oculto: $alvo"
         fi
     done
-    if "${caixa[@]}" sh -c 'touch /usr/.qa-escrita' 2> /dev/null; then
+    if "${caixa[@]}" sh -c 'touch /usr/.qa-escrita || touch /etc/.qa-escrita' 2> /dev/null; then
         echo "raiz GRAVÁVEL na caixa" >&2
         falhas=1
     else
         echo "raiz só leitura"
+    fi
+    if "${caixa[@]}" unshare --user true 2> /dev/null; then
+        echo "userns aninhado PERMITIDO na caixa" >&2
+        falhas=1
+    else
+        echo "userns aninhado bloqueado"
     fi
     "${caixa[@]}" codex --version > /dev/null && echo "codex executa na caixa" || falhas=1
     "${caixa[@]}" getent hosts api.openai.com > /dev/null && echo "DNS resolve na caixa" || falhas=1
@@ -156,8 +166,7 @@ montar_caixa "$qa" "$codex_home"
 cp "$prompt" "$out/prompt.md"
 
 set +e
-timeout 3600 "${caixa[@]}" codex exec --cd "$qa" --sandbox workspace-write \
-    -c 'sandbox_workspace_write.network_access=true' \
+timeout 3600 "${caixa[@]}" codex exec --cd "$qa" --sandbox danger-full-access \
     -c 'approval_policy="never"' -c 'features.multi_agent=false' \
     --skip-git-repo-check --ephemeral --json --output-schema "$codex_home/parecer-qa.schema.json" \
     -o "$qa/qa-out/parecer.json" - < "$prompt" > "$out/events.jsonl" 2> "$out/stderr.log"
