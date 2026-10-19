@@ -5,11 +5,11 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 from datetime import date, timedelta
-from uuid import uuid4
 
 import httpx
 import psycopg
 import pytest
+import web_dados
 
 from pncp_ti.config import get_settings, web_dsn
 from pncp_ti.web import consultas
@@ -22,55 +22,10 @@ def titulos(html: str) -> str:
     return " | ".join(re.findall(r"<h2><a[^>]*>(.*?)</a></h2>", html))
 
 
-FIM = date.today() + timedelta(days=60)
-
-
-async def _ata(conn, carga, fonte_id, objeto, *, fim=FIM, orgao="ORGAO X", uf=None, esfera=None):
-    await conn.execute(
-        "INSERT INTO atas (carga_id, id_origem, numero, objeto, orgao, status_origem, is_ti, "
-        "vigente_na_origem, fim, uf, esfera, link_origem) "
-        "VALUES (%s, %s, '1/2026', %s, %s, 'Válida', true, true, %s, %s, %s, %s)",
-        (carga, fonte_id, objeto, orgao, fim, uf, esfera, "https://pncp.gov.br/app/atas/1"),
-    )
-
-
-async def _item(conn, carga, ata, n, descricao, valor, fornecedor="ACME"):
-    await conn.execute(
-        "INSERT INTO ata_itens (carga_id, chave, ata_id_origem, id_item, descricao, nome_catalogo, "
-        "fornecedor, quantidade, valor_unitario, valor_valido) "
-        "VALUES (%s, %s, %s, %s, %s, '', %s, 10, %s, true)",
-        (carga, f"{ata}-{n}", ata, str(n), descricao, fornecedor, valor),
-    )
-
-
 @pytest.fixture
 async def dados(conn_ingest):
-    siga, arp = uuid4(), uuid4()
-    for carga, fonte in ((siga, "siga_rj"), (arp, "compras_arp")):
-        await conn_ingest.execute(
-            "INSERT INTO cargas (id, fonte, data_referencia, status, ativa) "
-            "VALUES (%s, %s, %s, 'concluida', true)",
-            (carga, fonte, date.today()),
-        )
-    await _ata(conn_ingest, siga, "S1", "Aquisição de notebooks para a rede estadual")
-    await _item(conn_ingest, siga, "S1", 1, "Notebook 16GB", 4500)
-    await _item(conn_ingest, siga, "S1", 2, "Mouse óptico", 30)
-    await _ata(conn_ingest, arp, "A1", "Outsourcing de impressão departamental", orgao="MINISTERIO")
-    await _item(conn_ingest, arp, "A1", 1, "Impressão A4 monocromática", 0.12)
-    await _ata(
-        conn_ingest,
-        arp,
-        "A2",
-        "<script>alert(1)</script> licença Microsoft",
-        fim=date.today() + timedelta(days=5),
-        uf="SP",
-        esfera="Municipal",
-    )
-    await conn_ingest.execute(
-        "INSERT INTO ata_participantes (carga_id, chave, ata_id_origem, id_item, item, unidade, "
-        "qtd_demandada, qtd_consumida) VALUES (%s, 'p1', 'S1', '1', 'Notebook', 'SEFAZ', 5, 2)",
-        (siga,),
-    )
+    for comando, parametros in web_dados.comandos():
+        await conn_ingest.execute(comando, parametros)
     await conn_ingest.commit()
 
 

@@ -40,6 +40,9 @@ Thumbs.db
 # Segredos do proxy
 deploy/caddy/caddy.env
 
+# Saída do E2E e do QA (capturas, logs).
+qa-out/
+
 # Design system de referência: material de terceiros, fora do Git.
 # Só os valores entram, por scripts/gerar_tokens_css.py.
 insumos/design-system/

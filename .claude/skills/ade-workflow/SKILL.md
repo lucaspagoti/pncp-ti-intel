@@ -112,6 +112,33 @@ Após settlement aceito, liberar o worker com `worker-release` e só então reco
 a Delivery. Guardar relatório e IDs antes de liberar; saída arquivada permanece
 consultável. Não deixar terminal retido por conveniência.
 
+### QA executor da web: `review-qa` (ADR 0029)
+
+Caminho padrão para mudanças na web (`src/pncp_ti/web/`, `tests/e2e/`, migrações que
+a web lê). O Codex executa, não só lê: `make migrate`, `make test`, `make e2e` e o
+exploratório da skill `.agents/skills/qa-web/SKILL.md`.
+
+```text
+bash .claude/skills/ade-workflow/scripts/review-qa isolamento
+bash .claude/skills/ade-workflow/scripts/review-qa SNAPSHOT_ID COMMIT PROMPT_FILE OUT_DIR ARQUIVO...
+```
+
+- O snapshot é um **commit** (o clone de QA parte dele). `OUT_DIR` fica no scratchpad.
+- O script clona o commit sem hardlinks, sobe o Postgres de QA
+  (`scripts/pg_descartavel.sh`), gera `.env` sintético, instala dependências fora da
+  caixa e roda o `codex exec` numa caixa `bwrap` por lista de permissão. Dentro dela o
+  Codex usa `danger-full-access`: a caixa é a fronteira (ADR 0029, item 4).
+- `review-qa isolamento` prova que `.env` real, `gh`, SSH, `/opt`, Docker e o worktree de
+  trabalho não existem na caixa. Rodar antes do primeiro uso numa máquina e em todo PR
+  que mudar a caixa.
+- `PROMPT_FILE` leva o pacote mínimo (com os critérios de aceite), o contrato abaixo
+  adaptado ("executa no clone de QA; não edita arquivos rastreados, não faz commit e
+  grava só em `qa-out/`") e manda ler `.agents/skills/qa-web/SKILL.md`.
+- Aceita o parecer (exit 0) só com `codex exec` terminado em 0, JSON validado por
+  `validar_parecer.py --qa` (`deploy_aprovado` só com `APPROVED`, `evidencias` não vazio)
+  e fingerprint do worktree de trabalho idêntico. Clone e contêiner são removidos ao sair.
+- `review-exec` (abaixo) continua para mudanças sem execução (docs, configuração).
+
 ### Fallback temporário: `codex exec` (sandbox x socket do Orca)
 
 Comprovado com Codex CLI 0.163.0: o sandbox `read-only` bloqueia `connect()` no socket
@@ -175,7 +202,7 @@ daquele snapshot: revisar somente o delta, respeitando o mesmo limite. Se a tare
 esgotou as rodadas, registrar bloqueio.
 
 Acompanhar o CI da PR (`.github/workflows/ci.yml` roda em `pull_request` e em push
-na `master`; jobs `test`, `secrets-scan` e `vuln-scan`):
+na `master`; jobs `test`, `e2e`, `secrets-scan` e `vuln-scan`):
 
 ```text
 gh pr checks NUMERO
@@ -194,7 +221,8 @@ mas não substituem a autorização do Lucas. Não propor nem configurar proteç
 rulesets, e não habilitar auto-merge (`gh pr merge --auto` é proibido).
 
 Para pedir o merge, conferir e informar ao Lucas: base `master`; head igual a
-`SHA_APROVADO`; parecer `APPROVED` desse snapshot; checks `test`, `secrets-scan` e
+`SHA_APROVADO`; parecer `APPROVED` desse snapshot (na web, com
+`deploy_aprovado: true` do `review-qa`); checks `test`, `e2e`, `secrets-scan` e
 `vuln-scan` verdes no head atual (sem falha, cancelamento ou skip); critério de
 aceite demonstrado. Perguntar no chat ("posso mergear o PR #N?") e esperar o "sim"
 daquele PR; autorização de outro PR ou de outra fase não vale.
@@ -206,5 +234,8 @@ gh pr merge NUMERO --merge --delete-branch --match-head-commit SHA_APROVADO
 ```
 
 Confirmar o estado remoto da PR antes de declarar integração; depois atualizar
-`master` local sem descartar alterações. Deploy continua sendo uma ação separada que
-exige instrução do Lucas.
+`master` local sem descartar alterações. Fora da web, deploy continua sendo uma ação
+separada que exige instrução do Lucas. Na web (`docs/ROADMAP-WEB.md`), o "sim" do PR
+com `deploy_aprovado: true` autoriza o rito: `make backup` e `make migrate` (se houver
+migração), `systemctl --user restart pncp-ti-web` e `scripts/smoke_web.sh`. Se o smoke
+falhar, abrir PR de revert com rollback da migração e avisar o Lucas.

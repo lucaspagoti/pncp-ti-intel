@@ -4,6 +4,10 @@ Este arquivo é o handoff entre sessões/agentes diferentes trabalhando no mesmo
 **Atualize-o sempre que parar de trabalhar**, antes de encerrar a sessão: o que foi feito, o que falta,
 e qualquer decisão nova. Não deixe o próximo agente (ou o Lucas) ter que reconstruir o contexto lendo o chat.
 
+> **19/10/2026 — ADR 0029:** para a web, o Codex é QA executor isolado (`review-qa`,
+> skill `.agents/skills/qa-web/SKILL.md`). Este arquivo é histórico; o contrato vigente
+> está em `AGENTS.md` e na skill `ade-workflow`.
+
 ## Nova revisão das correções R1 — Codex, 13/10/2026
 
 Head revisado: `2839b50` (código `84b9059`), também publicado na branch remota

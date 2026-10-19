@@ -47,8 +47,9 @@ antes de propor qualquer fase.
 
 ## Responsabilidades e entrega
 
-Claude Code implementa, testa e coordena. Codex é o revisor independente,
-somente leitura, pelo Orca; no máximo um worker Codex por vez.
+Claude Code implementa, testa e coordena. Codex é o revisor independente: QA executor
+isolado para a web (`review-qa`, ADR 0029) e revisor somente leitura para o resto
+(`review-exec`); no máximo um worker Codex por vez.
 O procedimento está em `.claude/skills/ade-workflow/SKILL.md`; não duplicá-lo aqui.
 Não utilizar Gemini ou outros agentes neste fluxo.
 
@@ -64,10 +65,16 @@ no repositório. Aprovação técnica do Codex e CI verde não substituem o acei
 de merge do Lucas. A `master` não tem proteção de branch (decisão aceita); a regra é
 seguida por disciplina, sem push direto na `master`.
 
-`LEIA-ME-CODEX.md` permanece como histórico e contexto complementar. Nesta revisão
-supervisionada, instruções históricas de editar logs, subir serviços, implementar
-ou sempre sugerir melhorias não ampliam o contrato somente leitura do Codex.
+`LEIA-ME-CODEX.md` permanece como histórico e contexto complementar. Instruções
+históricas de editar logs, subir serviços, implementar ou sempre sugerir melhorias não
+ampliam o contrato do Codex. Como QA (ADR 0029), ele executa suíte, banco de QA e E2E
+num clone descartável dentro de uma caixa `bwrap`, sem segredos e sem alterar o
+repositório de trabalho, o GitHub, o banco de produção ou serviços.
 Claude registra os achados; Codex não inventa melhorias nem modifica o repositório.
+
+Deploy da web (`docs/ROADMAP-WEB.md`): parecer `APPROVED` com `deploy_aprovado: true`,
+CI verde (`test`, `e2e`, `secrets-scan`, `vuln-scan`) e o "sim" do Lucas no PR; depois,
+merge, backup, migração (se houver), restart do `pncp-ti-web` e smoke pós-deploy.
 
 ## Stack
 
@@ -80,6 +87,10 @@ Ambiente: servidor Linux (homelab), acesso via SSH, Docker nativo. Sem Windows/W
 - `make up` — sobe o Postgres local (Docker Compose, porta só em `127.0.0.1`).
 - `make down` — derruba os containers do projeto.
 - `make test` — lint (`ruff check`), format-check (`ruff format --check`) e testes (`pytest`).
+- `make e2e` — E2E da web no Chromium (Playwright, `tests/e2e/`); no homelab, as bibliotecas do
+  navegador vêm de `scripts/playwright_libs.sh` (sem sudo).
+- `scripts/pg_descartavel.sh up NOME ARQUIVO_ENV` — Postgres descartável com `.env` sintético,
+  para testar sem o `.env` real; `down NOME` remove.
 - `make migrate` — aplica as migrações do Alembic (schema, papéis, views).
 - `make ingest FONTE=siga|arp|pncp_busca [ARGS=--validar]` — carga do SIGA RJ (R1), do Compras ARP
   (R2) ou da busca PNCP por termos (R3, `insumos/termos_ti.txt`).

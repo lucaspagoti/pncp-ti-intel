@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# QA executor (ADR 0029): o Codex roda suíte, E2E e exploratório num worktree descartável, com
+# Postgres de QA próprio e `.env` sintético, dentro de um bwrap que só expõe o necessário.
+#
+#   review-qa SNAPSHOT_ID COMMIT PROMPT_FILE OUT_DIR ARQUIVO_ESPERADO...
+#   review-qa isolamento    # prova que segredos, Docker e GitHub ficam fora do alcance
+#
+# OUT_DIR fica fora do repositório. O parecer só é aceito (exit 0) se o Codex terminar bem, o JSON
+# validar (`validar_parecer.py --qa`) e o worktree de trabalho não mudar. O clone e o contêiner de
+# QA são removidos ao sair, com ou sem sucesso.
+set -euo pipefail
+
+skill_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+repo_root="$(cd -- "$skill_dir/../../.." && pwd -P)"
+schema="$skill_dir/references/parecer-qa.schema.json"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+codex_bin="$(readlink -f "$(command -v codex)")"
+uv_bin="$(readlink -f "$(command -v uv)")"
+navegadores="${PLAYWRIGHT_BROWSERS_PATH:-$cache/ms-playwright}"
+
+# Monta o comando bwrap em `caixa` por lista de permissão: só /usr e /etc (ro), /tmp vazio e um
+# $HOME vazio, onde voltam o clone de QA (rw), o CODEX_HOME temporário (rw) e os binários e
+# caches necessários (ro). /opt, /srv, /var, /mnt e o resto do $HOME não existem na caixa.
+# Rede compartilhada (Postgres de QA e API do Codex); sem socket do Docker, do Orca ou do SSH.
+# A caixa é a fronteira: o AppArmor do Ubuntu não deixa o bwrap do Codex criar namespace aqui
+# dentro, então o Codex roda com `danger-full-access` (ADR 0029).
+montar_caixa() {
+    local qa=$1 codex_home=$2
+    caixa=(bwrap --die-with-parent --new-session
+        --unshare-user --disable-userns --unshare-pid --unshare-ipc --unshare-uts
+        --unshare-cgroup-try --cap-drop ALL
+        --ro-bind /usr /usr --ro-bind /etc /etc
+        --symlink usr/bin /bin --symlink usr/sbin /sbin
+        --symlink usr/lib /lib --symlink usr/lib64 /lib64
+        --dev /dev --proc /proc
+        --ro-bind /run/systemd/resolve /run/systemd/resolve
+        --tmpfs /tmp --dir "$HOME"
+        --ro-bind "$(dirname "$codex_bin")" "$(dirname "$codex_bin")"
+        --ro-bind "$uv_bin" "$HOME/.local/bin/uv"
+        --ro-bind "$HOME/.local/share/uv" "$HOME/.local/share/uv"
+        --ro-bind "$navegadores" "$navegadores"
+        --bind "$codex_home" "$codex_home")
+    [[ -d $cache/pncp-ti/playwright-libs ]] \
+        && caixa+=(--ro-bind "$cache/pncp-ti/playwright-libs" "$cache/pncp-ti/playwright-libs")
+    [[ -n $qa ]] && caixa+=(--bind "$qa" "$qa" --chdir "$qa")
+    caixa+=(env -i HOME="$HOME" USER="$USER" LANG=C.UTF-8 TERM=dumb
+        PATH="$HOME/.local/bin:$(dirname "$codex_bin"):/usr/local/bin:/usr/bin:/bin"
+        CODEX_HOME="$codex_home" PLAYWRIGHT_BROWSERS_PATH="$navegadores"
+        UV_NO_SYNC=1 UV_OFFLINE=1 UV_CACHE_DIR="${qa:-/tmp}/.uv-cache" UV_PYTHON_DOWNLOADS=never)
+    if [[ -d $cache/pncp-ti/playwright-libs ]]; then
+        local libs
+        libs=$("$repo_root/scripts/playwright_libs.sh")
+        caixa+=($(sed -n 's/^export //p' <<< "$libs"))
+    fi
+}
+
+# CODEX_HOME temporário: só a autenticação e uma config mínima (sem plugins, hooks nem MCP).
+preparar_codex_home() {
+    local destino=$1
+    mkdir -p "$destino"
+    install -m 600 "$HOME/.codex/auth.json" "$destino/auth.json"
+    printf '%s\n' 'model_reasoning_effort = "high"' > "$destino/config.toml"
+}
+
+# O Codex pode renovar o token dentro da caixa; devolve a renovação ao ~/.codex.
+devolver_auth() {
+    local origem=$1/auth.json
+    [[ -f $origem ]] || return 0
+    cmp -s "$origem" "$HOME/.codex/auth.json" && return 0
+    python3 -I - "$origem" "$HOME/.codex/auth.json" <<'PY'
+import json, os, sys
+novo, atual = sys.argv[1:]
+a, b = (json.load(open(p, encoding="utf-8")) for p in (novo, atual))
+if (a.get("last_refresh") or "") > (b.get("last_refresh") or ""):
+    tmp = atual + ".tmp"
+    with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+        json.dump(a, f, indent=2)
+    os.replace(tmp, atual)
+PY
+}
+
+if [[ ${1:-} == isolamento ]]; then
+    mkdir -p "$cache/pncp-ti/qa"
+    tmp=$(mktemp -d -p "$cache/pncp-ti/qa")
+    trap 'rm -rf "$tmp"' EXIT
+    preparar_codex_home "$tmp/codex"
+    montar_caixa "" "$tmp/codex"
+    falhas=0
+    for alvo in "$HOME/projetos/pncp-ti-intel/.env" "$HOME/.config/gh/hosts.yml" "$HOME/.ssh" \
+        "$HOME/.codex/config.toml" "$repo_root" /run/docker.sock /var/run/docker.sock \
+        /opt/homelab/secrets /opt /srv /var/lib /mnt /media /root; do
+        if "${caixa[@]}" test -e "$alvo"; then
+            echo "VISÍVEL na caixa: $alvo" >&2
+            falhas=1
+        else
+            echo "oculto: $alvo"
+        fi
+    done
+    if "${caixa[@]}" sh -c 'touch /usr/.qa-escrita || touch /etc/.qa-escrita' 2> /dev/null; then
+        echo "raiz GRAVÁVEL na caixa" >&2
+        falhas=1
+    else
+        echo "raiz só leitura"
+    fi
+    if "${caixa[@]}" unshare --user true 2> /dev/null; then
+        echo "userns aninhado PERMITIDO na caixa" >&2
+        falhas=1
+    else
+        echo "userns aninhado bloqueado"
+    fi
+    "${caixa[@]}" codex --version > /dev/null && echo "codex executa na caixa" || falhas=1
+    "${caixa[@]}" getent hosts api.openai.com > /dev/null && echo "DNS resolve na caixa" || falhas=1
+    exit $falhas
+fi
+
+if (( $# < 5 )); then
+    printf '%s\n' 'uso: review-qa SNAPSHOT_ID COMMIT PROMPT_FILE OUT_DIR ARQUIVO... | review-qa isolamento' >&2
+    exit 64
+fi
+snapshot_id=$1 commit=$2 prompt=$3 out=$4
+shift 4
+[[ $snapshot_id =~ ^[a-z0-9][a-z0-9_.-]*$ ]] || { echo "SNAPSHOT_ID inválido" >&2; exit 64; }
+commit=$(git -C "$repo_root" rev-parse --verify "$commit^{commit}")
+mkdir -p "$out"
+out=$(cd "$out" && pwd -P)
+qa="$cache/pncp-ti/qa/$snapshot_id"
+# Nunca reaproveitar nem limpar o clone ou o contêiner de outra execução: o `mkdir` do clone é a
+# reserva atômica do snapshot, e a limpeza só remove o que esta execução comprovadamente criou.
+mkdir -p "$cache/pncp-ti/qa"
+mkdir "$qa" 2> /dev/null || { echo "clone de QA já existe: $qa" >&2; exit 1; }
+criou_pg=0
+codex_home=$(mktemp -d -p "$cache/pncp-ti/qa" codex.XXXXXX)
+
+fingerprint() {
+    (cd "$repo_root" && git rev-parse HEAD \
+        && { git ls-files -co --exclude-standard -z | xargs -0 -r sha256sum; } | sort)
+    git -C "$repo_root" status --porcelain
+}
+
+limpar() {
+    devolver_auth "$codex_home" || echo "aviso: não devolveu o auth.json renovado" >&2
+    rm -rf "$codex_home"
+    [[ -d $qa/qa-out ]] && cp -r "$qa/qa-out" "$out/" 2> /dev/null || true
+    (( criou_pg )) && "$repo_root/scripts/pg_descartavel.sh" down "$snapshot_id"
+    rm -rf "$qa"
+}
+trap limpar EXIT
+
+fingerprint | sha256sum | cut -d' ' -f1 > "$out/tree.before"
+# Clone independente (sem hardlinks): o .git de um worktree aponta para fora da caixa.
+git clone -q --no-hardlinks --no-checkout "$repo_root" "$qa"
+git -C "$qa" checkout -q --detach "$commit"
+git -C "$qa" remote remove origin
+mkdir -p "$qa/qa-out"
+
+docker inspect "pncp-ti-qa-$snapshot_id" > /dev/null 2>&1 \
+    && { echo "contêiner de QA já existe: pncp-ti-qa-$snapshot_id" >&2; exit 1; }
+# Se o `up` falhar, ele mesmo remove o que criou; um nome já em uso não é removido aqui.
+"$repo_root/scripts/pg_descartavel.sh" up "$snapshot_id" "$qa/.env"
+criou_pg=1
+# Provisionamento fora da caixa (dentro dela, uv roda offline e sem sync). Cópia, não hardlink:
+# o .venv é gravável na caixa e não pode alterar o cache do uv do host.
+(cd "$qa" && UV_LINK_MODE=copy uv sync --frozen -q \
+    && uv run --frozen -q playwright install chromium > /dev/null)
+"$repo_root/scripts/playwright_libs.sh" > /dev/null
+
+preparar_codex_home "$codex_home"
+cp "$schema" "$codex_home/parecer-qa.schema.json"  # o worktree de trabalho não existe na caixa
+montar_caixa "$qa" "$codex_home"
+cp "$prompt" "$out/prompt.md"
+
+set +e
+timeout 3600 "${caixa[@]}" codex exec --cd "$qa" --sandbox danger-full-access \
+    -c 'approval_policy="never"' -c 'features.multi_agent=false' \
+    --skip-git-repo-check --ephemeral --json --output-schema "$codex_home/parecer-qa.schema.json" \
+    -o "$qa/qa-out/parecer.json" - < "$prompt" > "$out/events.jsonl" 2> "$out/stderr.log"
+rc=$?
+set -e
+[[ -f $qa/qa-out/parecer.json ]] && cp "$qa/qa-out/parecer.json" "$out/parecer.json"
+
+fingerprint | sha256sum | cut -d' ' -f1 > "$out/tree.after"
+cmp -s "$out/tree.before" "$out/tree.after" \
+    || { echo 'REJEITADO: o worktree de trabalho mudou durante o QA' >&2; exit 2; }
+(( rc == 0 )) || { echo "REJEITADO: codex exec terminou com código $rc" >&2; exit 3; }
+[[ -f $out/parecer.json ]] || { echo 'REJEITADO: sem parecer' >&2; exit 3; }
+
+python3 -I "$skill_dir/scripts/validar_parecer.py" --qa "$out/parecer.json" "$snapshot_id" "$@"
