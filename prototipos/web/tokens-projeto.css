@@ -18,4 +18,17 @@
   /* Marcadores com a cor por referência, e não com o hex embutido. */
   --shadow-marker-left: inset 3px 0 0 var(--navy);
   --shadow-marker-bottom: inset 0 -3px 0 var(--navy);
+
+  /* Elevação suave em três níveis, tingida de navy-dark em vez de preto, para combinar com a
+     paleta. A separação principal continua sendo a borda; a sombra só dá profundidade.
+     1: controles e botões; 2: a folha de trabalho; 3: menus e dicas (shadow-pop do DS). */
+  --sombra-tinta: color-mix(in srgb, var(--navy-dark) 10%, transparent);
+  --sombra-tinta-leve: color-mix(in srgb, var(--navy-dark) 6%, transparent);
+  --shadow-1: 0 1px 2px var(--sombra-tinta);
+  --shadow-2: 0 1px 2px var(--sombra-tinta-leve), 0 var(--space-1) var(--space-5) var(--sombra-tinta-leve);
+  --shadow-3: var(--shadow-pop);
+
+  /* Anel de foco e realce de linha, derivados do navy. */
+  --anel-foco: 0 0 0 3px color-mix(in srgb, var(--navy) 22%, transparent);
+  --linha-realce: color-mix(in srgb, var(--chip-bg) 70%, var(--panel));
 }
