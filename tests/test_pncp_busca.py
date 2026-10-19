@@ -143,13 +143,12 @@ async def test_retry_em_queda_de_conexao_e_termo_falho_nao_derruba():
     async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
         coleta = await b.coletar(["bom", "ruim", "bom2", "bom3", "bom4", "bom5"], HOJE, c)
     assert coleta.contagens["termos_falhos"] == 1
+    assert coleta.falhos == ["ruim"]
     assert len(coleta.atas) == 1
-    with pytest.raises(ErroValidacao) as exc:  # um termo perdido já impede a publicação
-        b.validar(coleta)
-    assert exc.value.tipo == "termos_falhos"
+    b.validar(coleta)  # o termo perdido é decidido na publicação (ADR 0028)
 
 
-async def test_validar_recusa_muitos_termos_falhos_e_coleta_vazia():
+async def test_validar_recusa_coleta_vazia_mesmo_com_todos_os_termos_falhos():
     def cair(req: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("queda")
 
@@ -157,7 +156,7 @@ async def test_validar_recusa_muitos_termos_falhos_e_coleta_vazia():
         coleta = await b.coletar(["a", "b"], HOJE, c)
     with pytest.raises(ErroValidacao) as exc:
         b.validar(coleta)
-    assert exc.value.tipo == "termos_falhos"
+    assert exc.value.tipo == "sem_atas"
     vazia = b.Coleta({}, {"termos": 1, "termos_falhos": 0}, [])
     with pytest.raises(ErroValidacao) as exc:
         b.validar(vazia)
@@ -342,3 +341,107 @@ async def test_pagina_vazia_com_total_zerado_no_meio_nao_vira_fim_de_lista():
     async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
         with pytest.raises(b._TermoFalhou):
             await b.buscar_termo(c, b.LimitadorTaxa(1000), "notebook")
+
+
+def _ata(id_ata: str, objeto: str, fim: date = date(2027, 1, 1), termo: str = "x") -> b.AtaBusca:
+    ata = b.mapear(item(id_ata, description=objeto), termo, HOJE)
+    assert ata is not None
+    ata.fim = fim
+    return ata
+
+
+def _coleta(atas: list[b.AtaBusca], falhos: list[str]) -> b.Coleta:
+    contagens = {"termos": 3, "termos_falhos": len(falhos), "atas_unicas": len(atas)}
+    return b.Coleta({a.id_origem: a for a in atas}, contagens, [], falhos)
+
+
+ID_C = "33333333000191-1-000001/2026-000001"
+ID_D = "44444444000191-1-000001/2026-000001"
+
+
+def test_termo_falho_reaproveita_as_atas_da_carga_ativa_que_casam_o_termo():
+    nova = _ata(ID_A, "Aquisição de equipamentos de informática e notebook", termo="notebook")
+    coleta = _coleta([nova], ["equipamentos de informatica"])
+    anteriores = {
+        ID_A: _ata(ID_A, "Aquisição de equipamentos de informática e notebook"),
+        ID_B: _ata(ID_B, "Registro de preços de EQUIPAMENTOS DE INFORMÁTICA"),
+        ID_C: _ata(ID_C, "Equipamentos de informática", fim=HOJE - timedelta(days=1)),
+        ID_D: _ata(ID_D, "Mobiliário de escritório"),
+    }
+    b.reaproveitar(coleta, anteriores, {}, HOJE)
+    assert set(coleta.atas) == {ID_A, ID_B}  # vencida e a que não casa ficam fora
+    assert coleta.atas[ID_A].termos == {"notebook", "equipamentos de informatica"}
+    assert coleta.atas[ID_B].termos == {"equipamentos de informatica"}
+    c = coleta.contagens
+    assert c["termos_pendentes"] == {"equipamentos de informatica": HOJE.isoformat()}
+    assert c["termos_reaproveitados"] == ["equipamentos de informatica"]
+    assert c["atas_reaproveitadas"] == 1
+    assert c["atas_unicas"] == 2
+
+
+def test_termo_sem_base_anterior_publica_vazio_e_fica_pendente():
+    coleta = _coleta([_ata(ID_A, "notebook", termo="notebook")], ["material de informatica"])
+    b.reaproveitar(coleta, {}, {}, HOJE)
+    assert set(coleta.atas) == {ID_A}
+    assert coleta.contagens["termos_pendentes"] == {"material de informatica": HOJE.isoformat()}
+    assert coleta.contagens["termos_reaproveitados"] == []
+    assert coleta.contagens["atas_reaproveitadas"] == 0
+
+
+def test_pendencia_herdada_mantem_a_data_e_falha_ao_passar_do_limite():
+    ainda = (HOJE - timedelta(days=b.DIAS_PENDENTE - 1)).isoformat()
+    coleta = _coleta([_ata(ID_A, "notebook", termo="notebook")], ["software"])
+    b.reaproveitar(coleta, {}, {"software": ainda}, HOJE)
+    assert coleta.contagens["termos_pendentes"] == {"software": ainda}
+
+    passou = (HOJE - timedelta(days=b.DIAS_PENDENTE)).isoformat()
+    coleta = _coleta([_ata(ID_A, "notebook", termo="notebook")], ["software"])
+    with pytest.raises(ErroValidacao) as exc:
+        b.reaproveitar(coleta, {}, {"software": passou}, HOJE)
+    assert exc.value.tipo == "termos_falhos"
+    assert "software" in str(exc.value)
+
+
+def test_termo_que_volta_a_responder_limpa_a_pendencia():
+    coleta = _coleta([_ata(ID_A, "notebook", termo="notebook")], [])
+    b.reaproveitar(coleta, {}, {"notebook": (HOJE - timedelta(days=1)).isoformat()}, HOJE)
+    assert coleta.contagens["termos_pendentes"] == {}
+    assert coleta.contagens["termos_reaproveitados"] == []
+
+
+async def test_publicar_com_termo_falho_reaproveita_a_carga_ativa(conn_ingest):
+    def respostas(falhar: bool):
+        def tratar(req: httpx.Request) -> httpx.Response:
+            termo = req.url.params["q"]
+            if termo == "desktop" and falhar:
+                raise httpx.ReadError("queda")
+            ids = [ID_A, ID_B] if termo == "notebook" or not falhar else [ID_B]
+            ids = [ID_A] if termo == "desktop" else ids
+            return httpx.Response(200, json={"items": [item(i) for i in ids], "total": len(ids)})
+
+        return httpx.AsyncClient(transport=httpx.MockTransport(tratar))
+
+    termos = ["notebook", "desktop"]
+    async with respostas(False) as c:
+        coleta = await b.coletar(termos, HOJE, c)
+    await b.publicar(conn_ingest, coleta, b._geracao(coleta, termos), uuid4(), HOJE)
+
+    async with respostas(True) as c:  # notebook só devolve B; desktop cai
+        coleta = await b.coletar(termos, HOJE, c)
+    coleta.atas.pop(ID_A, None)  # A só existia na carga ativa por "desktop"
+    resultado = await b.publicar(conn_ingest, coleta, b._geracao(coleta, termos), uuid4(), HOJE)
+
+    assert resultado.status == "concluida"
+    assert resultado.contagens["termos_pendentes"] == {"desktop": HOJE.isoformat()}
+    assert resultado.contagens["atas_reaproveitadas"] == 1
+    assert "desktop" not in resultado.contagens["resultados_por_termo"]
+    linhas = await (
+        await conn_ingest.execute(
+            "SELECT id_origem, motivo_ti FROM atas WHERE carga_id = %s ORDER BY id_origem",
+            (resultado.carga_id,),
+        )
+    ).fetchall()
+    assert {r["id_origem"]: r["motivo_ti"] for r in linhas} == {
+        ID_A: "termo_pncp:desktop",
+        ID_B: "termo_pncp:desktop|notebook",  # o objeto de B também casa "desktop"
+    }

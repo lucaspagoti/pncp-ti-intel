@@ -1,6 +1,7 @@
 # 0023 — Busca PNCP por termos (R3) e web local (R4)
 
 - Status: aceita (16/10/2026). Implementa as ADRs 0016 e 0018.
+- Alterada pela ADR 0028: termo que falhar reaproveita a carga ativa por até 3 dias.
 
 ## Decisões
 

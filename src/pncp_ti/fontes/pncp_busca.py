@@ -3,8 +3,9 @@
 Uma consulta paginada por termo de `insumos/termos_ti.txt` (`tipos_documento=ata`,
 `status=vigente`), dedupe por `numero_controle_pncp` e troca atômica da carga `pncp_busca`.
 A API de busca não é documentada: o contrato é validado a cada resposta e uma mudança
-falha alto. A busca não traz itens nem preços; o ARP tem preferência na view quando a mesma
-ata existe nas duas fontes (migração 0007).
+falha alto. Termo que o portal não responde reaproveita as atas da carga ativa por até
+`DIAS_PENDENTE` dias (ADR 0028). A busca não traz itens nem preços; o ARP tem preferência
+na view quando a mesma ata existe nas duas fontes (migração 0007).
 
     python -m pncp_ti.fontes.pncp_busca             # busca e carrega
     python -m pncp_ti.fontes.pncp_busca --validar   # busca e valida, sem gravar
@@ -52,6 +53,7 @@ ESPERA_BASE = 2.0
 PISO_ATAS = 0.5
 PASSADAS_EXTRA = 2  # novas tentativas dos termos que falharam, depois da passada principal
 ESPERA_PASSADA = 60.0  # segundos antes de cada passada extra: o portal costuma voltar em minutos
+DIAS_PENDENTE = 3  # dias seguidos em que um termo pode faltar antes de a carga falhar (ADR 0028)
 LIMITE_BYTES = 25 * 1024 * 1024  # uma página de 500 atas tem ~2 MB
 ID_PNCP_ATA = re.compile(r"\d{14}-\d-\d{6}/\d{4}-\d{6}")
 LIMITE_TEXTO = 4000
@@ -316,6 +318,7 @@ class Coleta:
     atas: dict[str, AtaBusca]
     contagens: dict[str, Any]
     sem_resultado: list[str]
+    falhos: list[str] = field(default_factory=list)
 
 
 async def coletar(
@@ -369,19 +372,92 @@ async def coletar(
     contagens["atas_unicas"] = len(atas)
     # Total declarado pelo portal por termo (antes do filtro de frase): o alerta da R6 lê daqui.
     contagens["resultados_por_termo"] = totais
-    return Coleta(atas, contagens, sem_resultado)
+    return Coleta(atas, contagens, sem_resultado, falhos)
 
 
 def validar(coleta: Coleta) -> None:
-    c = coleta.contagens
-    if c["termos_falhos"]:
-        # Termo perdido = atas exclusivas dele somem: não publica lista incompleta (o snapshot
-        # anterior continua visível e a carga seguinte tenta de novo).
-        raise ErroValidacao(
-            "termos_falhos", f"{c['termos_falhos']} de {c['termos']} termos falharam"
-        )
+    # Termo falho não recusa aqui: `reaproveitar` decide na publicação, com a carga ativa.
     if not coleta.atas:
         raise ErroValidacao("sem_atas", "a busca não devolveu nenhuma ata vigente")
+
+
+def reaproveitar(
+    coleta: Coleta,
+    anteriores: Mapping[str, AtaBusca],
+    pendentes_ativos: Mapping[str, str],
+    hoje: date,
+) -> None:
+    """Completa a coleta com as atas da carga ativa dos termos que falharam (ADR 0028).
+
+    Sem isso, as atas exclusivas do termo perdido sumiriam da base. Entra de novo a ata ativa
+    ainda vigente cujo objeto casa o termo, pelo mesmo filtro da coleta. Cada termo falho fica
+    pendente desde a primeira falha; passado `DIAS_PENDENTE`, a carga falha como antes.
+    """
+    pendentes = {t: pendentes_ativos.get(t, hoje.isoformat()) for t in coleta.falhos}
+    vencidos = sorted(
+        t
+        for t, desde in pendentes.items()
+        if (hoje - date.fromisoformat(desde)).days >= DIAS_PENDENTE
+    )
+    if vencidos:
+        raise ErroValidacao(
+            "termos_falhos",
+            f"{len(vencidos)} de {coleta.contagens['termos']} termos sem resposta há "
+            f"{DIAS_PENDENTE} dias ou mais: {', '.join(vencidos)}",
+        )
+    reaproveitados: list[str] = []
+    novas = 0
+    for termo in coleta.falhos:
+        casadas = [a for a in anteriores.values() if a.fim >= hoje and casa_termo(a.objeto, termo)]
+        if casadas:
+            reaproveitados.append(termo)
+        for anterior in casadas:
+            if anterior.id_origem in coleta.atas:
+                coleta.atas[anterior.id_origem].termos.add(termo)
+            else:
+                anterior.termos = {termo}
+                coleta.atas[anterior.id_origem] = anterior
+                novas += 1
+    for termo in coleta.falhos:
+        log.warning("pncp_busca_termo_pendente", termo=termo, desde=pendentes[termo])
+    c = coleta.contagens
+    c["termos_pendentes"] = pendentes
+    c["termos_reaproveitados"] = reaproveitados
+    c["atas_reaproveitadas"] = novas
+    c["atas_unicas"] = len(coleta.atas)
+
+
+async def _atas_ativas(
+    conn: psycopg.AsyncConnection, carga_id: UUID, hoje: date
+) -> dict[str, AtaBusca]:
+    linhas = await (
+        await conn.execute(
+            "SELECT id_origem, numero, unidade_gerenciadora, orgao, objeto, inicio, fim, "
+            "status_origem, vigente_na_origem, link_origem, valor_total, esfera, uf, municipio, "
+            "atualizado_origem FROM atas WHERE carga_id = %s AND fim >= %s",
+            (carga_id, hoje),
+        )
+    ).fetchall()
+    return {
+        r["id_origem"]: AtaBusca(
+            id_origem=r["id_origem"],
+            numero=r["numero"],
+            unidade_gerenciadora=r["unidade_gerenciadora"],
+            orgao=r["orgao"],
+            objeto=r["objeto"],
+            inicio=r["inicio"],
+            fim=r["fim"],
+            status_origem=r["status_origem"],
+            cancelada=not r["vigente_na_origem"],
+            link_origem=r["link_origem"],
+            valor_total=r["valor_total"],
+            esfera=r["esfera"],
+            uf=r["uf"],
+            municipio=r["municipio"],
+            atualizado_em=r["atualizado_origem"] or "",
+        )
+        for r in linhas
+    }
 
 
 def _geracao(coleta: Coleta, termos: Sequence[str]) -> dict[str, dict[str, object]]:
@@ -423,6 +499,12 @@ async def publicar(
                     "geracao_antiga",
                     f"data {hoje} anterior à carga ativa ({ativa['data_referencia']})",
                 )
+        anteriores_atas = (
+            await _atas_ativas(conn, ativa["id"], hoje) if ativa and coleta.falhos else {}
+        )
+        pendentes_ativos = ativa["contagens"].get("termos_pendentes", {}) if ativa else {}
+        reaproveitar(coleta, anteriores_atas, pendentes_ativos, hoje)
+        if ativa:
             anteriores = int(ativa["contagens"].get("atas_unicas", 0))
             if anteriores and contagens["atas_unicas"] < PISO_ATAS * anteriores:
                 raise ErroValidacao(
@@ -516,6 +598,8 @@ async def principal(validar_apenas: bool, termos_arquivo: Path = ARQUIVO_TERMOS)
             geracao = _geracao(coleta, termos)
             validar(coleta)
             if validar_apenas:
+                for termo in coleta.falhos:
+                    log.warning("pncp_busca_termo_pendente", termo=termo)
                 log.info(
                     "pncp_busca_validada",
                     segundos=round(time.monotonic() - inicio),
