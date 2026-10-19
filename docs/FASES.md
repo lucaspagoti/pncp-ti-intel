@@ -177,6 +177,9 @@ contra o ARP), que exigem regra melhor ou curadoria (ADR 0026).
 dados reais, as três buscas devolvem 325, 58 e 81 atas em ~1,5 s. Falta o Lucas fazer a
 demonstração dele. Limite conhecido: esfera e UF não existem para as atas do ARP.
 
+A nova interface e o QA executor seguem o roadmap próprio, `docs/ROADMAP-WEB.md` (W0–W2,
+ADR 0029); o aceite da R4 é o da W2.
+
 ## R5 · Exposição no domínio
 
 **Entregas**

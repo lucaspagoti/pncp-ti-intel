@@ -58,7 +58,13 @@ cp .env.example .env   # preencha senhas e PNCP_TI_IDENTITY_KEY antes de usar
 make up                # sobe o Postgres local
 make migrate           # aplica o schema (tabelas, papéis, views)
 make test              # lint + testes
+make e2e               # E2E da web no Chromium (Playwright)
 ```
+
+O E2E precisa do Chromium do Playwright (`uv run playwright install chromium`). No homelab,
+sem sudo, `make e2e` usa as bibliotecas extraídas por `scripts/playwright_libs.sh`. Para testar
+sem o `.env` real: `scripts/pg_descartavel.sh up dev /caminho/qa.env`, carregar esse arquivo no
+ambiente e rodar `make migrate test e2e`; `scripts/pg_descartavel.sh down dev` remove.
 
 ## Identidade e privacidade
 
