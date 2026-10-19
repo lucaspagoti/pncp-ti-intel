@@ -1,4 +1,4 @@
-.PHONY: up down test migrate ingest web backup restore amostra eval operacao mcp
+.PHONY: up down test e2e migrate ingest web backup restore amostra eval operacao mcp
 
 up: ## Sobe o Postgres local (porta só em 127.0.0.1).
 	@test -f .env || (echo "Falta o .env. Copie .env.example para .env e preencha antes de rodar 'make up'." && exit 1)
@@ -14,6 +14,13 @@ test: ## Lint + format-check + testes.
 	uv run ruff check .
 	uv run ruff format --check .
 	uv run pytest
+
+E2E_SAIDA ?= qa-out/e2e
+
+e2e: ## E2E da web no Chromium (Playwright); fora do CI e do QA, usa scripts/playwright_libs.sh.
+	@if [ -z "$$CI" ] && [ -z "$$FONTCONFIG_FILE" ]; then eval "$$(scripts/playwright_libs.sh)"; fi; \
+	PNCP_TI_E2E=1 uv run pytest tests/e2e --browser chromium \
+		--screenshot only-on-failure --output $(E2E_SAIDA)
 
 migrate: ## Aplica as migrações do Alembic (schema, papéis, views).
 	uv run alembic upgrade head

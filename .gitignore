@@ -39,3 +39,6 @@ Thumbs.db
 
 # Segredos do proxy
 deploy/caddy/caddy.env
+
+# Saída do E2E e do QA (capturas, logs).
+qa-out/
