@@ -9,156 +9,103 @@
 <link rel="stylesheet" href="prototipo.css">
 </head>
 <body>
-<div class="pagina">
-  <p class="footnote">Protótipo estático com dados de exemplo. Não está ligado ao banco.</p>
-  <header class="band">
-    <div>
-      <h1><a href="index.html">Atas de TI vigentes</a></h1>
-      <div class="sub">Pesquisa de preços e adesão a atas de registro de preços</div>
-    </div>
-    <div class="corte">Dados de 20/10/2026</div>
-  </header>
-
-  <section class="busca" aria-label="Busca">
-    <form role="search" action="index.html">
-      <div class="campo">
-        <label class="rotulo" for="q">Objeto ou item da ata</label>
-        <input type="search" id="q" name="q" value="outsourcing de impressão">
-      </div>
+<header class="appbar">
+  <a class="nome" href="index.html">Atas de TI vigentes</a>
+  <span class="corte">Dados de 20/10/2026</span>
+</header>
+<div class="app">
+  <aside class="filtros" aria-label="Filtros">
+    <input type="checkbox" class="alternar" id="alternar-filtros">
+    <label class="titulo-filtros" for="alternar-filtros">Filtros</label>
+    <form action="index.html">
+      <fieldset class="grupo"><legend>Fonte</legend>
+        <label class="opcao"><input type="radio" name="fonte" checked> Todas</label>
+        <label class="opcao"><input type="radio" name="fonte"> SIGA RJ</label>
+        <label class="opcao"><input type="radio" name="fonte"> Compras ARP</label>
+        <label class="opcao"><input type="radio" name="fonte"> PNCP</label>
+      </fieldset>
+      <fieldset class="grupo"><legend>Esfera</legend>
+        <label class="opcao"><input type="radio" name="esfera" checked> Todas</label>
+        <label class="opcao"><input type="radio" name="esfera"> Federal</label>
+        <label class="opcao"><input type="radio" name="esfera"> Estadual</label>
+        <label class="opcao"><input type="radio" name="esfera"> Municipal</label>
+      </fieldset>
+      <div class="grupo"><label class="rotulo" for="uf">UF</label>
+        <select id="uf"><option>Todas</option><option>RJ</option><option>SP</option><option>MG</option></select></div>
+      <div class="grupo"><label class="rotulo" for="orgao">Órgão contém</label><input type="text" id="orgao"></div>
+      <div class="grupo"><label class="rotulo" for="vence">Vigente até pelo menos</label><input type="date" id="vence"></div>
+      <div class="grupo"><span class="rotulo" id="r-preco">Preço unitário (R$)</span>
+        <div class="faixa" role="group" aria-labelledby="r-preco">
+          <input type="text" id="pmin" inputmode="decimal" placeholder="mín." aria-label="Preço unitário mínimo">
+          <input type="text" id="pmax" inputmode="decimal" placeholder="máx." aria-label="Preço unitário máximo">
+        </div></div>
+      <div class="acoes"><button class="botao" type="submit">Aplicar filtros</button><a class="botao-sec" href="index.html">Limpar</a></div>
+    </form>
+  </aside>
+  <main class="conteudo">
+    <form class="busca" role="search" action="index.html">
+      <input type="search" id="q" value="outsourcing de impressão" aria-label="Buscar objeto ou item da ata">
       <button class="botao" type="submit">Buscar</button>
     </form>
-    <div class="sugestoes"><span>Buscas frequentes:</span><a href="index.html">notebook</a><a href="index.html">licença Microsoft</a><a href="index.html">switch gerenciável</a><a href="index.html">toner</a></div>
-  </section>
-
-  <section class="controls" aria-label="Filtros">
-    <div class="ctl"><span class="rotulo" id="r-fonte">Fonte</span><div class="segmented" role="group" aria-labelledby="r-fonte"><button type="button" aria-pressed="true">Todas</button><button type="button" aria-pressed="false">SIGA RJ</button><button type="button" aria-pressed="false">Compras ARP</button><button type="button" aria-pressed="false">PNCP</button></div></div>
-    <div class="ctl"><span class="rotulo" id="r-esfera">Esfera</span><div class="segmented" role="group" aria-labelledby="r-esfera"><button type="button" aria-pressed="true">Todas</button><button type="button" aria-pressed="false">Federal</button><button type="button" aria-pressed="false">Estadual</button><button type="button" aria-pressed="false">Municipal</button></div></div>
-    <div class="ctl"><label class="rotulo" for="uf">UF</label>
-      <select id="uf"><option>Todas</option><option>RJ</option><option>SP</option><option>MG</option></select></div>
-    <div class="ctl"><label class="rotulo" for="orgao">Órgão contém</label><input type="text" id="orgao"></div>
-    <div class="ctl"><label class="rotulo" for="vence">Vigente até pelo menos</label><input type="date" id="vence"></div>
-    <div class="ctl"><span class="rotulo" id="r-preco">Preço unitário (R$)</span>
-      <div class="faixa" role="group" aria-labelledby="r-preco">
-        <input type="text" id="pmin" inputmode="decimal" placeholder="mín." aria-label="Preço unitário mínimo">
-        <input type="text" id="pmax" inputmode="decimal" placeholder="máx." aria-label="Preço unitário máximo">
-      </div></div>
-    <div class="ctl"><label class="rotulo" for="ordem">Ordenar por</label>
-      <select id="ordem"><option>Relevância</option><option>Vence primeiro</option><option>Mais novas</option><option>Menor preço</option></select></div>
-    <div class="ctl escopo"><span class="rotulo">Universo</span><span class="valor">Atas de TI vigentes</span></div>
-  </section>
-
-  <section class="painel rampa" aria-labelledby="t-rampa">
-    <div class="titulo" id="t-rampa">Prazo restante de vigência <span>(325 atas; clique numa faixa para filtrar)</span></div>
-    <table aria-describedby="t-rampa"><colgroup><col width="67.7%"><col width="19.7%"><col width="7.1%"><col width="5.5%"></colgroup><tbody><tr><td class="p1"><a href="index.html" title="Filtrar: vence em mais de 180 dias">220</a></td><td class="p2"><a href="index.html" title="Filtrar: vence em 91 a 180 dias">64</a></td><td class="p3"><a href="index.html" title="Filtrar: vence em 31 a 90 dias">23</a></td><td class="p4"><a href="index.html" title="Filtrar: vence em até 30 dias">18</a></td></tr></tbody></table>
-    <ul class="legenda"><li><i class="p1"></i>mais de 180 dias</li><li><i class="p2"></i>91 a 180 dias</li><li><i class="p3"></i>31 a 90 dias</li><li><i class="p4"></i>até 30 dias</li></ul>
-  </section>
-
-  <div class="section-title"><h2>325 atas encontradas</h2><div class="line"></div><a class="acao" href="index.html">Exportar CSV</a></div>
-
-  <section class="painel" aria-label="Resultados">
-    <ol class="atas">
-      <li class="ata">
-        <div>
-          <h3><a href="ata.html">Outsourcing de impressão corporativa com fornecimento de equipamentos multifuncionais e suprimentos</a></h3>
-          <div class="orgao"><span class="chip">PNCP</span><span>Prefeitura Municipal de Niterói</span><span>Municipal · RJ</span></div>
-        </div>
-        <div class="preco"><div class="valor">R$ 0,08</div><div class="apoio">a R$ 389,00 · 4 itens</div></div>
-        <div class="regua prazo-3">
-          <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 12/01/2026 a 10/12/2026; vence em 51 dias">
-            <rect class="trilha" x="0" y="4" width="100" height="4"/>
-            <rect class="restante" x="84.6" y="4" width="15.4" height="4"/>
-            <rect class="hoje" x="84.3" y="0" width="0.6" height="12"/>
-          </svg>
-          <span class="chip warn">vence em 51 dias</span>
-          <div class="datas"><span>12/01/2026</span><span>10/12/2026</span></div>
-        </div>
-        <details class="itens-ata" open>
-          <summary>Ver 4 itens com preço</summary>
-          <div class="loc-detalhe"><ul><li><span>Página impressa monocromática A4, franquia mensal <span class="forn">· Imprimax Soluções Ltda.</span></span><strong>R$ 0,08</strong></li><li><span>Página impressa colorida A4, excedente à franquia <span class="forn">· Imprimax Soluções Ltda.</span></span><strong>R$ 0,31</strong></li><li><span>Locação de multifuncional laser 45 ppm, com manutenção <span class="forn">· Imprimax Soluções Ltda.</span></span><strong>R$ 389,00</strong></li><li><span>Software de bilhetagem, licença por equipamento <span class="forn">· Imprimax Soluções Ltda.</span></span><strong>R$ 22,50</strong></li></ul></div>
-        </details>
-      </li>
-      <li class="ata">
-        <div>
-          <h3><a href="ata.html">Prestação de serviços de impressão, cópia e digitalização (outsourcing), com franquia de páginas</a></h3>
-          <div class="orgao"><span class="chip">Compras ARP</span><span>Tribunal Regional Federal da 2ª Região</span><span>Federal · RJ</span></div>
-        </div>
-        <div class="preco"><div class="valor">R$ 0,06</div><div class="apoio">a R$ 412,00 · 3 itens</div></div>
-        <div class="regua prazo-4">
-          <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 03/11/2025 a 02/11/2026; vence em 13 dias">
-            <rect class="trilha" x="0" y="4" width="100" height="4"/>
-            <rect class="restante" x="96.4" y="4" width="3.6" height="4"/>
-            <rect class="hoje" x="96.1" y="0" width="0.6" height="12"/>
-          </svg>
-          <span class="chip crit">vence em 13 dias</span>
-          <div class="datas"><span>03/11/2025</span><span>02/11/2026</span></div>
-        </div>
-        <details class="itens-ata">
-          <summary>Ver 3 itens com preço</summary>
-          <div class="loc-detalhe"><ul><li><span>Página monocromática A4 <span class="forn">· Copiadora Atlântica S.A.</span></span><strong>R$ 0,06</strong></li><li><span>Página colorida A4 <span class="forn">· Copiadora Atlântica S.A.</span></span><strong>R$ 0,42</strong></li><li><span>Multifuncional departamental A3 <span class="forn">· Copiadora Atlântica S.A.</span></span><strong>R$ 412,00</strong></li></ul></div>
-        </details>
-      </li>
-      <li class="ata">
-        <div>
-          <h3><a href="ata.html">Serviço de outsourcing de impressão departamental para as unidades da Secretaria de Estado de Saúde</a></h3>
-          <div class="orgao"><span class="chip">SIGA RJ</span><span>Secretaria de Estado de Saúde do RJ</span><span>Estadual · RJ</span></div>
-        </div>
-        <div class="preco"><div class="valor">R$ 0,07</div><div class="apoio">a R$ 1,10 · 2 itens</div></div>
-        <div class="regua prazo-2">
-          <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 20/03/2026 a 19/03/2027; vence em 150 dias">
-            <rect class="trilha" x="0" y="4" width="100" height="4"/>
-            <rect class="restante" x="58.8" y="4" width="41.2" height="4"/>
-            <rect class="hoje" x="58.5" y="0" width="0.6" height="12"/>
-          </svg>
-          <span class="chip">vence em 150 dias</span>
-          <div class="datas"><span>20/03/2026</span><span>19/03/2027</span></div>
-        </div>
-        <details class="itens-ata">
-          <summary>Ver 2 itens com preço</summary>
-          <div class="loc-detalhe"><ul><li><span>Página monocromática A4 <span class="forn">· Rede Print Serviços Ltda.</span></span><strong>R$ 0,07</strong></li><li><span>Página colorida A3 <span class="forn">· Rede Print Serviços Ltda.</span></span><strong>R$ 1,10</strong></li></ul></div>
-        </details>
-      </li>
-      <li class="ata">
-        <div>
-          <h3><a href="ata.html">Registro de preços para outsourcing de impressão com locação de impressoras e multifuncionais</a></h3>
-          <div class="orgao"><span class="chip">Compras ARP</span><span>Universidade Federal de Minas Gerais</span><span>Federal · MG</span></div>
-        </div>
-        <div class="preco"><div class="valor">R$ 0,05</div><div class="apoio">a R$ 0,29 · 2 itens</div></div>
-        <div class="regua prazo-1">
-          <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 01/06/2026 a 31/05/2027; vence em 223 dias">
-            <rect class="trilha" x="0" y="4" width="100" height="4"/>
-            <rect class="restante" x="38.7" y="4" width="61.3" height="4"/>
-            <rect class="hoje" x="38.4" y="0" width="0.6" height="12"/>
-          </svg>
-          <span class="chip">vence em 223 dias</span>
-          <div class="datas"><span>01/06/2026</span><span>31/05/2027</span></div>
-        </div>
-        <details class="itens-ata">
-          <summary>Ver 2 itens com preço</summary>
-          <div class="loc-detalhe"><ul><li><span>Página monocromática A4 <span class="forn">· Minas Documentos Ltda.</span></span><strong>R$ 0,05</strong></li><li><span>Página colorida A4 <span class="forn">· Minas Documentos Ltda.</span></span><strong>R$ 0,29</strong></li></ul></div>
-        </details>
-      </li>
-      <li class="ata">
-        <div>
-          <h3><a href="ata.html">Outsourcing de impressão, com fornecimento de equipamentos novos, software de gestão e suprimentos, exceto papel</a></h3>
-          <div class="orgao"><span class="chip">PNCP</span><span>Prefeitura Municipal de Campinas</span><span>Municipal · SP</span></div>
-        </div>
-        <div class="preco"><span class="chip">sem itens nesta fonte</span></div>
-        <div class="regua prazo-4">
-          <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 14/11/2025 a 13/11/2026; vence em 24 dias">
-            <rect class="trilha" x="0" y="4" width="100" height="4"/>
-            <rect class="restante" x="93.4" y="4" width="6.6" height="4"/>
-            <rect class="hoje" x="93.1" y="0" width="0.6" height="12"/>
-          </svg>
-          <span class="chip crit">vence em 24 dias</span>
-          <div class="datas"><span>14/11/2025</span><span>13/11/2026</span></div>
-        </div>
-      </li>
-    </ol>
-  </section>
-
-  <nav class="pag" aria-label="Paginação"><span>Página 1 de 17</span><a href="index.html">Próxima página</a></nav>
-
-  <p class="footnote">Dados públicos de SIGA RJ, Compras.gov.br e portal PNCP. Confira sempre na origem antes de qualquer uso formal. Nada aqui substitui a análise humana.</p>
+    <div class="barra">
+      <span class="total"><strong>325</strong> atas vigentes · página 1 de 17</span>
+      <div class="ordem"><label for="ordem">Ordenar por</label>
+        <select id="ordem"><option>Relevância</option><option>Vence primeiro</option><option>Mais novas</option><option>Menor preço</option></select>
+        <a class="botao-sec" href="index.html">Exportar CSV</a></div>
+    </div>
+    <div class="tabela resultados">
+      <table>
+        <thead><tr><th>Objeto e órgão</th><th>Fonte</th><th>Vence em</th><th class="n">Itens</th><th class="n">Preço unitário</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="objeto"><a href="ata.html">Outsourcing de impressão corporativa com fornecimento de equipamentos multifuncionais e suprimentos</a><span class="sub">Prefeitura Municipal de Niterói · Municipal · RJ</span></td>
+            <td class="fonte" data-rotulo="Fonte">PNCP</td>
+            <td data-rotulo="Vence em">10/12/2026 <span class="chip warn">51 dias</span></td>
+            <td class="n oculto-cel">4</td>
+            <td class="n preco" data-rotulo="Preço unitário">R$ 0,08 a R$ 389,00</td>
+          </tr>
+          <tr>
+            <td class="objeto"><a href="ata.html">Prestação de serviços de impressão, cópia e digitalização (outsourcing), com franquia de páginas</a><span class="sub">Tribunal Regional Federal da 2ª Região · Federal · RJ</span></td>
+            <td class="fonte" data-rotulo="Fonte">Compras ARP</td>
+            <td data-rotulo="Vence em">02/11/2026 <span class="chip crit">13 dias</span></td>
+            <td class="n oculto-cel">3</td>
+            <td class="n preco" data-rotulo="Preço unitário">R$ 0,06 a R$ 412,00</td>
+          </tr>
+          <tr>
+            <td class="objeto"><a href="ata.html">Serviço de outsourcing de impressão departamental para as unidades da Secretaria de Estado de Saúde</a><span class="sub">Secretaria de Estado de Saúde do RJ · Estadual · RJ</span></td>
+            <td class="fonte" data-rotulo="Fonte">SIGA RJ</td>
+            <td data-rotulo="Vence em">19/03/2027<span class="sub">150 dias</span></td>
+            <td class="n oculto-cel">2</td>
+            <td class="n preco" data-rotulo="Preço unitário">R$ 0,07 a R$ 1,10</td>
+          </tr>
+          <tr>
+            <td class="objeto"><a href="ata.html">Registro de preços para outsourcing de impressão com locação de impressoras e multifuncionais</a><span class="sub">Universidade Federal de Minas Gerais · Federal · MG</span></td>
+            <td class="fonte" data-rotulo="Fonte">Compras ARP</td>
+            <td data-rotulo="Vence em">31/05/2027<span class="sub">223 dias</span></td>
+            <td class="n oculto-cel">2</td>
+            <td class="n preco" data-rotulo="Preço unitário">R$ 0,05 a R$ 0,29</td>
+          </tr>
+          <tr>
+            <td class="objeto"><a href="ata.html">Outsourcing de impressão, com fornecimento de equipamentos novos, software de gestão e suprimentos, exceto papel</a><span class="sub">Prefeitura Municipal de Campinas · Municipal · SP</span></td>
+            <td class="fonte" data-rotulo="Fonte">PNCP</td>
+            <td data-rotulo="Vence em">13/11/2026 <span class="chip crit">24 dias</span></td>
+            <td class="n oculto-cel">—</td>
+            <td class="n preco" data-rotulo="Preço unitário"><span class="sub">sem itens nesta fonte</span></td>
+          </tr>
+          <tr>
+            <td class="objeto"><a href="ata.html">Contratação de serviços de impressão corporativa com equipamentos multifuncionais em comodato</a><span class="sub">Instituto Federal Fluminense · Federal · RJ</span></td>
+            <td class="fonte" data-rotulo="Fonte">Compras ARP</td>
+            <td data-rotulo="Vence em">28/08/2027<span class="sub">312 dias</span></td>
+            <td class="n oculto-cel">3</td>
+            <td class="n preco" data-rotulo="Preço unitário">R$ 0,09 a R$ 0,48</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <nav class="pag" aria-label="Paginação"><span>Mostrando 1 a 20 de 325</span>
+      <div class="acoes"><span class="botao-sec" aria-disabled="true">Anterior</span><a class="botao-sec" href="index.html">Próxima</a></div></nav>
+    <p class="footnote">Protótipo estático com dados de exemplo. Dados públicos de SIGA RJ, Compras.gov.br e portal PNCP: confira sempre na origem antes de qualquer uso formal.</p>
+  </main>
 </div>
 </body>
 </html>

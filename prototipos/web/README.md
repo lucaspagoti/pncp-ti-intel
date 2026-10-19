@@ -17,26 +17,25 @@ Duas telas estáticas, com dados de exemplo e sem backend: `index.html` (busca) 
   sem arquivo embarcado.
 - `tokens-projeto.css` cobre as lacunas do design system com tokens derivados dos dele, sem
   valor novo: `--on-navy`, `--control-border`, `--chip-warn-*`, `--band-badge-bg`, os marcadores
-  com `var(--navy)` e a rampa `--prazo-1` a `--prazo-4` (reaproveita `age1` a `age4`).
+  com `var(--navy)`.
 
 ## Componentes usados
 
+Aparência de sistema, não de painel: barra fina no topo, filtros numa lateral e resultados numa
+tabela. Cor só para ação (`navy`) e alerta (`warn`, `crit`).
+
 | Tela | Componente do design system |
 |---|---|
-| Faixa do topo com a data dos dados | Band (sem marca) |
-| Filtros | Controls: segmentado para fonte e esfera, `select` para UF e ordenação |
-| "vence em N dias", "sem itens nesta fonte", fonte da ata | Chip (`warn` e neutra) |
-| "325 atas encontradas", "Itens" | SectionTitle |
-| Régua de vigência | Trilha de barra da LocationRow, com a marca de hoje |
-| Ficha da ata e notas | Bloco de nota (`footnote-bg`) |
-| Prazo restante das atas encontradas | AgeRamp adaptado: mais de 180, 91 a 180, 31 a 90 e até 30 dias; cada faixa filtra |
-| "Ver itens com preço" na lista | LocationRow com `<details>`, sem JS |
+| Barra do topo com a data dos dados | Band, reduzida a barra (sem marca) |
+| Filtros | Forma da SideNav (painel com régua), com rótulos do Controls; no celular, recolhe sem JS |
+| Lista de atas e itens | Tabela com cabeçalho em versalete `muted` e separação por borda |
+| "51 dias", "13 dias" | Chip `warn` (31 a 90 dias) e `crit` (até 30 dias) |
+| "Itens" no detalhe | SectionTitle |
+| Notas | Bloco de nota (`footnote-bg`) |
 
 ## Desvios do design system, todos para cumprir as regras dele
 
 - Borda de controle em `--muted` (5,47:1), e não em `--border` (1,4:1), pelo piso de 3:1.
 - Chip `warn` com fundo `--panel` e borda `--warn` (4,87:1). O preview usa `warn` a 13% de
   fundo, e o texto mede 4,11:1. Chip `crit` na mesma forma (6,54:1) para até 30 dias.
-- Larguras da rampa por `<col width>`, atributo HTML, porque a CSP da web real não aceita
-  `style` inline (o preview do AgeRamp usa).
-- Abaixo de 600px, a tabela de itens vira blocos, para o preço unitário não sumir na rolagem.
+- Abaixo de 600px, as tabelas viram linhas empilhadas, para o preço unitário não sumir na rolagem.

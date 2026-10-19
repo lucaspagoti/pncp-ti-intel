@@ -18,11 +18,4 @@
   /* Marcadores com a cor por referência, e não com o hex embutido. */
   --shadow-marker-left: inset 3px 0 0 var(--navy);
   --shadow-marker-bottom: inset 0 -3px 0 var(--navy);
-
-  /* Prazo restante de vigência: reaproveita a rampa de envelhecimento, com as tintas medidas.
-     prazo-1 tem mais tempo; prazo-4 vence logo. */
-  --prazo-1: var(--age1);  --prazo-1-ink: var(--age1-ink);
-  --prazo-2: var(--age2);  --prazo-2-ink: var(--age2-ink);
-  --prazo-3: var(--age3);  --prazo-3-ink: var(--age3-ink);
-  --prazo-4: var(--age4);  --prazo-4-ink: var(--age4-ink);
 }
