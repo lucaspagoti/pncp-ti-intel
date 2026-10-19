@@ -273,19 +273,27 @@ def _ti_por_catalogo(item: ItemArp, catalogo: CatalogoTI) -> str | None:
     return None
 
 
+def itens_ti_por_catalogo(itens: Sequence[ItemArp], catalogo: CatalogoTI) -> set[str]:
+    """`id_item` dos itens de TI pelo catálogo (um item com vários fornecedores conta uma vez)."""
+    return {i.id_item for i in itens if _ti_por_catalogo(i, catalogo)}
+
+
 def decidir_ata(
     objeto: str,
     itens: Sequence[ItemArp],
     catalogo: CatalogoTI,
     regra: RegraArp = REGRA_PADRAO,
+    compra: tuple[int, int] | None = None,
 ) -> Decisao:
     """TI = anexo da IN PRODERJ 05 (objeto e nome do PDM) OU catálogo com corte (R2.1).
 
     O `motivo_ti` registra qual regra decidiu; o anexo vale primeiro para manter o
     comportamento do SIGA. O catálogo só acrescenta atas de TI quando o anexo não achou
-    sinal algum **e** a ata passa no corte: proporção de itens de TI >= `limiar_proporcao`
-    ou um item de PDM central (`insumos/regra_ti_arp.json`). Exclusões explícitas do anexo
-    (nobreak, drone) não são revertidas.
+    sinal algum **e** a ata passa no corte (`insumos/regra_ti_arp.json`): um item de PDM
+    central, a proporção de itens de TI da compra >= `limiar_proporcao` ou ao menos
+    `minimo_itens_ata` itens de TI na própria ata. `compra` traz (itens de TI, itens) somados
+    em todas as atas da compra; sem ela, a compra é a própria ata. Exclusões explícitas do
+    anexo (nobreak, drone) não são revertidas.
     """
     decisao = classificar_ata(objeto, sorted({i.nome_pdm for i in itens if i.nome_pdm}))
     if decisao.is_ti or decisao.motivo != "sem_sinal":
@@ -294,14 +302,13 @@ def decidir_ata(
     if not decisivos:
         return decisao
     # Um item com vários fornecedores vira várias linhas: conta-se por `id_item`.
-    itens_ti = {i.id_item for i, _ in decisivos}
-    itens_total = {i.id_item for i in itens}
+    itens_ti = len({i.id_item for i, _ in decisivos})
+    ti_compra, total_compra = compra or (itens_ti, len({i.id_item for i in itens}))
     central = next(((i, m) for i, m in decisivos if i.codigo_pdm in regra.pdms_centrais), None)
-    if not regra.passa(len(itens_ti), len(itens_total), central is not None):
+    caminho = regra.motivo(itens_ti, ti_compra, total_compra, central is not None)
+    if caminho is None:
         return Decisao(False, "catalogo_incidental")
-    if central:
-        return Decisao(True, f"{central[1]}:central")
-    return Decisao(True, f"{decisivos[0][1]}:prop{len(itens_ti)}de{len(itens_total)}")
+    return Decisao(True, f"{(central or decisivos[0])[1]}:{caminho}")
 
 
 __all__ = [
@@ -315,6 +322,7 @@ __all__ = [
     "decidir_ata",
     "e_candidata",
     "escolher",
+    "itens_ti_por_catalogo",
     "mapear_ata",
     "mapear_item",
     "texto",

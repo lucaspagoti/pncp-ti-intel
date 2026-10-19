@@ -47,6 +47,7 @@ from pncp_ti.fontes.arp_dados import (
     decidir_ata,
     e_candidata,
     escolher,
+    itens_ti_por_catalogo,
     mapear_ata,
     mapear_item,
     texto,
@@ -82,6 +83,7 @@ TENTATIVAS_VARREDURA = 2
 PISO_ATAS = 0.5
 PISO_ITENS = 0.7
 ID_PNCP_ATA = re.compile(r"\d{14}-\d-\d{6}/\d{4}-\d{6}")  # CNPJ-1-compra/ano-ata
+SEQUENCIAL_ATA = re.compile(r"-\d{6}$")
 TOLERANCIA_TOTAL = 0.01  # |linhas explicadas − totalRegistros| em relação ao declarado
 LIMITE_SEM_ID = 0.05  # atas sem numeroControlePncpAta (1,7% em 14/10/2026)
 LIMITE_CONFLITO_ID = 0.01  # mesmo id com número de ata diferente
@@ -1041,6 +1043,43 @@ async def recuperar_ids(
     return {a.id_origem: a for a in achadas if vezes[a.id_origem] == 1}, falhas
 
 
+def compra_da_ata(ata: AtaArp) -> str:
+    """Compra a que a ata pertence: o ARP emite uma ata por fornecedor (ADR 0025, item 7).
+
+    Sem `numeroControlePncpCompra`, usa o id da ata sem o sequencial (`-NNNNNN`); sem nenhum
+    dos dois, a ata é a própria compra.
+    """
+    return ata.numero_controle_pncp_compra or SEQUENCIAL_ATA.sub("", ata.id_origem)
+
+
+def contas_por_compra(
+    atas: Mapping[str, AtaArp],
+    itens_por_ata: Mapping[str, list[ItemArp]],
+    catalogo: CatalogoTI,
+) -> dict[str, tuple[int, int]]:
+    """(itens de TI, itens) de cada compra, somando as atas de todos os fornecedores.
+
+    Conta por `id_item`, que é o número do item na compra: um item dividido entre dois
+    fornecedores conta uma vez. A ata cujos itens não foram buscados entra pela
+    `quantidade_itens` da listagem; toda ata com item de TI de material já foi buscada
+    (é candidata pela varredura), então ela só soma ao total. Serviço de TI (CATSER) não é
+    varrido: numa ata não buscada, ele conta como item que não é de TI.
+    """
+    ti: dict[str, set[str]] = defaultdict(set)
+    buscados: dict[str, set[str]] = defaultdict(set)
+    da_listagem: dict[str, int] = defaultdict(int)
+    for id_origem, ata in atas.items():
+        compra = compra_da_ata(ata)
+        do_ata = itens_por_ata.get(id_origem)
+        if do_ata:
+            buscados[compra].update(i.id_item for i in do_ata)
+            ti[compra].update(itens_ti_por_catalogo(do_ata, catalogo))
+        else:
+            da_listagem[compra] += ata.quantidade_itens or 0
+    compras = {compra_da_ata(a) for a in atas.values()}
+    return {c: (len(ti[c]), len(buscados[c]) + da_listagem[c]) for c in compras}
+
+
 @dataclass(slots=True)
 class Preparado:
     atas: list[AtaArp]
@@ -1071,11 +1110,12 @@ def preparar(
 
     itens: dict[str, ItemArp] = {}
     decisoes: dict[str, tuple[bool, str]] = {}
+    contas = contas_por_compra(atas, itens_por_ata, catalogo)
     for id_origem, ata in atas.items():
         do_ata = itens_por_ata.get(id_origem, [])
         for item in do_ata:
             itens[item.chave] = item
-        decisao = decidir_ata(ata.objeto, do_ata, catalogo, regra)
+        decisao = decidir_ata(ata.objeto, do_ata, catalogo, regra, contas[compra_da_ata(ata)])
         decisoes[id_origem] = (decisao.is_ti, decisao.motivo)
 
     contagens = {

@@ -1,7 +1,8 @@
 {
- "versao": 1,
- "descricao": "Regra de TI do ARP pelo catálogo (R2.1, ADR 0025). A ata só vira TI por itens de catálogo se pelo menos `limiar_proporcao` dos itens for de TI OU tiver um item de PDM central. Revisado pelo Lucas; mudanças viram PR.",
+ "versao": 2,
+ "descricao": "Regra de TI do ARP pelo catálogo (R2.1, ADR 0025). A ata só vira TI por itens de catálogo se tiver um item de PDM central, OU se pelo menos `limiar_proporcao` dos itens da compra (todas as atas dela) for de TI, OU se a própria ata tiver `minimo_itens_ata` itens de TI. Lista de PDMs centrais revisada pelo Lucas em 19/10/2026; mudanças viram PR.",
  "limiar_proporcao": 0.5,
+ "minimo_itens_ata": 2,
  "pdms_centrais": [
   {
    "codigo": 223,

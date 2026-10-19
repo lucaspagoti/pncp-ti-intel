@@ -178,8 +178,22 @@ def test_item_de_ti_incidental_nao_classifica_a_ata():
 
 def test_proporcao_no_limiar_classifica_e_motivo_registra_a_conta():
     decisao = decidir_ata("Material diverso", _itens(239, 283, 1, 2), CATALOGO, REGRA)
-    assert decisao.is_ti and decisao.motivo.endswith(":prop2de4")
+    assert decisao.is_ti and decisao.motivo.endswith(":compra2de4")  # sem compra: a própria ata
     assert not decidir_ata("Material diverso", _itens(239, 1, 2, 3, 4), CATALOGO, REGRA).is_ti
+
+
+def test_proporcao_e_da_compra_e_nao_da_ata_do_fornecedor():
+    """ADR 0025, item 7: uma ata por fornecedor; mouse pad 1 de 1 numa compra genérica."""
+    so_mouse_pad = _itens(239)
+    incidental = decidir_ata("Material de expediente", so_mouse_pad, CATALOGO, REGRA, (1, 10))
+    assert not incidental.is_ti and incidental.motivo == "catalogo_incidental"
+    pela_compra = decidir_ata("Material diverso", so_mouse_pad, CATALOGO, REGRA, (3, 6))
+    assert pela_compra.is_ti and pela_compra.motivo == "catmat70:pdm239@item:compra3de6"
+
+
+def test_dois_itens_de_ti_na_ata_classificam_mesmo_em_compra_generica():
+    decisao = decidir_ata("Material diverso", _itens(239, 283), CATALOGO, REGRA, (2, 90))
+    assert decisao.is_ti and decisao.motivo == "catmat70:pdm239@item:ata2itens"
 
 
 def test_pdm_central_classifica_mesmo_com_um_item_entre_muitos():
@@ -203,7 +217,7 @@ def test_proporcao_conta_itens_e_nao_linhas_de_fornecedor():
     ]
     catalogo = CatalogoTI(pdms=frozenset({239}), servicos={})
     decisao = decidir_ata("Material diverso", ti + nao_ti, catalogo, REGRA)
-    assert decisao.is_ti and decisao.motivo.endswith(":prop2de4")  # 2 de 4 itens, não 2 de 6
+    assert decisao.is_ti and decisao.motivo.endswith(":compra2de4")  # 2 de 4 itens, não 2 de 6
 
 
 def test_motivo_central_aponta_o_item_central_e_nao_o_primeiro_item_de_ti():
