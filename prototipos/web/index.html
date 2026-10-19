@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atas de TI vigentes</title>
 <link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="tokens-projeto.css">
 <link rel="stylesheet" href="prototipo.css">
 </head>
 <body>
@@ -46,6 +47,12 @@
     <div class="ctl escopo"><span class="rotulo">Universo</span><span class="valor">Atas de TI vigentes</span></div>
   </section>
 
+  <section class="painel rampa" aria-labelledby="t-rampa">
+    <div class="titulo" id="t-rampa">Prazo restante de vigência <span>(325 atas; clique numa faixa para filtrar)</span></div>
+    <table aria-describedby="t-rampa"><colgroup><col width="67.7%"><col width="19.7%"><col width="7.1%"><col width="5.5%"></colgroup><tbody><tr><td class="p1"><a href="index.html" title="Filtrar: vence em mais de 180 dias">220</a></td><td class="p2"><a href="index.html" title="Filtrar: vence em 91 a 180 dias">64</a></td><td class="p3"><a href="index.html" title="Filtrar: vence em 31 a 90 dias">23</a></td><td class="p4"><a href="index.html" title="Filtrar: vence em até 30 dias">18</a></td></tr></tbody></table>
+    <ul class="legenda"><li><i class="p1"></i>mais de 180 dias</li><li><i class="p2"></i>91 a 180 dias</li><li><i class="p3"></i>31 a 90 dias</li><li><i class="p4"></i>até 30 dias</li></ul>
+  </section>
+
   <div class="section-title"><h2>325 atas encontradas</h2><div class="line"></div><a class="acao" href="index.html">Exportar CSV</a></div>
 
   <section class="painel" aria-label="Resultados">
@@ -55,8 +62,8 @@
           <h3><a href="ata.html">Outsourcing de impressão corporativa com fornecimento de equipamentos multifuncionais e suprimentos</a></h3>
           <div class="orgao"><span class="chip">PNCP</span><span>Prefeitura Municipal de Niterói</span><span>Municipal · RJ</span></div>
         </div>
-        <div class="preco"><div class="valor">R$ 0,08</div><div class="apoio">a R$ 0,31 · 4 itens</div></div>
-        <div class="regua prazo-curto">
+        <div class="preco"><div class="valor">R$ 0,08</div><div class="apoio">a R$ 389,00 · 4 itens</div></div>
+        <div class="regua prazo-3">
           <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 12/01/2026 a 10/12/2026; vence em 51 dias">
             <rect class="trilha" x="0" y="4" width="100" height="4"/>
             <rect class="restante" x="84.6" y="4" width="15.4" height="4"/>
@@ -65,30 +72,38 @@
           <span class="chip warn">vence em 51 dias</span>
           <div class="datas"><span>12/01/2026</span><span>10/12/2026</span></div>
         </div>
+        <details class="itens-ata" open>
+          <summary>Ver 4 itens com preço</summary>
+          <div class="loc-detalhe"><ul><li><span>Página impressa monocromática A4, franquia mensal <span class="forn">· Imprimax Soluções Ltda.</span></span><strong>R$ 0,08</strong></li><li><span>Página impressa colorida A4, excedente à franquia <span class="forn">· Imprimax Soluções Ltda.</span></span><strong>R$ 0,31</strong></li><li><span>Locação de multifuncional laser 45 ppm, com manutenção <span class="forn">· Imprimax Soluções Ltda.</span></span><strong>R$ 389,00</strong></li><li><span>Software de bilhetagem, licença por equipamento <span class="forn">· Imprimax Soluções Ltda.</span></span><strong>R$ 22,50</strong></li></ul></div>
+        </details>
       </li>
       <li class="ata">
         <div>
           <h3><a href="ata.html">Prestação de serviços de impressão, cópia e digitalização (outsourcing), com franquia de páginas</a></h3>
           <div class="orgao"><span class="chip">Compras ARP</span><span>Tribunal Regional Federal da 2ª Região</span><span>Federal · RJ</span></div>
         </div>
-        <div class="preco"><div class="valor">R$ 0,06</div><div class="apoio">a R$ 0,42 · 7 itens</div></div>
-        <div class="regua prazo-curto">
+        <div class="preco"><div class="valor">R$ 0,06</div><div class="apoio">a R$ 412,00 · 3 itens</div></div>
+        <div class="regua prazo-4">
           <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 03/11/2025 a 02/11/2026; vence em 13 dias">
             <rect class="trilha" x="0" y="4" width="100" height="4"/>
             <rect class="restante" x="96.4" y="4" width="3.6" height="4"/>
             <rect class="hoje" x="96.1" y="0" width="0.6" height="12"/>
           </svg>
-          <span class="chip warn">vence em 13 dias</span>
+          <span class="chip crit">vence em 13 dias</span>
           <div class="datas"><span>03/11/2025</span><span>02/11/2026</span></div>
         </div>
+        <details class="itens-ata">
+          <summary>Ver 3 itens com preço</summary>
+          <div class="loc-detalhe"><ul><li><span>Página monocromática A4 <span class="forn">· Copiadora Atlântica S.A.</span></span><strong>R$ 0,06</strong></li><li><span>Página colorida A4 <span class="forn">· Copiadora Atlântica S.A.</span></span><strong>R$ 0,42</strong></li><li><span>Multifuncional departamental A3 <span class="forn">· Copiadora Atlântica S.A.</span></span><strong>R$ 412,00</strong></li></ul></div>
+        </details>
       </li>
       <li class="ata">
         <div>
           <h3><a href="ata.html">Serviço de outsourcing de impressão departamental para as unidades da Secretaria de Estado de Saúde</a></h3>
           <div class="orgao"><span class="chip">SIGA RJ</span><span>Secretaria de Estado de Saúde do RJ</span><span>Estadual · RJ</span></div>
         </div>
-        <div class="preco"><div class="valor">R$ 0,07</div><div class="apoio">a R$ 1,10 · 5 itens</div></div>
-        <div class="regua">
+        <div class="preco"><div class="valor">R$ 0,07</div><div class="apoio">a R$ 1,10 · 2 itens</div></div>
+        <div class="regua prazo-2">
           <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 20/03/2026 a 19/03/2027; vence em 150 dias">
             <rect class="trilha" x="0" y="4" width="100" height="4"/>
             <rect class="restante" x="58.8" y="4" width="41.2" height="4"/>
@@ -97,14 +112,18 @@
           <span class="chip">vence em 150 dias</span>
           <div class="datas"><span>20/03/2026</span><span>19/03/2027</span></div>
         </div>
+        <details class="itens-ata">
+          <summary>Ver 2 itens com preço</summary>
+          <div class="loc-detalhe"><ul><li><span>Página monocromática A4 <span class="forn">· Rede Print Serviços Ltda.</span></span><strong>R$ 0,07</strong></li><li><span>Página colorida A3 <span class="forn">· Rede Print Serviços Ltda.</span></span><strong>R$ 1,10</strong></li></ul></div>
+        </details>
       </li>
       <li class="ata">
         <div>
           <h3><a href="ata.html">Registro de preços para outsourcing de impressão com locação de impressoras e multifuncionais</a></h3>
           <div class="orgao"><span class="chip">Compras ARP</span><span>Universidade Federal de Minas Gerais</span><span>Federal · MG</span></div>
         </div>
-        <div class="preco"><div class="valor">R$ 0,05</div><div class="apoio">a R$ 0,29 · 6 itens</div></div>
-        <div class="regua">
+        <div class="preco"><div class="valor">R$ 0,05</div><div class="apoio">a R$ 0,29 · 2 itens</div></div>
+        <div class="regua prazo-1">
           <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 01/06/2026 a 31/05/2027; vence em 223 dias">
             <rect class="trilha" x="0" y="4" width="100" height="4"/>
             <rect class="restante" x="38.7" y="4" width="61.3" height="4"/>
@@ -113,6 +132,10 @@
           <span class="chip">vence em 223 dias</span>
           <div class="datas"><span>01/06/2026</span><span>31/05/2027</span></div>
         </div>
+        <details class="itens-ata">
+          <summary>Ver 2 itens com preço</summary>
+          <div class="loc-detalhe"><ul><li><span>Página monocromática A4 <span class="forn">· Minas Documentos Ltda.</span></span><strong>R$ 0,05</strong></li><li><span>Página colorida A4 <span class="forn">· Minas Documentos Ltda.</span></span><strong>R$ 0,29</strong></li></ul></div>
+        </details>
       </li>
       <li class="ata">
         <div>
@@ -120,13 +143,13 @@
           <div class="orgao"><span class="chip">PNCP</span><span>Prefeitura Municipal de Campinas</span><span>Municipal · SP</span></div>
         </div>
         <div class="preco"><span class="chip">sem itens nesta fonte</span></div>
-        <div class="regua prazo-curto">
+        <div class="regua prazo-4">
           <svg viewBox="0 0 100 12" preserveAspectRatio="none" role="img" aria-label="Vigência de 14/11/2025 a 13/11/2026; vence em 24 dias">
             <rect class="trilha" x="0" y="4" width="100" height="4"/>
             <rect class="restante" x="93.4" y="4" width="6.6" height="4"/>
             <rect class="hoje" x="93.1" y="0" width="0.6" height="12"/>
           </svg>
-          <span class="chip warn">vence em 24 dias</span>
+          <span class="chip crit">vence em 24 dias</span>
           <div class="datas"><span>14/11/2025</span><span>13/11/2026</span></div>
         </div>
       </li>
