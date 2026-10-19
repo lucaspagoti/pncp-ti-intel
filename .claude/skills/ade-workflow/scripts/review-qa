@@ -124,11 +124,11 @@ commit=$(git -C "$repo_root" rev-parse --verify "$commit^{commit}")
 mkdir -p "$out"
 out=$(cd "$out" && pwd -P)
 qa="$cache/pncp-ti/qa/$snapshot_id"
-# Nunca reaproveitar nem limpar o clone ou o contêiner de outra execução.
-[[ -e $qa ]] && { echo "clone de QA já existe: $qa" >&2; exit 1; }
-docker inspect "pncp-ti-qa-$snapshot_id" > /dev/null 2>&1 \
-    && { echo "contêiner de QA já existe: pncp-ti-qa-$snapshot_id" >&2; exit 1; }
+# Nunca reaproveitar nem limpar o clone ou o contêiner de outra execução: o `mkdir` do clone é a
+# reserva atômica do snapshot, e a limpeza só remove o que esta execução comprovadamente criou.
 mkdir -p "$cache/pncp-ti/qa"
+mkdir "$qa" 2> /dev/null || { echo "clone de QA já existe: $qa" >&2; exit 1; }
+criou_pg=0
 codex_home=$(mktemp -d -p "$cache/pncp-ti/qa" codex.XXXXXX)
 
 fingerprint() {
@@ -141,7 +141,7 @@ limpar() {
     devolver_auth "$codex_home" || echo "aviso: não devolveu o auth.json renovado" >&2
     rm -rf "$codex_home"
     [[ -d $qa/qa-out ]] && cp -r "$qa/qa-out" "$out/" 2> /dev/null || true
-    "$repo_root/scripts/pg_descartavel.sh" down "$snapshot_id"
+    (( criou_pg )) && "$repo_root/scripts/pg_descartavel.sh" down "$snapshot_id"
     rm -rf "$qa"
 }
 trap limpar EXIT
@@ -153,7 +153,11 @@ git -C "$qa" checkout -q --detach "$commit"
 git -C "$qa" remote remove origin
 mkdir -p "$qa/qa-out"
 
+docker inspect "pncp-ti-qa-$snapshot_id" > /dev/null 2>&1 \
+    && { echo "contêiner de QA já existe: pncp-ti-qa-$snapshot_id" >&2; exit 1; }
+# Se o `up` falhar, ele mesmo remove o que criou; um nome já em uso não é removido aqui.
 "$repo_root/scripts/pg_descartavel.sh" up "$snapshot_id" "$qa/.env"
+criou_pg=1
 # Provisionamento fora da caixa (dentro dela, uv roda offline e sem sync). Cópia, não hardlink:
 # o .venv é gravável na caixa e não pode alterar o cache do uv do host.
 (cd "$qa" && UV_LINK_MODE=copy uv sync --frozen -q \

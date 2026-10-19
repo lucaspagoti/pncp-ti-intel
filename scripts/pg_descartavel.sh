@@ -33,8 +33,9 @@ up)
     docker exec "$conteiner" pg_isready -q -U postgres -d pncp_ti -h 127.0.0.1 \
         || { echo "Postgres de QA não respondeu" >&2; docker rm -f "$conteiner" > /dev/null; exit 1; }
     porta=$(docker port "$conteiner" 5432/tcp | head -1 | sed 's/.*://')
-    umask 077
-    cat > "$arquivo" <<EOF
+    # Temporário 0600 e troca atômica: um destino preexistente não preserva permissão larga.
+    tmp=$(mktemp "$(dirname -- "$arquivo")/.pg_descartavel.XXXXXX")
+    cat > "$tmp" <<EOF
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=$porta
 POSTGRES_DB=pncp_ti
@@ -44,6 +45,7 @@ PNCP_TI_READER_PASSWORD=$(senha)
 PNCP_TI_WEB_PASSWORD=$(senha)
 PNCP_TI_IDENTITY_KEY=$(openssl rand -hex 32)
 EOF
+    mv -f -- "$tmp" "$arquivo"
     echo "$conteiner em 127.0.0.1:$porta"
     ;;
 down)
