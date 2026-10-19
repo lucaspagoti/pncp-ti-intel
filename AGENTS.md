@@ -33,7 +33,8 @@ antes de propor qualquer fase.
   neutralizadas no CSV exportado.
 - Ingestão idempotente por fonte: staging, normalização e troca atômica. Chave lógica:
   `(fonte, id_origem)`; deduplicação entre ARP e busca PNCP por `numero_controle_pncp`. Uma falha
-  não publica carga parcial.
+  não publica carga parcial; exceção: termo da busca PNCP que falhar reaproveita a carga ativa por
+  até 3 dias (ADR 0028).
 - Toda fonte nova tem teste de parse com fixture e, se a API não for documentada, teste de contrato.
 - Critério de TI do SIGA = Anexo Único da IN PRODERJ/PRE 05/2024 (`insumos/normas/`, ADR 0019).
   A regra lê objeto e nome de catálogo, nunca a especificação do item. O Lucas decidiu seguir o

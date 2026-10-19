@@ -31,6 +31,15 @@ Essa estrutura é `cargas.contagens`, em uma carga `fonte = 'pncp_busca'`, com
 `concluido_em` preenchido. O termo deve ser estável e corresponder exatamente à chave.
 Ausência da métrica com monitoramento configurado alerta; não é interpretada como zero.
 
+Termo da busca PNCP que o portal não responde fica em `contagens.termos_pendentes`
+(`{termo: data da primeira falha}`) e reaproveita as atas da carga ativa. A carga só falha,
+e avisa no WhatsApp, quando um termo fica pendente por 3 dias seguidos (ADR 0028). Para ver
+as pendências:
+
+```sql
+SELECT contagens->'termos_pendentes' FROM cargas WHERE fonte = 'pncp_busca' AND ativa;
+```
+
 ## Rotina diária
 
 Às 03:00, SIGA e ARP executam de forma independente. Às 08:30, a operação consulta o
