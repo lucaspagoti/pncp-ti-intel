@@ -16,7 +16,7 @@ echo "$*" >> "$REGISTRO"
 case $1 in
   run) [[ -n ${DOCKER_RUN_FALHA:-} ]] && exit 125; echo id ;;
   exec) exit 0 ;;
-  port) echo 127.0.0.1:55432 ;;
+  port) [[ -n ${DOCKER_PORT_FALHA:-} ]] && exit 42; echo 127.0.0.1:55432 ;;
   inspect) exit 1 ;;
   rm) exit 0 ;;
 esac
@@ -57,6 +57,16 @@ def test_pg_descartavel_grava_env_0600_mesmo_com_destino_existente(tmp_path):
     assert stat.S_IMODE(destino.stat().st_mode) == 0o600
     conteudo = destino.read_text()
     assert "POSTGRES_PORT=55432" in conteudo and "antigo" not in conteudo
+
+
+def test_pg_descartavel_remove_o_conteiner_que_criou_se_falhar_depois(tmp_path):
+    env = {**_bin_falso(tmp_path), "DOCKER_PORT_FALHA": "1"}
+    destino = tmp_path / "qa.env"
+    r = subprocess.run([PG, "up", "teste", destino], env=env, capture_output=True, text=True)
+    assert r.returncode != 0
+    assert "rm -f -v pncp-ti-qa-teste" in _chamadas_docker(tmp_path)
+    assert not destino.exists()
+    assert not list(tmp_path.glob(".pg_descartavel.*"))
 
 
 def test_review_qa_nao_apaga_clone_de_outra_execucao(tmp_path):
