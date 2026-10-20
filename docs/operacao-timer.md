@@ -54,6 +54,6 @@ e do Diun), que repassa ao WAHA; o Kuma não fala direto com o WAHA. Detalhes em
 
 R6 acrescenta `PNCP_TI_NOTIFY_URL` no `.env` para a bridge existente (`POST /notify/text`,
 texto puro, exige `{"ok": true}`). Sem URL, publicação falha explicitamente e conserva
-a fila; não marca mensagem como entregue. SIGA parado >48h, falha/idade ARP e gancho PNCP
-geram alertas separados do Push. Instalação, recuperação, limites de entrega, configuração
+a fila; não marca mensagem como entregue. Fonte sem dados, dados parados >48h e termo PNCP
+zerado saem numa frase por dia, separada do Push; falha de carga só pelo `OnFailure` (ADR 0030). Instalação, recuperação, limites de entrega, configuração
 do termo PNCP e MCP: [manual-operacao.md](manual-operacao.md), ADR 0022.

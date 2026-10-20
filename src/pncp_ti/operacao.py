@@ -17,19 +17,28 @@ from pncp_ti.config import get_settings, ingest_dsn
 from pncp_ti.notificar import publicar
 
 SP = ZoneInfo("America/Sao_Paulo")
+NOMES = {"siga_rj": "SIGA RJ", "compras_arp": "Compras.gov.br"}
+# Uma frase por serviço, em português simples (o Lucas lê no WhatsApp, sem terminal).
+FALHAS = {
+    "pncp-ti-carga.service": "a atualização de hoje falhou; o site segue com os dados anteriores",
+    "pncp-ti-web.service": "o site parou de funcionar",
+    "pncp-ti-backup.service": "o backup de hoje falhou",
+    "pncp-ti-operacao.service": "a verificação diária falhou",
+}
 
 
 def alertas(cargas: list[dict], agora: datetime, termo: str | None = None) -> list[tuple[str, str]]:
-    """Avaliação pura; sem_mudanca não esconde a idade dos arquivos SIGA."""
+    """Avaliação pura; sem_mudanca não esconde a idade dos arquivos SIGA.
+
+    Carga que falhou já foi avisada de madrugada pelo OnFailure da carga; aqui só entra o que
+    ele não vê: dados parados, fonte sem dados e o termo estável zerado (ADR 0027).
+    """
     avisos = []
     for fonte in ("siga_rj", "compras_arp"):
-        linhas = [c for c in cargas if c["fonte"] == fonte]
-        recente = max(linhas, key=lambda c: c["iniciado_em"], default=None)
-        ativa = next((c for c in linhas if c["ativa"]), None)
-        if recente and recente["status"] == "falhou":
-            avisos.append((f"{fonte}:falhou", f"{fonte}: última carga falhou; consulte cargas."))
+        nome = NOMES[fonte]
+        ativa = next((c for c in cargas if c["fonte"] == fonte and c["ativa"]), None)
         if not ativa:
-            avisos.append((f"{fonte}:ausente", f"{fonte}: nenhuma carga ativa."))
+            avisos.append((f"{fonte}:ausente", f"{nome} sem dados"))
             continue
         if fonte == "siga_rj":
             datas = [
@@ -44,24 +53,35 @@ def alertas(cargas: list[dict], agora: datetime, termo: str | None = None) -> li
         else:
             referencia = ativa["concluido_em"]
         if referencia is None or agora - referencia > timedelta(hours=48):
-            avisos.append((f"{fonte}:velha", f"{fonte}: dados parados há mais de 48h."))
+            avisos.append((f"{fonte}:velha", f"{nome} sem atualizar há mais de 2 dias"))
     if termo:
         pncp = [c for c in cargas if c["fonte"] == "pncp_busca"]
-        recente = max(pncp, key=lambda c: c["iniciado_em"], default=None)
-        if not recente or recente["status"] not in {"concluida", "sem_mudanca"}:
-            avisos.append(("pncp:indisponivel", "PNCP: termo monitorado sem carga bem-sucedida."))
-        elif agora - recente["concluido_em"] > timedelta(hours=48):
-            avisos.append(("pncp:velha", "PNCP: medição do termo monitorado há mais de 48h."))
+        recente = max(
+            (c for c in pncp if c["status"] in {"concluida", "sem_mudanca"}),
+            key=lambda c: c["iniciado_em"],
+            default=None,
+        )
+        if recente is None or agora - recente["concluido_em"] > timedelta(hours=48):
+            avisos.append(("pncp:velha", "busca PNCP sem atualizar há mais de 2 dias"))
         else:
-            # Gancho R3: contagens.resultados_por_termo = {termo: total}.
+            # Gancho R3: contagens.resultados_por_termo = {termo: total}. Termo ausente é termo
+            # que não respondeu hoje e reaproveitou a carga (ADR 0028), não incidente.
             total = recente["contagens"].get("resultados_por_termo", {}).get(termo)
-            if type(total) is not int or total < 0:
-                avisos.append(("pncp:sem_metrica", "PNCP: métrica do termo monitorado ausente."))
-            elif total == 0:
+            if type(total) is int and total == 0:
                 avisos.append(
-                    ("pncp:zero", "PNCP: termo estável monitorado retornou 0 resultados.")
+                    (
+                        "pncp:zero",
+                        f'busca PNCP voltou vazia para "{termo}"; o portal pode ter mudado',
+                    )
                 )
     return avisos
+
+
+def resumo(avisos: list[tuple[str, str]]) -> str | None:
+    """Os avisos do dia numa frase só, ou None se não há nada a avisar."""
+    if not avisos:
+        return None
+    return "Atas de TI: " + "; ".join(frase for _, frase in avisos) + "."
 
 
 async def enfileirar(conn, agora: datetime, termo: str | None = None) -> None:
@@ -74,10 +94,12 @@ async def enfileirar(conn, agora: datetime, termo: str | None = None) -> None:
         )
     """)
     ).fetchall()
-    for codigo, corpo in alertas(cargas, agora, termo):
+    corpo = resumo(alertas(cargas, agora, termo))
+    if corpo:
+        # Uma mensagem por dia, no máximo.
         await conn.execute(
             "INSERT INTO notificacoes (chave, corpo) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (f"alerta:{hoje}:{codigo}", corpo),
+            (f"alerta:{hoje}:resumo", corpo),
         )
     # Digest de atas novas desativado (ADR 0027): WhatsApp só para incidentes.
 
@@ -122,7 +144,8 @@ async def executar(modo: str, unidade: str | None = None) -> int:
             if not unidade or not re.fullmatch(r"pncp-ti-[a-zA-Z0-9_.@-]{1,100}", unidade):
                 raise ValueError("unidade inválida")
             # OnFailure funciona mesmo com o Postgres indisponível.
-            await publicar(f"Falha no serviço {unidade}; consulte journalctl --user.", client)
+            frase = FALHAS.get(unidade, f"o serviço {unidade} falhou")
+            await publicar(f"Atas de TI: {frase}.", client)
             return 0
         async with await psycopg.AsyncConnection.connect(
             ingest_dsn(get_settings()), row_factory=dict_row

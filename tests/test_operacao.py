@@ -37,7 +37,8 @@ def test_frescor_por_fonte_falha_arp_nao_esconde_siga_parado():
         carga("compras_arp", status="falhou", ativa=False),
         carga("siga_rj", status="sem_mudanca", ativa=False),
     ]
-    assert codigos(cargas) == {"siga_rj:velha", "compras_arp:falhou"}
+    # A falha da carga já foi avisada de madrugada pelo OnFailure; 08:30 não repete.
+    assert codigos(cargas) == {"siga_rj:velha"}
 
 
 def test_limite_48h_estrito_e_carga_ausente():
@@ -57,9 +58,10 @@ def test_siga_sem_last_modified_usa_data_origem_nao_execucao_recente():
     [
         (0, "pncp:zero"),
         (4, None),
-        (None, "pncp:sem_metrica"),
-        (False, "pncp:sem_metrica"),
-        (-1, "pncp:sem_metrica"),
+        # Termo que não respondeu hoje reaproveita a carga (ADR 0028): não é incidente.
+        (None, None),
+        (False, None),
+        (-1, None),
     ],
 )
 def test_gancho_pncp_parametrizavel(total, esperado):
@@ -73,11 +75,20 @@ def test_gancho_pncp_parametrizavel(total, esperado):
 
 
 def test_pncp_ausente_antigo_ou_falhando_nao_vira_zero():
-    assert "pncp:indisponivel" in codigos([], "notebook")
     assert "pncp:velha" in codigos([carga("pncp_busca", idade=49)], "notebook")
-    assert "pncp:indisponivel" in codigos(
+    # Falha da carga é avisada pelo OnFailure da carga; 08:30 não repete.
+    assert "pncp:zero" not in codigos(
         [carga("pncp_busca", status="falhou", ativa=False)], "notebook"
     )
+
+
+def test_resumo_numa_frase_simples():
+    cargas = [carga("siga_rj", idade=49), carga("pncp_busca", idade=49)]
+    assert operacao.resumo(alertas(cargas, AGORA, "notebook")) == (
+        "Atas de TI: SIGA RJ sem atualizar há mais de 2 dias; Compras.gov.br sem dados; "
+        "busca PNCP sem atualizar há mais de 2 dias."
+    )
+    assert operacao.resumo([]) is None
 
 
 @pytest.mark.parametrize(
@@ -141,7 +152,13 @@ async def test_onfailure_independe_do_banco(monkeypatch):
     monkeypatch.setattr(operacao, "publicar", fake)
     monkeypatch.setattr(operacao.psycopg.AsyncConnection, "connect", sem_banco)
     assert await operacao.executar("falha", "pncp-ti-backup.service") == 0
-    assert "pncp-ti-backup.service" in mensagens[0]
+    assert await operacao.executar("falha", "pncp-ti-carga.service") == 0
+    assert await operacao.executar("falha", "pncp-ti-web.service") == 0
+    assert mensagens == [
+        "Atas de TI: o backup de hoje falhou.",
+        "Atas de TI: a atualização de hoje falhou; o site segue com os dados anteriores.",
+        "Atas de TI: o site parou de funcionar.",
+    ]
     with pytest.raises(ValueError):
         await operacao.executar("falha", "$(touch bad)")
 
