@@ -13,7 +13,7 @@ jobs:
     # não são segredos reais (regra do CLAUDE.md é sobre segredos de produção).
     services:
       postgres:
-        image: postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+        image: postgres@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c
         env:
           POSTGRES_DB: pncp_ti
           POSTGRES_PASSWORD: ci-postgres-password
@@ -56,7 +56,7 @@ jobs:
     # não são segredos reais (regra do CLAUDE.md é sobre segredos de produção).
     services:
       postgres:
-        image: postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+        image: postgres@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c
         env:
           POSTGRES_DB: pncp_ti
           POSTGRES_PASSWORD: ci-postgres-password
@@ -141,7 +141,7 @@ jobs:
         with:
           scan-type: image
           # mesmo digest pinado em docker-compose.yml — atualizar os dois juntos.
-          image-ref: postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+          image-ref: postgres@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
