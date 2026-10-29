@@ -1,7 +1,7 @@
 services:
   postgres:
     # postgres:16 (atualizar o digest junto da versão; ver docs/PLANO.md, seção Segurança).
-    image: postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+    image: postgres@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c
     container_name: pncp_ti_postgres
     restart: unless-stopped
     ports:
