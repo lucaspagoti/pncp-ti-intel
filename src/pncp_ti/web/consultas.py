@@ -7,10 +7,11 @@ parâmetro (`%(q)s`). Lê só views (papel `web_reader`).
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, replace
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.rows import dict_row
@@ -25,7 +26,23 @@ ORDENS = {
     "preco": "preco_min ASC NULLS LAST, id_ata",
 }
 FONTES = {"siga_rj": "SIGA RJ", "compras_arp": "Compras.gov.br", "pncp_busca": "Busca PNCP"}
-ESFERAS = ("Federal", "Estadual", "Municipal", "Distrital")
+SEM_ESFERA = "Não informada"
+ESFERAS = ("Federal", "Estadual", "Municipal", "Distrital", "Não se aplica", SEM_ESFERA)
+DIAS_CRIT = 30
+DIAS_WARN = 90
+FUSO = ZoneInfo("America/Sao_Paulo")
+
+
+def hoje() -> date:
+    return datetime.now(FUSO).date()
+
+
+def dias_restantes(fim: date | None, referencia: date | None = None) -> tuple[int | None, str]:
+    """Dias até o fim da vigência e o nível do selo: `crit` até 30, `warn` até 90, senão ''."""
+    if fim is None:
+        return None, ""
+    dias = (fim - (referencia or hoje())).days
+    return dias, "crit" if dias <= DIAS_CRIT else "warn" if dias <= DIAS_WARN else ""
 
 
 def como_texto(valor: Decimal | None) -> str:
@@ -40,7 +57,7 @@ class Filtros:
     esfera: str = ""
     uf: str = ""
     orgao: str = ""
-    vence_ate: date | None = None
+    vigente_ate: date | None = None
     preco_min: Decimal | None = None
     preco_max: Decimal | None = None
     ordem: str = "relevancia"
@@ -54,7 +71,7 @@ class Filtros:
             "esfera": self.esfera,
             "uf": self.uf,
             "orgao": self.orgao,
-            "vence_ate": self.vence_ate.isoformat() if self.vence_ate else "",
+            "vigente_ate": self.vigente_ate.isoformat() if self.vigente_ate else "",
             "preco_min": como_texto(self.preco_min),
             "preco_max": como_texto(self.preco_max),
             "ordem": self.ordem if self.ordem != "relevancia" else "",
@@ -107,7 +124,7 @@ def ler_filtros(params: Mapping[str, str]) -> Filtros:
         esfera=esfera if esfera in ESFERAS else "",
         uf=uf if len(uf) == 2 and uf.isalpha() else "",
         orgao=_texto(params.get("orgao")),
-        vence_ate=_data(params.get("vence_ate")),
+        vigente_ate=_data(params.get("vigente_ate")),
         preco_min=_preco(params.get("preco_min")),
         preco_max=_preco(params.get("preco_max")),
         ordem=ordem if ordem in ORDENS else "relevancia",
@@ -122,19 +139,19 @@ _COLUNAS = (
 )
 
 
-def _where(f: Filtros) -> tuple[str, dict[str, Any]]:
+def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
+    """WHERE dos filtros; `sem` deixa um campo de fora (contagem da faceta desse campo)."""
     cond = ["true"]
     p: dict[str, Any] = {}
     if f.q:
         p["q"] = f.q
-        cond.append(
-            "to_tsvector('portuguese', texto_busca) @@ websearch_to_tsquery('portuguese', "
-            "unaccent(%(q)s))"
-        )
-    if f.fonte:
+        cond.append("documento @@ websearch_to_tsquery('portuguese', unaccent(%(q)s))")
+    if f.fonte and sem != "fonte":
         cond.append("fonte = %(fonte)s")
         p["fonte"] = f.fonte
-    if f.esfera:
+    if f.esfera == SEM_ESFERA and sem != "esfera":
+        cond.append("esfera IS NULL")
+    elif f.esfera and sem != "esfera":
         cond.append("esfera = %(esfera)s")
         p["esfera"] = f.esfera
     if f.uf:
@@ -146,9 +163,9 @@ def _where(f: Filtros) -> tuple[str, dict[str, Any]]:
             "LIKE '%%' || unaccent(lower(%(orgao)s)) || '%%'"
         )
         p["orgao"] = f.orgao.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    if f.vence_ate:
-        cond.append("fim <= %(vence_ate)s")
-        p["vence_ate"] = f.vence_ate
+    if f.vigente_ate:
+        cond.append("fim >= %(vigente_ate)s")
+        p["vigente_ate"] = f.vigente_ate
     if f.preco_min is not None or f.preco_max is not None:
         # Um mesmo item precisa caber na faixa (mín. e máx. agregados deixariam passar uma ata
         # com itens de R$ 100 e R$ 1.000 numa faixa de R$ 200 a R$ 500).
@@ -165,12 +182,7 @@ def _where(f: Filtros) -> tuple[str, dict[str, Any]]:
 
 def _consulta(f: Filtros, limite: int, deslocamento: int) -> tuple[str, dict[str, Any]]:
     onde, p = _where(f)
-    rank = (
-        "ts_rank(to_tsvector('portuguese', texto_busca), "
-        "websearch_to_tsquery('portuguese', unaccent(%(q)s)))"
-        if f.q
-        else "0"
-    )
+    rank = "ts_rank(documento, websearch_to_tsquery('portuguese', unaccent(%(q)s)))" if f.q else "0"
     p.update(limite=limite, deslocamento=deslocamento)
     return (
         f"SELECT {_COLUNAS}, {rank} AS rank, count(*) OVER () AS total "
@@ -206,11 +218,63 @@ async def para_exportar(conn: psycopg.AsyncConnection, f: Filtros) -> list[dict[
 
 async def opcoes_filtro(conn: psycopg.AsyncConnection) -> dict[str, list[str]]:
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(
-            "SELECT DISTINCT uf FROM v_atas_ti_vigentes WHERE uf IS NOT NULL ORDER BY 1"
-        )
+        await cur.execute("SELECT DISTINCT uf FROM v_busca_atas WHERE uf IS NOT NULL ORDER BY 1")
         ufs = [r["uf"] for r in await cur.fetchall()]
     return {"ufs": ufs}
+
+
+async def facetas(conn: psycopg.AsyncConnection, f: Filtros) -> dict[str, dict[str, int]]:
+    """Contagem por fonte e por esfera sob os demais filtros; só opções com alguma ata."""
+    resultado: dict[str, dict[str, int]] = {}
+    for campo, expressao in (("fonte", "fonte"), ("esfera", f"COALESCE(esfera, '{SEM_ESFERA}')")):
+        onde, p = _where(f, sem=campo)
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                f"SELECT {expressao} AS valor, count(*) AS n FROM v_busca_atas WHERE {onde} "
+                "GROUP BY 1",
+                p,
+            )
+            contagem = {r["valor"]: r["n"] for r in await cur.fetchall()}
+        ordem = FONTES if campo == "fonte" else ESFERAS
+        resultado[campo] = {v: contagem[v] for v in ordem if contagem.get(v)}
+    return resultado
+
+
+def filtros_ativos(f: Filtros) -> list[tuple[str, str, Filtros]]:
+    """Pílulas: (rótulo, valor exibido, filtros sem esse campo) para o link de remover."""
+
+    def sem(**campo: Any) -> Filtros:
+        return replace(f, pagina=1, **campo)
+
+    ativos: list[tuple[str, str, Filtros]] = []
+    if f.q:
+        ativos.append(("Termo", f.q, sem(q="")))
+    if f.fonte:
+        ativos.append(("Fonte", FONTES[f.fonte], sem(fonte="")))
+    if f.esfera:
+        ativos.append(("Esfera", f.esfera, sem(esfera="")))
+    if f.uf:
+        ativos.append(("UF", f.uf, sem(uf="")))
+    if f.orgao:
+        ativos.append(("Órgão", f.orgao, sem(orgao="")))
+    if f.vigente_ate:
+        ativos.append(
+            ("Vigente até pelo menos", f.vigente_ate.strftime("%d/%m/%Y"), sem(vigente_ate=None))
+        )
+    if f.preco_min is not None:
+        ativos.append(("Preço mín.", "R$ " + como_texto(f.preco_min), sem(preco_min=None)))
+    if f.preco_max is not None:
+        ativos.append(("Preço máx.", "R$ " + como_texto(f.preco_max), sem(preco_max=None)))
+    return ativos
+
+
+async def cargas(conn: psycopg.AsyncConnection) -> list[dict[str, Any]]:
+    """Cargas ativas por fonte (rodapé "Dados de")."""
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            "SELECT fonte, data_referencia, concluido_em FROM v_cargas_web ORDER BY fonte"
+        )
+        return await cur.fetchall()
 
 
 async def ata(conn: psycopg.AsyncConnection, fonte: str, id_ata: str) -> dict[str, Any] | None:
@@ -226,8 +290,8 @@ async def ata(conn: psycopg.AsyncConnection, fonte: str, id_ata: str) -> dict[st
 async def itens(conn: psycopg.AsyncConnection, fonte: str, id_ata: str) -> list[dict[str, Any]]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
-            "SELECT id_item, descricao, nome_catalogo, fornecedor, quantidade, valor_unitario, "
-            "valor_valido, quantidade_empenhada, maximo_adesao FROM v_ata_itens_ti "
+            "SELECT id_item, descricao, nome_catalogo, codigo_catalogo, fornecedor, quantidade, "
+            "valor_unitario, valor_valido, quantidade_empenhada, maximo_adesao FROM v_ata_itens_ti "
             "WHERE fonte = %s AND id_ata = %s ORDER BY id_item LIMIT 2000",
             (fonte, id_ata),
         )

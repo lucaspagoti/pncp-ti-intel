@@ -23,6 +23,16 @@ CABECALHO = [
     "preco_unitario_max",
     "link_origem",
 ]
+CABECALHO_ITENS = [
+    "id_item",
+    "descricao",
+    "nome_catalogo",
+    "codigo_catalogo",
+    "fornecedor",
+    "quantidade",
+    "maximo_adesao",
+    "valor_unitario",
+]
 _CAMPOS = {
     "preco_unitario_min": "preco_min",
     "preco_unitario_max": "preco_max",
@@ -36,10 +46,10 @@ def neutralizar(valor: Any) -> str:
     return texto
 
 
-def gerar_csv(linhas: list[Mapping[str, Any]]) -> str:
+def gerar_csv(linhas: list[Mapping[str, Any]], cabecalho: list[str] = CABECALHO) -> str:
     saida = io.StringIO()
     escritor = csv.writer(saida, lineterminator="\n")
-    escritor.writerow(CABECALHO)
+    escritor.writerow(cabecalho)
     for linha in linhas:
-        escritor.writerow(neutralizar(linha.get(_CAMPOS.get(c, c))) for c in CABECALHO)
+        escritor.writerow(neutralizar(linha.get(_CAMPOS.get(c, c))) for c in cabecalho)
     return saida.getvalue()

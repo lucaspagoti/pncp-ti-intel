@@ -23,14 +23,25 @@ só tem `&nbsp;`); o E2E o localiza por CSS até lá.
 
 ## W1 · Backend da web (sprint 2)
 
-- Migração 0010 com `v_cargas_web` (fonte, data de referência e conclusão da carga ativa) e
-  GRANT para `web_reader`, testada e reversível.
+- Migração 0010, testada e reversível:
+  - `v_cargas_web` (fonte, data de referência e conclusão da carga ativa), com GRANT para
+    `web_reader`;
+  - busca materializada `mv_busca_atas`, atualizada depois de cada carga (ADR 0035);
+  - cache `unidades_gerenciadoras`, que dá esfera, UF e município ao ARP (ADR 0034).
+- Pool da web descarta conexão morta; `/saude` consulta o banco e responde 503 sem ele.
+- Filtro de data passa a "vigente até pelo menos" (`vigente_ate`, `fim >= data`), como no
+  protótipo.
 - Em `consultas.py`: facetas (contagem por opção de filtro), `filtros_ativos` e
   `dias_restantes` com nível (`warn` ≤ 90 dias, `crit` ≤ 30, hoje em `America/Sao_Paulo`).
 - Rota `/ata/{fonte}/{id}/itens.csv` com `gerar_csv` e fórmulas neutralizadas.
 - `scripts/smoke_web.sh`: `/saude`, as três buscas do aceite, CSP, detalhe e CSV.
 - A interface ainda não muda.
-- **Aceite:** testes e E2E verdes, QA aprovado e migração aplicada no deploy com backup validado.
+- **Aceite:**
+  - testes e E2E verdes;
+  - QA aprovado;
+  - migração aplicada no deploy com backup validado;
+  - na cópia de produção, as três buscas do aceite com as facetas abaixo de 500 ms;
+  - depois da primeira carga do ARP, ao menos 95% das atas do ARP com esfera e UF.
 
 ## W2 · Frontend da web (sprint 3)
 

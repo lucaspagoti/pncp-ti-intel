@@ -16,12 +16,12 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from psycopg_pool import AsyncConnectionPool
+from psycopg_pool import AsyncConnectionPool, PoolTimeout
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from pncp_ti.config import get_settings, web_dsn
 from pncp_ti.web import consultas
-from pncp_ti.web.exportar import gerar_csv
+from pncp_ti.web.exportar import CABECALHO_ITENS, gerar_csv
 
 BASE = Path(__file__).parent
 HOSTS_PADRAO = "127.0.0.1,localhost,testserver"
@@ -77,6 +77,8 @@ def criar_app(dsn: str | None = None) -> FastAPI:
             dsn or web_dsn(get_settings()),
             min_size=1,
             max_size=4,
+            # Conexão morta (Postgres reiniciado) é descartada antes de ir para a requisição.
+            check=AsyncConnectionPool.check_connection,
             kwargs={"options": OPCOES_CONEXAO, "autocommit": True},
             open=False,
         )
@@ -95,7 +97,12 @@ def criar_app(dsn: str | None = None) -> FastAPI:
     templates = Jinja2Templates(directory=BASE / "templates")
     templates.env.autoescape = True
     templates.env.filters.update(
-        brl=_brl, data=_data, numero=_numero, url_segura=_url_segura, preco_br=consultas.como_texto
+        brl=_brl,
+        data=_data,
+        numero=_numero,
+        url_segura=_url_segura,
+        preco_br=consultas.como_texto,
+        dias_restantes=consultas.dias_restantes,
     )
     templates.env.globals.update(FONTES=consultas.FONTES, ESFERAS=consultas.ESFERAS)
 
@@ -112,8 +119,13 @@ def criar_app(dsn: str | None = None) -> FastAPI:
     templates.env.globals["qs"] = _qs
 
     @app.get("/saude", response_class=PlainTextResponse)
-    async def saude() -> str:
-        return "ok"
+    async def saude(request: Request) -> Response:
+        try:
+            async with request.app.state.pool.connection(timeout=5) as conn:
+                await conn.execute("SELECT 1 FROM v_cargas_web LIMIT 1")
+        except (psycopg.Error, PoolTimeout):
+            return PlainTextResponse("banco indisponível", status_code=503)
+        return PlainTextResponse("ok")
 
     @app.get("/", response_class=HTMLResponse)
     async def inicio(request: Request, conn: Conn) -> Response:
@@ -123,11 +135,27 @@ def criar_app(dsn: str | None = None) -> FastAPI:
             "f": filtros,
             "p": pagina,
             "opcoes": await consultas.opcoes_filtro(conn),
+            "facetas": await consultas.facetas(conn, filtros),
+            "ativos": consultas.filtros_ativos(filtros),
+            "cargas": await consultas.cargas(conn),
             "ordens": list(consultas.ORDENS),
         }
         # HTMX pede só o bloco de resultados.
         modelo = "_resultados.html" if request.headers.get("HX-Request") else "index.html"
         return templates.TemplateResponse(request, modelo, contexto)
+
+    @app.get("/ata/{fonte}/{id_ata:path}/itens.csv")
+    async def exportar_itens(fonte: str, id_ata: str, conn: Conn) -> Response:
+        if fonte not in consultas.FONTES or len(id_ata) > 200:
+            raise HTTPException(404)
+        if await consultas.ata(conn, fonte, id_ata) is None:
+            raise HTTPException(404)
+        linhas = await consultas.itens(conn, fonte, id_ata)
+        return Response(
+            gerar_csv(linhas, CABECALHO_ITENS),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="itens_ata.csv"'},
+        )
 
     @app.get("/ata/{fonte}/{id_ata:path}", response_class=HTMLResponse)
     async def detalhe(request: Request, fonte: str, id_ata: str, conn: Conn) -> Response:
@@ -140,6 +168,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
             "a": registro,
             "itens": await consultas.itens(conn, fonte, id_ata),
             "consumo": await consultas.consumo(conn, fonte, id_ata),
+            "cargas": await consultas.cargas(conn),
         }
         return templates.TemplateResponse(request, "ata.html", contexto)
 

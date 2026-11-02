@@ -20,7 +20,7 @@ import re
 import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Container, Coroutine, Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, astuple, dataclass, field, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -33,10 +33,12 @@ import structlog
 from compras_mcp.clients.dados_abertos import DadosAbertosClient
 from compras_mcp.errors import ComprasError
 
+from pncp_ti.busca import atualizar_busca
 from pncp_ti.classificar.in05 import versao_regra
 from pncp_ti.classificar.regra import CATMAT_GRUPO_TI, CATSER_CLASSES_TI
 from pncp_ti.config import Settings, get_settings
 from pncp_ti.db import conectar
+from pncp_ti.fontes import unidades as unidades_pncp
 from pncp_ti.fontes.arp_dados import (
     CAMPOS_ATA,
     CAMPOS_ITEM,
@@ -1156,8 +1158,15 @@ async def _publicar(
     geracao: dict[str, dict[str, object]],
     carga_id: UUID,
     hoje: date,
+    unidades: Mapping[unidades_pncp.Chave, unidades_pncp.Unidade] | None = None,
 ) -> ResultadoCarga:
     contagens = preparado.contagens
+    unidades = unidades or {}
+
+    def local(a: AtaArp) -> unidades_pncp.Unidade:
+        c = unidades_pncp.chave(a.id_origem, a.codigo_unidade)
+        return unidades.get(c, unidades_pncp.SEM_CADASTRO) if c else unidades_pncp.SEM_CADASTRO
+
     async with conn.transaction():
         bloqueio = await (
             await conn.execute(
@@ -1197,7 +1206,7 @@ async def _publicar(
             "COPY atas (carga_id, id_origem, numero, unidade_gerenciadora, objeto, licitacao, "
             "inicio, fim, criterio_julgamento, status_origem, processos, is_ti, motivo_ti, "
             "vigente_na_origem, numero_controle_pncp, link_origem, orgao, valor_total, "
-            "quantidade_itens, atualizado_origem) FROM STDIN",
+            "quantidade_itens, atualizado_origem, esfera, uf, municipio) FROM STDIN",
             (
                 (
                     carga_id,
@@ -1219,6 +1228,7 @@ async def _publicar(
                     a.valor_total,
                     a.quantidade_itens,
                     preparado.versao_itens.get(a.id_origem, a.atualizado_em) or None,
+                    *astuple(local(a)),
                 )
                 for a in preparado.atas
             ),
@@ -1480,7 +1490,10 @@ async def principal(validar: bool) -> int:
                     "arp_validado", segundos=round(time.monotonic() - inicio), **preparado.contagens
                 )
                 return 0
-            resultado = await _publicar(conn, preparado, geracao, carga_id, hoje)
+            chaves = (unidades_pncp.chave(a.id_origem, a.codigo_unidade) for a in preparado.atas)
+            unidades, contagens_unidades = await unidades_pncp.resolver(conn, filter(None, chaves))
+            preparado.contagens.update(contagens_unidades)
+            resultado = await _publicar(conn, preparado, geracao, carga_id, hoje, unidades)
             cache.limpar_antigos()
             cache_varredura.limpar_antigos()
         except Exception as exc:
@@ -1494,7 +1507,7 @@ async def principal(validar: bool) -> int:
             segundos=round(time.monotonic() - inicio),
             **resultado.contagens,
         )
-        return 0
+        return 0 if await atualizar_busca(conn) else 1
     except ErroValidacao as exc:
         log.error("arp_falha", tipo=exc.tipo, mensagem=str(exc))
         # 2: repetir agora daria o mesmo erro (supervisor e timer não insistem).
