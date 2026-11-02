@@ -5,7 +5,8 @@ fase é uma sprint. Decisões em 19/10/2026: o Codex é o QA executor (ADR 0029)
 entra no grupo dev e no CI, e o deploy segue o rito abaixo.
 
 A stack não muda (ADR 0018): FastAPI + Jinja2 + HTMX, sem framework JavaScript nem build com
-Node. O protótipo visual está em `prototipos/web/`; o design system de referência fica fora do Git.
+Node. O protótipo em `prototipos/web/` é o MVP da web (ADR 0033); o design system de referência
+fica fora do Git.
 
 ## W0 · Esteira de QA (sprint 1)
 
@@ -44,6 +45,8 @@ só tem `&nbsp;`); o E2E o localiza por CSS até lá.
   - depois da primeira carga do ARP, ao menos 95% das atas do ARP com esfera e UF.
 
 ## W2 · Frontend da web (sprint 3)
+
+Entrega o MVP: as duas telas do protótipo com dados reais, nada além delas (ADR 0033).
 
 - O gerador de tokens ganha o destino `src/pncp_ti/web/static/tokens.css`.
 - Templates `base.html`, `index.html`, `_resultados.html` (alvo HTMX) e `ata.html` a partir do

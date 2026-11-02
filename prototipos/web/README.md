@@ -1,5 +1,7 @@
 # Protótipo da web
 
+Este protótipo é o MVP da web (ADR 0033).
+
 Duas telas estáticas, com dados de exemplo e sem backend: `index.html` (busca) e `ata.html`
 (detalhe). Servem de referência visual para a web real (`src/pncp_ti/web/`).
 
