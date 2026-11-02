@@ -534,3 +534,28 @@ async def test_primeira_pagina_vazia_nao_deixa_total_velho_para_a_passada_seguin
     assert coleta.contagens["termos_recuperados"] == 1
     assert coleta.contagens["resultados_por_termo"] == {"notebook": 2}
     assert sorted(coleta.atas) == sorted(ids)
+
+
+async def test_reordenacao_que_preserva_a_ultima_pagina_guardada_rele_o_termo(monkeypatch):
+    # [A,B,C,D] vira [D,B,C,A]: a página 2 (B) continua igual, mas A se repetiria e D faltaria.
+    monkeypatch.setattr(b, "TAMANHO_PAGINA", 1)
+    ids = [f"00394502000144-1-009124/2026-00000{n}" for n in range(1, 5)]
+    ordem = {"atual": ids}
+    chamadas: list[int] = []
+    quedas = {"n": 0}
+
+    def tratar(req: httpx.Request) -> httpx.Response:
+        pagina = int(req.url.params["pagina"])
+        chamadas.append(pagina)
+        if pagina == 3 and quedas["n"] < b.TENTATIVAS:
+            quedas["n"] += 1
+            if quedas["n"] == b.TENTATIVAS:
+                ordem["atual"] = [ids[3], ids[1], ids[2], ids[0]]
+            raise httpx.ReadError("queda")
+        corpo = {"items": [item(ordem["atual"][pagina - 1])], "total": 4}
+        return httpx.Response(200, json=corpo)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        coleta = await b.coletar(["notebook"], HOJE, c)
+    assert chamadas == [1, 2] + [3] * b.TENTATIVAS + [2, 3, 4, 1, 2, 3, 4]
+    assert sorted(coleta.atas) == sorted(ids)

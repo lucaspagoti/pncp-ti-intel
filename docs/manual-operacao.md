@@ -42,7 +42,9 @@ SELECT contagens->'termos_pendentes' FROM cargas WHERE fonte = 'pncp_busca' AND 
 ```
 
 Um termo que cai no meio da paginação guarda as páginas já lidas, e a passada extra continua
-da página que falhou. Se o total declarado mudar entre as passadas, o termo recomeça da página 1.
+da página que falhou, depois de reler a última página guardada. O termo recomeça da página 1
+se essa página ou o total declarado mudaram, ou se a coleta retomada termina com uma ata
+repetida (sinal de que o índice se reordenou e alguma ata ficou de fora).
 O log `pncp_busca_termo_falhou_tentativa` traz `pagina` e `itens`, para mostrar onde o portal
 caiu.
 

@@ -287,9 +287,10 @@ async def buscar_termo(
     da página que falhou, depois de conferir que a última página guardada não mudou.
     """
     p = progresso if progresso is not None else _Progresso()
-    if p.pagina > 1 and not await _continua_igual(client, limitador, termo, p):
+    retomada = p.pagina > 1
+    if retomada and not await _continua_igual(client, limitador, termo, p):
         # O índice mudou entre as passadas: as páginas guardadas podem ter se deslocado.
-        p.pagina = 1
+        p.pagina, retomada = 1, False
     if p.pagina == 1:
         # Sem página válida guardada, nada do que ficou (nem o total) serve de referência.
         p.itens.clear()
@@ -302,6 +303,14 @@ async def buscar_termo(
         p.itens.extend(da_pagina)
         esperado = min(p.total, LIMITE_JANELA)
         if len(p.itens) >= esperado:
+            ids = _ids(p.itens)
+            if retomada and len(set(ids)) < len(ids):
+                # Com o mesmo total, uma ata que faltou implica outra lida duas vezes: o índice
+                # se reordenou entre as passadas sem mudar a última página guardada. Relê tudo.
+                retomada = False
+                p.itens.clear()
+                p.total, p.ultima, p.pagina = None, [], 1
+                continue
             return p.itens, p.total
         if not da_pagina:
             # Resposta vazia antes do total declarado: o portal falhou; não é fim de lista.
