@@ -166,6 +166,17 @@ def test_pontuacao_em_utf8_e_texto_duplamente_codificado_sao_reparados():
     assert decodificar(conteudo, "x").texto == "Preço – “x” é"
 
 
+@pytest.mark.parametrize(
+    "texto", ["PREFEITURA DE MACEIÓ", "PÓ DE TONER", "pagamento à vista", "AVÔ; SÓ", "AÇÃO –"]
+)
+def test_acento_utf8_no_fim_da_palavra_tambem_e_reparado(texto):
+    # Ó, Ô e à em UTF-8 viram "Ã“", "Ã”" e "Ã"+NBSP: em cp1252, pontuação depois do "Ã".
+    conteudo = "Preço;".encode("cp1252") + texto.encode()
+    r = decodificar(conteudo, "x")
+    assert r.texto == "Preço;" + texto
+    assert r.reparos > 0
+
+
 def test_byte_indefinido_em_cp1252_falha():
     with pytest.raises(ErroValidacao) as exc:
         decodificar(b"abc\x81def", "x")
@@ -193,6 +204,15 @@ def test_carga_repara_unidade_e_chave_e_a_mesma_quando_a_origem_corrigir():
     assert corrigido.contagens["reparos_codificacao"] == 0
     assert quebrado.contagens["trechos_nao_reparados"] == 0
     assert nome in {p.unidade for p in quebrado.participantes}
+    assert sorted(p.chave for p in quebrado.participantes) == sorted(
+        p.chave for p in corrigido.participantes
+    )
+
+
+def test_chave_estavel_com_acento_no_fim_da_palavra():
+    nome = "PREFEITURA DE MACEIÓ - SAÚDE"
+    quebrado = _montar(_com_unidade(nome.encode()))
+    corrigido = _montar(_com_unidade(nome.encode("cp1252")))
     assert sorted(p.chave for p in quebrado.participantes) == sorted(
         p.chave for p in corrigido.participantes
     )

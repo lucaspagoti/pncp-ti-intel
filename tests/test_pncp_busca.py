@@ -474,7 +474,8 @@ async def test_termo_que_cai_no_meio_retoma_da_pagina_que_falhou(monkeypatch):
     chamadas, c = _portal_que_cai_na_pagina_3(total=4)
     async with c:
         coleta = await b.coletar(["notebook"], HOJE, c)
-    assert chamadas == [1, 2] + [3] * b.TENTATIVAS + [3, 4]  # sem reler as páginas 1 e 2
+    # Relê só a página 2 (a última guardada) para conferir que o índice não mudou.
+    assert chamadas == [1, 2] + [3] * b.TENTATIVAS + [2, 3, 4]
     assert coleta.contagens["termos_recuperados"] == 1
     assert coleta.contagens["termos_falhos"] == 0
     assert len(coleta.atas) == 4
@@ -485,10 +486,51 @@ async def test_total_mudou_entre_as_passadas_recomeca_da_pagina_1(monkeypatch):
     chamadas, c = _portal_que_cai_na_pagina_3(total=4, totais_depois=5)
     async with c:
         coleta = await b.coletar(["notebook"], HOJE, c)
-    assert chamadas == [1, 2] + [3] * b.TENTATIVAS + [3, 1, 2, 3, 4, 5]
+    assert chamadas == [1, 2] + [3] * b.TENTATIVAS + [2, 1, 2, 3, 4, 5]
     assert coleta.contagens["resultados_por_termo"] == {"notebook": 5}
     assert len(coleta.atas) == 5
 
 
 def test_texto_utf8_lido_como_cp1252_na_origem_e_reparado():
     assert b._texto("SECRETARIA DE SAÃšDE â€“ Saudável") == "SECRETARIA DE SAÚDE – Saudável"
+
+
+async def test_ordem_mudou_com_o_mesmo_total_recomeca_da_pagina_1(monkeypatch):
+    monkeypatch.setattr(b, "TAMANHO_PAGINA", 1)
+    ids = [f"00394502000144-1-009124/2026-00000{n}" for n in range(1, 5)]
+    ordem = {"atual": ids}
+    chamadas: list[int] = []
+    quedas = {"n": 0}
+
+    def tratar(req: httpx.Request) -> httpx.Response:
+        pagina = int(req.url.params["pagina"])
+        chamadas.append(pagina)
+        if pagina == 3 and quedas["n"] < b.TENTATIVAS:
+            quedas["n"] += 1
+            if quedas["n"] == b.TENTATIVAS:
+                ordem["atual"] = [ids[3], *ids[:3]]  # a ata 4 subiu para o topo
+            raise httpx.ReadError("queda")
+        corpo = {"items": [item(ordem["atual"][pagina - 1])], "total": 4}
+        return httpx.Response(200, json=corpo)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        coleta = await b.coletar(["notebook"], HOJE, c)
+    assert chamadas == [1, 2] + [3] * b.TENTATIVAS + [2, 1, 2, 3, 4]
+    assert sorted(coleta.atas) == sorted(ids)
+
+
+async def test_primeira_pagina_vazia_nao_deixa_total_velho_para_a_passada_seguinte(monkeypatch):
+    monkeypatch.setattr(b, "TAMANHO_PAGINA", 1)
+    ids = [ID_A, ID_B]
+    respostas = iter([{"items": [], "total": 1}])
+
+    def tratar(req: httpx.Request) -> httpx.Response:
+        pagina = int(req.url.params["pagina"])
+        corpo = next(respostas, None) or {"items": [item(ids[pagina - 1])], "total": 2}
+        return httpx.Response(200, json=corpo)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        coleta = await b.coletar(["notebook"], HOJE, c)
+    assert coleta.contagens["termos_recuperados"] == 1
+    assert coleta.contagens["resultados_por_termo"] == {"notebook": 2}
+    assert sorted(coleta.atas) == sorted(ids)

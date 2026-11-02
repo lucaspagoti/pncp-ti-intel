@@ -26,6 +26,7 @@ FALHAS = {
     "pncp-ti-operacao.service": "a verificação diária falhou",
 }
 # Falha da carga com fonte e motivo (ADR 0032): lido de `cargas.erro_tipo`.
+PRAZO_BANCO = 15.0  # segundos para ler `cargas` no OnFailure
 FONTES_CARGA = {
     "siga_rj": "o SIGA RJ",
     "compras_arp": "o Compras.gov.br",
@@ -143,20 +144,26 @@ def frase_carga(falhas: list[dict]) -> str:
     return f"{sujeito} não atualizaram hoje; o site segue com os dados anteriores"
 
 
+async def _ler_falhas(inicio: datetime) -> list[dict]:
+    async with await psycopg.AsyncConnection.connect(
+        ingest_dsn(get_settings()), row_factory=dict_row, connect_timeout=5
+    ) as conn:
+        return await (
+            await conn.execute(
+                "SELECT DISTINCT ON (fonte) fonte, status, erro_tipo FROM cargas "
+                "WHERE iniciado_em >= %s ORDER BY fonte, iniciado_em DESC, id",
+                (inicio,),
+            )
+        ).fetchall()
+
+
 async def falhas_de_hoje(agora: datetime) -> list[dict]:
     """Última carga de hoje de cada fonte, se falhou; vazio se o banco não responder."""
     inicio = datetime.combine(agora.astimezone(SP).date(), time(), SP)
     try:
-        async with await psycopg.AsyncConnection.connect(
-            ingest_dsn(get_settings()), row_factory=dict_row, connect_timeout=5
-        ) as conn:
-            linhas = await (
-                await conn.execute(
-                    "SELECT DISTINCT ON (fonte) fonte, status, erro_tipo FROM cargas "
-                    "WHERE iniciado_em >= %s ORDER BY fonte, iniciado_em DESC, id",
-                    (inicio,),
-                )
-            ).fetchall()
+        # Prazo para conexão e leitura juntas: sobra tempo para a frase genérica antes do
+        # TimeoutStartSec=60 do OnFailure, mesmo com a leitura bloqueada.
+        linhas = await asyncio.wait_for(_ler_falhas(inicio), PRAZO_BANCO)
     except Exception:
         # O OnFailure precisa avisar mesmo com o Postgres fora: cai na frase genérica.
         return []

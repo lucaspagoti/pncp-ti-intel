@@ -249,6 +249,30 @@ class _Progresso:
     itens: list[dict[str, Any]] = field(default_factory=list)
     total: int | None = None
     pagina: int = 1
+    ultima: list[str] = field(default_factory=list)  # ids da última página lida
+
+
+def _ids(itens: list[dict[str, Any]]) -> list[str]:
+    return [str(i.get("numero_controle_pncp")) for i in itens]
+
+
+def _parametros(termo: str, pagina: int) -> dict[str, str | int]:
+    return {
+        "q": termo,
+        "tipos_documento": "ata",
+        "status": "vigente",
+        "tam_pagina": TAMANHO_PAGINA,
+        "pagina": pagina,
+    }
+
+
+async def _continua_igual(
+    client: httpx.AsyncClient, limitador: LimitadorTaxa, termo: str, p: _Progresso
+) -> bool:
+    """Relê a última página guardada: mesmo total e mesmos ids, senão o índice mudou."""
+    corpo = await _pegar(client, limitador, _parametros(termo, p.pagina - 1))
+    itens, total = validar_pagina(corpo)
+    return total == p.total and _ids(itens) == p.ultima
 
 
 async def buscar_termo(
@@ -260,30 +284,19 @@ async def buscar_termo(
     """Todas as páginas de um termo; devolve (itens, total declarado).
 
     Com `progresso`, uma queda no meio guarda as páginas lidas e a chamada seguinte retoma
-    da página que falhou.
+    da página que falhou, depois de conferir que a última página guardada não mudou.
     """
     p = progresso if progresso is not None else _Progresso()
-    retomada = p.pagina > 1
+    if p.pagina > 1 and not await _continua_igual(client, limitador, termo, p):
+        # O índice mudou entre as passadas: as páginas guardadas podem ter se deslocado.
+        p.pagina = 1
+    if p.pagina == 1:
+        # Sem página válida guardada, nada do que ficou (nem o total) serve de referência.
+        p.itens.clear()
+        p.total, p.ultima = None, []
     while True:
-        corpo = await _pegar(
-            client,
-            limitador,
-            {
-                "q": termo,
-                "tipos_documento": "ata",
-                "status": "vigente",
-                "tam_pagina": TAMANHO_PAGINA,
-                "pagina": p.pagina,
-            },
-        )
+        corpo = await _pegar(client, limitador, _parametros(termo, p.pagina))
         da_pagina, total_pagina = validar_pagina(corpo)
-        if retomada:
-            retomada = False
-            if total_pagina != p.total:
-                # O índice mudou entre as passadas: as páginas guardadas podem ter se deslocado.
-                p.itens.clear()
-                p.total, p.pagina = None, 1
-                continue
         if p.total is None:
             p.total = total_pagina  # o total da 1ª página é a referência; as seguintes não o mudam
         p.itens.extend(da_pagina)
@@ -293,6 +306,7 @@ async def buscar_termo(
         if not da_pagina:
             # Resposta vazia antes do total declarado: o portal falhou; não é fim de lista.
             raise _TermoFalhou(f"página vazia com {len(p.itens)} de {esperado} itens")
+        p.ultima = _ids(da_pagina)
         p.pagina += 1
 
 

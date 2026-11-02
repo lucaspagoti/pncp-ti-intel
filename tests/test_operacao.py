@@ -1,5 +1,6 @@
 """Notificação isolada, frescor e contrato do gancho PNCP; sem rede real."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -208,3 +209,12 @@ def test_motivo_de_excecao_sem_tipo_conhecido(tipo, esperado):
 
 def test_sem_falha_registrada_usa_a_frase_generica():
     assert operacao.frase_carga([]) == operacao.FALHAS["pncp-ti-carga.service"]
+
+
+async def test_leitura_bloqueada_no_banco_cai_na_frase_generica(monkeypatch):
+    async def bloqueada(inicio):
+        await asyncio.sleep(3600)  # conectou, mas a leitura de `cargas` não volta
+
+    monkeypatch.setattr(operacao, "PRAZO_BANCO", 0.05)
+    monkeypatch.setattr(operacao, "_ler_falhas", bloqueada)
+    assert await operacao.falhas_de_hoje(AGORA) == []

@@ -22,7 +22,12 @@ codificado duas vezes ou o SIGA passar a publicar o arquivo inteiro em UTF-8.
 - `pncp_ti.codificacao.reparar` troca cada sequência UTF-8 lida como cp1252 (`Â`/`Ã` mais um
   byte de continuação, ou `â€`/`â‚` mais um byte de continuação) pelo caractere original, em
   até 3 passadas. Bytes indefinidos em cp1252 entram como *surrogate* para que `Ã`+0x81 vire
-  `Á`. Pontuação logo depois de `Ã`/`Â` (`MAÇÔ`) só é reparada se vier uma letra a seguir.
+  `Á`.
+- `Ã` seguido de pontuação cp1252 (`“ ” ‘ ’ • – — …`) é o caso ambíguo: `MACEIÃ“` é `MACEIÓ`,
+  mas `MAÇÔ` é uma palavra legítima seguida de aspa. É reparado, exceto com sinal de cp1252
+  legítimo: outra letra acentuada de verdade na mesma palavra (`MAÇÃ`) ou, para aspa de
+  fechamento, a aspa de abertura antes na mesma linha (`“IRMÔ`). `Ã` + NBSP (`à`) é sempre
+  reparado.
 - O SIGA lê UTF-8 (com ou sem BOM) quando o arquivo inteiro decodifica em UTF-8; caso
   contrário lê cp1252. O reparo vale nos dois casos. O cabeçalho, que tem acentos, continua
   conferido e pega uma leitura com a codificação errada.
@@ -43,7 +48,9 @@ codificado duas vezes ou o SIGA passar a publicar o arquivo inteiro em UTF-8.
 - Quando o SIGA corrigir a origem, nada muda deste lado: o contador volta a 0 e as chaves
   continuam as mesmas.
 - Texto legítimo com `Ã`/`Â` seguido de símbolo da faixa 0x80–0xBF do cp1252 seria reparado
-  por engano. Isso não acontece em português (depois de `Ã`/`Â` vem letra ASCII) e a
-  pontuação tem a proteção acima.
+  por engano. Isso não acontece em português (depois de `Ã`/`Â` vem letra ASCII); o único caso
+  plausível é uma palavra sem outro acento terminada em `Ã` e colada numa aspa sem abertura
+  (`IRMÔ`), que vira `IRMÓ`. Aceito: `Ó`/`Ô` no fim da palavra (`MACEIÓ`, `PÓ`, `AVÔ`) é bem
+  mais comum.
 - Uma mudança real de formato continua derrubando a carga pelo cabeçalho, pelas colunas ou
   pelo limite de 1%.
