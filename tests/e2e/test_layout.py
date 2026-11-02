@@ -99,3 +99,14 @@ def test_texto_longo_sem_espaco_nao_alarga_a_pagina(page: Page, base_url, tela):
     expect(page.get_by_role("heading", level=1)).to_be_visible()
     page.goto(f"{base_url}/?q={'x' * 200}")
     expect(page.get_by_label("Remover termo")).to_be_visible()
+
+
+def test_numero_do_item_fica_numa_linha(page: Page, base_url):
+    """No ARP real o item é `00001`; a quebra de texto da tabela não pode partir o número."""
+    page.goto(f"{base_url}/ata/compras_arp/LONGO")
+    linhas = page.evaluate(
+        """() => [...document.querySelectorAll('td.num-item')].map((td) => {
+             const r = document.createRange(); r.selectNodeContents(td);
+             return r.getClientRects().length; })"""
+    )
+    assert linhas == [1, 1], linhas

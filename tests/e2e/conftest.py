@@ -47,6 +47,9 @@ def _semear(dsn: str) -> None:
     # QA-001: objeto e órgão sem espaço, que não podem alargar a página.
     longo = "zzzlongo " + "X" * 250
     comandos.append(web_dados.ata(arp, "LONGO", longo, orgao="O" * 200))
+    # Nº de item com zeros à esquerda e descrição longa, como no ARP real: o número não quebra.
+    descricao = "Locação de multifuncional laser monocromática com manutenção e suprimentos " * 3
+    comandos += [web_dados.item(arp, "LONGO", f"{n:05}", descricao, 0.17) for n in (1, 2)]
     with psycopg.connect(dsn) as conn:
         conn.execute("DELETE FROM cargas")
         for comando, parametros in comandos:

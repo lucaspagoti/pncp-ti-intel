@@ -3,8 +3,12 @@
    (navy) e alerta (warn, crit); profundidade pelas sombras --shadow-1 a --shadow-3. */
 
 * { box-sizing: border-box; }
-/* Texto de terceiros pode vir sem espaço (códigos, URLs): quebra em vez de alargar a página. */
-h1, h2, td, dd, .pilula b, .sub, .opcao span { overflow-wrap: anywhere; }
+/* Texto de terceiros pode vir sem espaço (códigos, URLs): quebra em vez de alargar a página. Em
+   célula de tabela, `anywhere` encolheria as colunas estreitas (nº do item); lá vale `break-word`,
+   e a tabela rola dentro de `.tabela`. O objeto tem largura mínima e pode quebrar em qualquer ponto. */
+h1, h2, dd, .pilula b, .opcao span, .resultados td.objeto { overflow-wrap: anywhere; }
+td { overflow-wrap: break-word; }
+td.num-item { white-space: nowrap; }
 html, body { margin: 0; }
 body { font-size: var(--fs-md); line-height: var(--fs-md-lh); color: var(--text); background: var(--bg); }
 a { color: var(--navy); }
