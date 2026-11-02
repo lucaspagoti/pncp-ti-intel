@@ -63,7 +63,7 @@ foi abandonado em 13/10/2026.
   `uv run python -m pncp_ti.busca_avaliacao` (`evals/busca_<data>.md`).
 
 `make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
-(`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, ADR 0024). O banco local está na migração 0011 depois do deploy da W3.
+(`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, publicado em `atas.myhomelablp.site` pelo Cloudflare Tunnel com Access, ADR 0024). O banco local está na migração 0011 depois do deploy da W3.
 
 ## Como rodar
 

@@ -1,18 +1,43 @@
-# Proxy reverso da web pncp-ti (R5, ADR 0023): TLS + autenticação na frente, web só em loopback.
+# Proxy reverso da web pncp-ti (R5, ADR 0024): autenticação na frente, web só em loopback.
 # Variáveis (arquivo deploy/caddy/caddy.env, fora do Git; ver README.md desta pasta):
-#   PNCP_SITE_ADDRESS  endereço servido, ex.: 127.0.0.1:8443 (padrão) ou atas.example.com
-#   PNCP_BIND          interface de escuta (padrão 127.0.0.1; só mude ao expor de propósito)
+#   PNCP_SITE_ADDRESS  endereço do site de teste local, ex.: 127.0.0.1:8443 (padrão)
+#   PNCP_BIND          interface de escuta desse site (padrão 127.0.0.1)
 #   PNCP_TLS           internal (CA local do Caddy, padrão) ou o e-mail para Let's Encrypt
+#   PNCP_TUNNEL_HOST   domínio que o Cloudflare Tunnel entrega (padrão atas.myhomelablp.site)
+#   PNCP_TUNNEL_PORT   porta HTTP em 127.0.0.1 para o cloudflared (padrão 8444)
 #   PNCP_AUTH_USER / PNCP_AUTH_HASH  usuário e hash bcrypt (caddy hash-password)
 {
 	admin off
+	# Sem o redirecionador HTTP->HTTPS na :80 de todas as interfaces.
+	auto_https disable_redirects
+	# Erros (502 com a web fora, por exemplo) registram a requisição original: o token do Access
+	# também sai deste logger, que não passa pelo filtro do log de acesso.
+	log default {
+		output stderr
+		format filter {
+			wrap console
+			fields {
+				request>headers>Cf-Access-Jwt-Assertion delete
+			}
+		}
+	}
 }
 
-{$PNCP_SITE_ADDRESS:127.0.0.1:8443} {
-	bind {$PNCP_BIND:127.0.0.1}
-	tls {$PNCP_TLS:internal}
+# O log guarda o Cf-Connecting-IP (IP real atrás do tunnel), mas não o token do Access.
+(registro) {
+	log {
+		output stdout
+		format filter {
+			wrap console
+			fields {
+				request>headers>Cf-Access-Jwt-Assertion delete
+			}
+		}
+	}
+}
 
-	# Nada chega à web sem credencial: a autenticação vem antes de qualquer rota.
+# Tudo o que um site faz: nada chega à web sem credencial, a autenticação vem antes de qualquer rota.
+(protegido) {
 	basic_auth {
 		{$PNCP_AUTH_USER} {$PNCP_AUTH_HASH}
 	}
@@ -30,10 +55,30 @@
 	reverse_proxy 127.0.0.1:8000 {
 		header_up Host 127.0.0.1
 		header_up -X-Forwarded-For
+		# O token do Cloudflare Access não serve à web; não sai do proxy.
+		header_up -Cf-Access-Jwt-Assertion
 	}
 
-	log {
-		output stdout
-		format console
-	}
+	import registro
+}
+
+# Teste local com TLS (CA interna).
+{$PNCP_SITE_ADDRESS:127.0.0.1:8443} {
+	bind {$PNCP_BIND:127.0.0.1}
+	tls {$PNCP_TLS:internal}
+	import protegido
+}
+
+# Entrada do Cloudflare Tunnel (opção A): o TLS público e o Access ficam na borda da Cloudflare;
+# o cloudflared fala HTTP com este site só em loopback. Casa apenas pelo Host do domínio.
+http://{$PNCP_TUNNEL_HOST:atas.myhomelablp.site}:{$PNCP_TUNNEL_PORT:8444} {
+	bind 127.0.0.1
+	import protegido
+}
+
+# Qualquer outro Host na porta do tunnel é recusado sem chegar à web.
+http://:{$PNCP_TUNNEL_PORT:8444} {
+	bind 127.0.0.1
+	import registro
+	respond 421
 }
