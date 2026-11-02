@@ -1,41 +1,60 @@
-"""Filtros pelo HTMX: troca só o bloco de resultados e atualiza a URL."""
+"""Filtros pelo HTMX: trocam a casca (facetas, pílulas e resultados) e atualizam a URL."""
 
 from __future__ import annotations
 
 from datetime import date, timedelta
 
+from comum import RESULTADOS, buscar
 from playwright.sync_api import Page, expect
 
-RESULTADOS = "#resultados article.card h2 a"
-# O botão não tem nome acessível hoje (label só com &nbsp;); a W2 corrige e o E2E
-# passa a localizá-lo pelo papel.
-BUSCAR = "form.busca button[type=submit]"
+NOTEBOOK = "Aquisição de notebooks para a rede estadual"
 
 
 def test_filtro_de_fonte_troca_resultados_sem_recarregar(page: Page, base_url):
     page.goto(base_url)
     page.evaluate("window.__sem_recarga = true")
     with page.expect_request(lambda r: r.headers.get("hx-request") == "true"):
-        page.get_by_label("Fonte").select_option("siga_rj")
-    expect(page.locator(RESULTADOS)).to_have_text(["Aquisição de notebooks para a rede estadual"])
+        page.get_by_label("SIGA RJ").check()
+    expect(page.locator(RESULTADOS)).to_have_text([NOTEBOOK])
     expect(page).to_have_url(
-        f"{base_url}/?q=&fonte=siga_rj&esfera=&uf=&orgao=&vigente_ate=&preco_min=&preco_max=&ordem=relevancia"
+        f"{base_url}/?fonte=siga_rj&esfera=&uf=&orgao=&vigente_ate=&preco_min=&preco_max=&q=&ordem=relevancia"
     )
+    expect(page.locator(".pilula")).to_contain_text(["Fonte: SIGA RJ"])
     assert page.evaluate("window.__sem_recarga") is True
+    # A pílula remove o filtro, ainda pelo HTMX.
+    page.get_by_label("Remover fonte").click()
+    expect(page.locator(".pilula")).to_have_count(0)
+    expect(page.get_by_label("Todas").first).to_be_checked()
+    assert page.evaluate("window.__sem_recarga") is True
+
+
+def test_voltar_do_navegador_restaura_a_busca(page: Page, base_url):
+    page.goto(f"{base_url}/?q=impressao")
+    page.get_by_label("Ordenar por").select_option("vencimento")
+    expect(page).to_have_url(
+        f"{base_url}/?fonte=&esfera=&uf=&orgao=&vigente_ate=&preco_min=&preco_max=&q=impressao&ordem=vencimento"
+    )
+    page.go_back()
+    expect(page).to_have_url(f"{base_url}/?q=impressao")
+    expect(page.locator(RESULTADOS)).to_have_text(["Outsourcing de impressão departamental"])
+    expect(page.get_by_label("Ordenar por")).to_have_value("relevancia")
 
 
 def test_vigente_ate_pelo_menos(page: Page, base_url):
     page.goto(base_url)
     page.get_by_label("Vigente até pelo menos").fill(str(date.today() + timedelta(days=100)))
-    page.locator(BUSCAR).click()
+    page.get_by_role("button", name="Aplicar filtros").click()
     expect(page.locator(RESULTADOS)).to_have_count(1)
     expect(page.locator(RESULTADOS)).to_contain_text(["toner"])
 
 
 def test_faixa_de_preco(page: Page, base_url):
     page.goto(base_url)
-    page.get_by_label("Preço unitário mín. (R$)").fill("1000")
-    page.get_by_label("Preço unitário máx. (R$)").fill("5000,00")
-    page.locator(BUSCAR).click()
-    expect(page.locator(RESULTADOS)).to_have_text(["Aquisição de notebooks para a rede estadual"])
-    expect(page.get_by_label("Preço unitário máx. (R$)")).to_have_value("5000,00")
+    page.get_by_label("Preço unitário mínimo").fill("1000")
+    page.get_by_label("Preço unitário máximo").fill("5000,00")
+    buscar(page)
+    expect(page.locator(RESULTADOS)).to_have_text([NOTEBOOK])
+    expect(page.get_by_label("Preço unitário máximo")).to_have_value("5000,00")
+    expect(page.locator(".pilula")).to_contain_text(
+        ["Preço mín.: R$ 1000", "Preço máx.: R$ 5000,00"]
+    )

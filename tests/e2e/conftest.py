@@ -21,7 +21,9 @@ import web_dados
 from pncp_ti.config import get_settings, ingest_dsn, web_dsn
 from pncp_ti.web.app import criar_app
 
-ATAS_PAGINACAO = 30  # mais que TAMANHO_PAGINA (25)
+ATAS_PAGINACAO = 30  # mais que TAMANHO_PAGINA (20)
+DESKTOP = {"width": 1366, "height": 768}
+CELULAR = {"width": 390, "height": 844}
 
 
 def pytest_collection_modifyitems(config, items):
@@ -42,6 +44,14 @@ def _semear(dsn: str) -> None:
     comandos += [
         web_dados.ata(arp, f"P{n:02}", f"Cabo de rede lote {n:02}") for n in range(ATAS_PAGINACAO)
     ]
+    # QA-001: objeto e órgão sem espaço, que não podem alargar a página.
+    longo = "zzzlongo " + "X" * 250
+    comandos.append(web_dados.ata(arp, "LONGO", longo, orgao="O" * 200))
+    # Nº de item com zeros à esquerda e descrição longa, como no ARP real: o número não quebra.
+    descricao = "Locação de multifuncional laser monocromática com manutenção e suprimentos " * 3
+    comandos += [web_dados.item(arp, "LONGO", f"{n:05}", descricao, 0.17) for n in (1, 2)]
+    # R2-001: descrição sem espaço não pode tirar o preço da folha impressa.
+    comandos.append(web_dados.item(arp, "LONGO", "00003", "Y" * 250, 9.99))
     with psycopg.connect(dsn) as conn:
         conn.execute("DELETE FROM cargas")
         for comando, parametros in comandos:
@@ -79,6 +89,12 @@ def base_url(nome_banco_teste):
     yield f"http://127.0.0.1:{porta}"
     servidor.should_exit = True
     thread.join(timeout=10)
+
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    """Desktop de referência da W2 (1366); os testes de celular trocam para 390."""
+    return {**browser_context_args, "viewport": DESKTOP}
 
 
 @pytest.fixture

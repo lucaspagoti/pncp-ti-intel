@@ -52,6 +52,11 @@ foi abandonado em 13/10/2026.
   - facetas;
   - CSV de itens;
   - `scripts/smoke_web.sh` (`make smoke-web`).
+- **W2 — Frontend do MVP da web** (ADR 0033): as duas telas de `prototipos/web/` (busca e
+  detalhe) com os dados reais. Filtros na lateral com contagem, trocados pelo HTMX sem recarregar
+  a página; no celular, os filtros ficam recolhidos. Sem `style=` nem cor fora dos tokens
+  (`src/pncp_ti/web/static/tokens.css` sai de `scripts/gerar_tokens_css.py`). O detalhe não
+  mostra mais demandado × consumido, que não está no protótipo.
 
 `make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
 (`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, ADR 0024). O banco local está na migração 0010 depois do deploy da W1.

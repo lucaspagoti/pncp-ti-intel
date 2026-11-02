@@ -1,4 +1,4 @@
-"""Web local (R4): busca, filtros, detalhe, CSV, cabeçalhos e permissões do `web_reader`."""
+"""Web local (R4, W2): busca, filtros, detalhe, CSV, cabeçalhos e permissões do `web_reader`."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from pncp_ti.web.exportar import gerar_csv, neutralizar
 
 def titulos(html: str) -> str:
     """Só o texto dos resultados (o formulário traz exemplos de busca)."""
-    return " | ".join(re.findall(r"<h2><a[^>]*>(.*?)</a></h2>", html))
+    return " | ".join(re.findall(r'<td class="objeto"><a [^>]*>(.*?)</a>', html))
 
 
 @pytest.fixture
@@ -90,17 +90,24 @@ async def test_parametros_hostis_nao_quebram(cliente):
         assert (await cliente.get("/", params=params)).status_code == 200, params
 
 
-async def test_htmx_devolve_so_o_bloco(cliente):
-    r = await cliente.get("/", headers={"HX-Request": "true"})
-    assert "<html" not in r.text and "ata" in r.text
+async def test_htmx_devolve_so_a_casca(cliente):
+    r = await cliente.get("/", params={"q": "notebook"}, headers={"HX-Request": "true"})
+    assert "<html" not in r.text and "<form" not in r.text
+    assert r.text.lstrip().startswith("<aside") and "notebooks para a rede" in titulos(r.text)
+    # A restauração do histórico (voltar do navegador) precisa da página inteira.
+    cab = {"HX-Request": "true", "HX-History-Restore-Request": "true"}
+    assert "<html" in (await cliente.get("/", headers=cab)).text
+    assert '<div class="casca" id="casca">' in (await cliente.get("/")).text
 
 
-async def test_detalhe_mostra_itens_consumo_e_origem(cliente):
+async def test_detalhe_mostra_itens_e_origem(cliente):
     r = await cliente.get("/ata/siga_rj/S1")
     assert r.status_code == 200
     assert "Notebook 16GB" in r.text and "R$ 4.500,00" in r.text
-    assert "SEFAZ" in r.text and "sem link público por ata" not in r.text  # link_origem preenchido
-    assert "https://pncp.gov.br/app/atas/1" in r.text
+    assert 'href="https://pncp.gov.br/app/atas/1"' in r.text and "Conferir no portal" in r.text
+    assert 'href="/ata/siga_rj/S1/itens.csv"' in r.text
+    # Fora do MVP (ADR 0033): o detalhe não mostra mais demandado × consumido.
+    assert "SEFAZ" not in r.text
     assert (await cliente.get("/ata/siga_rj/NAOEXISTE")).status_code == 404
     assert (await cliente.get("/ata/fonte_falsa/S1")).status_code == 404
 
@@ -111,7 +118,7 @@ async def test_link_nao_http_nao_vira_href(cliente, conn_ingest):
     )
     await atualizar(conn_ingest)
     r = await cliente.get("/ata/siga_rj/S1")
-    assert "javascript:" not in r.text
+    assert "javascript:" not in r.text and "Conferir no portal" not in r.text
 
 
 async def test_csv_neutraliza_formulas_e_baixa_como_anexo(cliente, conn_ingest):
@@ -325,3 +332,84 @@ async def test_csv_de_itens_nao_corta_em_2000(cliente, conn_ingest):
     await atualizar(conn_ingest)
     r = await cliente.get("/ata/compras_arp/A1/itens.csv")
     assert len(r.text.splitlines()) == 1 + 2001
+
+
+RAIZ_WEB = consultas.__file__.rsplit("/", 1)[0]
+
+
+def test_templates_e_css_sem_estilo_inline_nem_cor_fora_dos_tokens():
+    """CSP `style-src 'self'` e design system: nada de `style=` e hex só no tokens.css gerado."""
+    from pathlib import Path
+
+    web = Path(RAIZ_WEB)
+    for modelo in (web / "templates").glob("*.html"):
+        texto = modelo.read_text(encoding="utf-8")
+        assert not re.search(r"\bstyle\s*=|<style", texto, re.I), modelo.name
+    for css in ("app.css", "tokens-projeto.css"):
+        texto = (web / "static" / css).read_text(encoding="utf-8")
+        assert not re.search(r"#[0-9a-fA-F]{3,8}\b", texto), css
+        assert not re.search(r"\brgba?\(", texto), css
+    assert not (web / "static" / "estilo.css").exists()
+
+
+async def test_paginas_sem_estilo_inline(cliente):
+    for url in ("/", "/?q=notebook", "/ata/siga_rj/S1", "/ata/compras_arp/A2"):
+        assert not re.search(r"\bstyle\s*=", (await cliente.get(url)).text), url
+
+
+async def test_lateral_mostra_facetas_e_marca_a_opcao(cliente):
+    r = await cliente.get("/", params={"fonte": "siga_rj"})
+    assert re.search(r'value="siga_rj" checked> SIGA RJ</span><span class="qtd">1<', r.text)
+    assert re.search(r'value="compras_arp" > Compras ARP</span><span class="qtd">2<', r.text)
+    assert "PNCP</span>" not in r.text  # sem atas da busca PNCP: a opção não aparece
+    # A opção escolhida aparece mesmo quando os outros filtros zeram a contagem dela.
+    r = await cliente.get("/", params={"esfera": "Municipal", "uf": "RJ"})
+    assert re.search(r'value="Municipal" checked> Municipal</span><span class="qtd">0<', r.text)
+    assert "Nenhuma ata encontrada para esses filtros." in r.text
+
+
+async def test_pilulas_e_selo_de_vencimento(cliente):
+    r = await cliente.get("/", params={"q": "microsoft", "uf": "SP"})
+    assert 'aria-label="Remover termo"' in r.text and 'aria-label="Remover uf"' in r.text
+    assert 'href="/?uf=SP"' in r.text  # remover o termo mantém a UF
+    assert '<span class="chip crit">vence em 5 dias</span>' in r.text
+    r = await cliente.get("/", params={"q": "notebook"})
+    assert '<span class="chip warn">vence em 60 dias</span>' in r.text
+    assert "Mostrando 1 a 1 de 1 ata vigente" in r.text
+
+
+async def test_ata_sem_itens_e_rodape_com_a_data_da_carga(cliente):
+    r = await cliente.get("/", params={"q": "microsoft"})
+    assert "sem itens nesta fonte" in r.text
+    assert f"Dados de <strong>{date.today():%d/%m/%Y}</strong>" in r.text
+    r = await cliente.get("/ata/compras_arp/A2")
+    assert "Esta fonte não traz itens para esta ata." in r.text and "itens.csv" not in r.text
+    assert "Municipal · SP" in r.text
+    assert "até " + (date.today() + timedelta(days=5)).strftime("%d/%m/%Y") in r.text  # sem início
+
+
+async def test_paginacao_de_20_em_20(cliente, conn_ingest):
+    carga = (
+        await (
+            await conn_ingest.execute("SELECT id FROM cargas WHERE fonte = 'compras_arp'")
+        ).fetchone()
+    )["id"]
+    for n in range(25):
+        await conn_ingest.execute(*web_dados.ata(carga, f"L{n}", f"Cabo lote {n}"))
+    await atualizar(conn_ingest)
+    r = await cliente.get("/", params={"q": "cabo"})
+    assert "Mostrando 1 a 20 de 25 atas vigentes" in r.text and "Página 1 de 2" in r.text
+    assert '<span class="botao-sec" aria-disabled="true">Anterior</span>' in r.text
+    r = await cliente.get("/", params={"q": "cabo", "pagina": "2"})
+    assert "Mostrando 21 a 25 de 25" in r.text
+    assert '<span class="botao-sec" aria-disabled="true">Próxima</span>' in r.text
+
+
+async def test_descricao_longa_vira_resumo_com_especificacao(cliente, conn_ingest):
+    longa = "Notebook " + "especificação detalhada " * 20
+    await conn_ingest.execute("UPDATE ata_itens SET descricao = %s WHERE chave = 'S1-1'", (longa,))
+    await atualizar(conn_ingest)
+    r = await cliente.get("/ata/siga_rj/S1")
+    assert "<summary>Ver especificação completa</summary>" in r.text
+    assert r.text.count(longa.strip()) == 2  # no <details> (tela) e no bloco de impressão
+    assert "Mouse óptico</td>" in r.text or "Mouse óptico<span" in r.text  # curta fica inteira
