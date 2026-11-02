@@ -82,3 +82,20 @@ def test_contraste_minimo_de_texto(page: Page, base_url, url, seletor):
     razao = page.evaluate(CONTRASTE_JS, seletor)
     assert razao is not None, seletor
     assert razao >= 4.5, f"{seletor}: {razao:.2f}"
+
+
+@pytest.mark.parametrize("tela", [DESKTOP, CELULAR], ids=["desktop", "celular"])
+def test_texto_longo_sem_espaco_nao_alarga_a_pagina(page: Page, base_url, tela):
+    """QA-001: termo, órgão e objeto sem espaço quebram em vez de criar rolagem horizontal."""
+    page.set_viewport_size(tela)
+    for url in (
+        f"/?q={'x' * 200}",
+        f"/?orgao={'x' * 200}",
+        "/?q=zzzlongo",
+        "/ata/compras_arp/LONGO",
+    ):
+        page.goto(base_url + url)
+        _sem_rolagem_horizontal(page)
+    expect(page.get_by_role("heading", level=1)).to_be_visible()
+    page.goto(f"{base_url}/?q={'x' * 200}")
+    expect(page.get_by_label("Remover termo")).to_be_visible()

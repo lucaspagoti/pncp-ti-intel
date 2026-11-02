@@ -3,6 +3,8 @@
    (navy) e alerta (warn, crit); profundidade pelas sombras --shadow-1 a --shadow-3. */
 
 * { box-sizing: border-box; }
+/* Texto de terceiros pode vir sem espaço (códigos, URLs): quebra em vez de alargar a página. */
+h1, h2, td, dd, .pilula b, .sub, .opcao span { overflow-wrap: anywhere; }
 html, body { margin: 0; }
 body { font-size: var(--fs-md); line-height: var(--fs-md-lh); color: var(--text); background: var(--bg); }
 a { color: var(--navy); }
@@ -121,11 +123,11 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--n
 .busca input { font-size: var(--fs-lg); padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-6) + var(--space-1)); }
 
 .ativos { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.pilula { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--fs-2xs);
+.pilula { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--fs-2xs); max-width: 100%; min-width: 0;
           padding: 2px var(--space-1) 2px var(--space-3); border-radius: var(--radius-pill);
           background: var(--panel); border: 1px solid var(--control-border); box-shadow: var(--shadow-1); }
-.pilula b { font-weight: 700; }
-.pilula a { display: grid; place-items: center; width: 18px; height: 18px; border-radius: var(--radius-pill); color: var(--muted); text-decoration: none; }
+.pilula b { font-weight: 700; min-width: 0; }
+.pilula a { flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: var(--radius-pill); color: var(--muted); text-decoration: none; }
 .pilula a:hover { background: var(--chip-bg); color: var(--text); }
 .pilula a svg { width: 12px; height: 12px; }
 .ativos .botao-fantasma { min-height: 0; padding: 2px var(--space-2); font-size: var(--fs-2xs); }
@@ -156,7 +158,7 @@ tbody tr:last-child td { border-bottom: 0; }
 
 .resultados tbody tr { transition: background-color .2s ease; }
 .resultados tbody tr:hover { background: var(--linha-realce); }
-.resultados td.objeto { min-width: 320px; }
+.resultados td.objeto { min-width: 320px; max-width: 60ch; }
 .resultados td.objeto a { color: var(--text); font-weight: 700; text-decoration: none; }
 .resultados td.objeto a:hover { color: var(--navy); text-decoration: underline; }
 .resultados td.fonte { white-space: nowrap; }

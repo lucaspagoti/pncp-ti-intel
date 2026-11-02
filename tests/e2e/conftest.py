@@ -44,6 +44,9 @@ def _semear(dsn: str) -> None:
     comandos += [
         web_dados.ata(arp, f"P{n:02}", f"Cabo de rede lote {n:02}") for n in range(ATAS_PAGINACAO)
     ]
+    # QA-001: objeto e órgão sem espaço, que não podem alargar a página.
+    longo = "zzzlongo " + "X" * 250
+    comandos.append(web_dados.ata(arp, "LONGO", longo, orgao="O" * 200))
     with psycopg.connect(dsn) as conn:
         conn.execute("DELETE FROM cargas")
         for comando, parametros in comandos:
