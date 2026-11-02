@@ -16,7 +16,7 @@ CVE-2026-32871
 CVE-2026-27124
 
 # --- Imagem oficial postgres:16 (não é código nosso) ---
-# 25 CVEs em `usr/local/bin/gosu` (binário Go vendorizado pela imagem oficial
+# 26 CVEs em `usr/local/bin/gosu` (binário Go vendorizado pela imagem oficial
 # do Postgres, usado só para trocar de usuário antes de iniciar o servidor).
 # Todas em crypto/tls, crypto/x509 e net/url do stdlib do Go — gosu não faz
 # handshake TLS nem parseia certificado/URL de terceiros em uso normal;
@@ -24,6 +24,9 @@ CVE-2026-27124
 # imagem oficial (fora do nosso controle). Mitigação real: re-puxar e
 # re-pinar `postgres:16` periodicamente (a cada início de fase, no mínimo),
 # o que naturalmente atualiza o gosu embutido.
+# 02/11/2026: CVE-2026-111943 (crypto/x509) entrou; o digest mais novo de
+# postgres:16 (sha256:5db6dac2…) traz o mesmo gosu (Go 1.24.6), então re-pinar
+# ainda não corrige. Revisitar no próximo re-pin.
 CVE-2025-68121
 CVE-2025-61726
 CVE-2025-61729
@@ -49,6 +52,7 @@ CVE-2026-56862
 CVE-2026-78667
 CVE-2026-78669
 CVE-2026-97031
+CVE-2026-111943
 
 # /etc/ssl/private/ssl-cert-snakeoil.key — chave placeholder padrão do pacote
 # Debian `ssl-cert`, presente em toda imagem Debian/Postgres oficial. Não é

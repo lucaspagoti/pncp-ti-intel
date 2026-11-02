@@ -16,6 +16,7 @@ from typing import Any
 
 from pncp_ti.classificar.in05 import Decisao, classificar_ata, normalizar
 from pncp_ti.classificar.regra import objeto_ata_tem_sinal_ti
+from pncp_ti.codificacao import reparar
 from pncp_ti.fontes.arp_regra import REGRA_PADRAO, RegraArp
 from pncp_ti.fontes.siga_csv import ErroValidacao
 from pncp_ti.privacy import identificar_fornecedor, sanitizar
@@ -82,7 +83,8 @@ class CatalogoTI:
 def _texto(valor: Any) -> str:
     if valor is None:
         return ""
-    return " ".join(str(sanitizar(str(valor))).split())[:LIMITE_TEXTO]
+    # Texto UTF-8 lido como cp1252 na origem ("SaudÃ¡vel") volta ao original (ADR 0031).
+    return " ".join(str(sanitizar(reparar(str(valor))[0])).split())[:LIMITE_TEXTO]
 
 
 texto = _texto  # mesmo tratamento para o texto lido em `fontes.arp`

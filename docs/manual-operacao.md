@@ -41,6 +41,23 @@ as pendências:
 SELECT contagens->'termos_pendentes' FROM cargas WHERE fonte = 'pncp_busca' AND ativa;
 ```
 
+Um termo que cai no meio da paginação guarda as páginas já lidas, e a passada extra continua
+da página que falhou, depois de reler a última página guardada. O termo recomeça da página 1
+se essa página ou o total declarado mudaram, ou se a coleta retomada termina com uma ata
+repetida (sinal de que o índice se reordenou e alguma ata ficou de fora).
+O log `pncp_busca_termo_falhou_tentativa` traz `pagina` e `itens`, para mostrar onde o portal
+caiu.
+
+Texto UTF-8 dentro do cp1252 do SIGA ("SaudÃ¡vel") é reparado na leitura (ADR 0031). A carga
+segue e registra `reparos_codificacao`, `trechos_nao_reparados` e `arquivos_utf8` em
+`cargas.contagens`, mais um `siga_texto_reparado` no journald. Só falha com `codificacao`
+quando sobra um byte que não se consegue reparar ou texto quebrado em mais de 1% das linhas:
+
+```sql
+SELECT concluido_em, contagens->'reparos_codificacao', contagens->'arquivos_utf8'
+FROM cargas WHERE fonte = 'siga_rj' ORDER BY iniciado_em DESC LIMIT 5;
+```
+
 ## Rotina diária
 
 Às 03:00, SIGA e ARP executam de forma independente. Às 08:30, a operação consulta o
@@ -68,7 +85,8 @@ SELECT fonte, count(*) FROM v_atas_ti_vigentes GROUP BY fonte;
 
 ## Falha de carga ou dado velho
 
-Confira `erro_tipo` em `cargas` e o journald. Código 2 na ARP é erro determinístico de
+O alerta do WhatsApp diz qual fonte falhou e o motivo, traduzido de `erro_tipo` (ADR 0032);
+com o banco fora, sai a frase genérica. Confira `erro_tipo` em `cargas` e o journald. Código 2 na ARP é erro determinístico de
 contrato/dado; repetir a mesma carga não o resolve. A carga anterior permanece ativa.
 Após corrigir a causa, use `make ingest FONTE=siga` ou `make ingest FONTE=arp`. Não apague
 `atas_vistas`: uma recarga forçada preserva a primeira observação e não cria novidades.

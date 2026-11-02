@@ -6,7 +6,9 @@ carga incoerente.
 
 Formato observado em 13/10/2026: `cp1252` (há travessão e aspas tipográficas nos
 itens; latin-1 as decodificaria como controle), separador `;`, decimal com vírgula,
-datas `dd/mm/aaaa`. O `ID Ata` repete em `atas` (uma linha por processo SEI) e esse
+datas `dd/mm/aaaa`. Desde 29/10/2026 há valores gravados em UTF-8 dentro do cp1252
+("SaudÃ¡vel"): são reparados aqui, e um arquivo inteiro em UTF-8 também é aceito (ADR 0031).
+O `ID Ata` repete em `atas` (uma linha por processo SEI) e esse
 efeito se propaga como linhas idênticas em itens e participantes.
 """
 
@@ -21,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
+from pncp_ti.codificacao import reparar, restante
 from pncp_ti.privacy import sanitizar
 
 CABECALHO_ATAS = (
@@ -69,8 +72,7 @@ CABECALHO_PARTICIPANTES = (
 LIMITE_ORFAOS = 0.01
 LIMITE_CONFLITOS = 0.01
 LIMITE_SEM_ITEM = 0.05
-# UTF-8 lido como cp1252 vira "Ã©", "Âº" etc.; em português legítimo "Ã" só precede letras.
-_MOJIBAKE = re.compile("Ã[©§£¡³ªº¢´µ¨ƒ‡°]|Â[ºª°]")
+LIMITE_TEXTO_QUEBRADO = 0.01  # fração de linhas com texto quebrado que não se conseguiu reparar
 
 
 class ErroValidacao(RuntimeError):
@@ -133,17 +135,57 @@ class ConjuntoSiga:
     contagens: dict[str, int] = field(default_factory=dict)
 
 
-def decodificar(conteudo: bytes, nome: str) -> str:
-    """cp1252 estrito: byte indefinido ou sinal de UTF-8 indica mudança na origem."""
+@dataclass(frozen=True, slots=True)
+class Decodificado:
+    texto: str
+    codificacao: str  # cp1252 | utf-8 | utf-8-sig
+    reparos: int  # trechos UTF-8 lidos como cp1252 que voltaram ao caractere original
+    nao_reparados: int
+
+
+def decodificar(conteudo: bytes, nome: str) -> Decodificado:
+    """UTF-8 (com ou sem BOM) se o arquivo inteiro for UTF-8; senão cp1252, com reparo.
+
+    O cabeçalho de cada arquivo tem acentos e é conferido depois: uma leitura com a
+    codificação errada continua falhando ali. Byte indefinido em cp1252 que não faz parte
+    de uma sequência UTF-8 reparável, ou texto quebrado acima de `LIMITE_TEXTO_QUEBRADO`
+    das linhas, indica mudança na origem e falha.
+    """
     if conteudo.startswith(b"\xef\xbb\xbf"):
-        raise ErroValidacao("codificacao", f"{nome}: BOM UTF-8; a origem mudou de codificação")
+        codificacao, texto = "utf-8-sig", _utf8(conteudo[3:], nome)
+    elif not conteudo.isascii() and (texto_utf8 := _utf8_ou_none(conteudo)) is not None:
+        codificacao, texto = "utf-8", texto_utf8
+    else:
+        codificacao = "cp1252"
+        texto = conteudo.decode("cp1252", "surrogateescape")
+    texto, reparos = reparar(texto)
     try:
-        texto = conteudo.decode("cp1252")
+        texto.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        byte = texto[exc.start].encode("utf-8", "surrogateescape")
+        raise ErroValidacao(
+            "codificacao", f"{nome}: byte inválido em cp1252: {byte!r} na posição {exc.start}"
+        ) from None
+    nao_reparados = restante(texto)
+    if nao_reparados > LIMITE_TEXTO_QUEBRADO * max(texto.count("\n"), 1):
+        raise ErroValidacao(
+            "codificacao", f"{nome}: {nao_reparados} trechos de UTF-8 lido como cp1252"
+        )
+    return Decodificado(texto, codificacao, reparos, nao_reparados)
+
+
+def _utf8_ou_none(conteudo: bytes) -> str | None:
+    try:
+        return conteudo.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def _utf8(conteudo: bytes, nome: str) -> str:
+    try:
+        return conteudo.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise ErroValidacao("codificacao", f"{nome}: byte inválido em cp1252: {exc}") from None
-    if _MOJIBAKE.search(texto):
-        raise ErroValidacao("codificacao", f"{nome}: sequência típica de UTF-8 lido como cp1252")
-    return texto
+        raise ErroValidacao("codificacao", f"{nome}: BOM UTF-8 com byte inválido: {exc}") from None
 
 
 def _normalizar(valor: str) -> str:
@@ -242,20 +284,27 @@ def _texto(valor: str) -> str:
 def montar(
     conteudo_atas: bytes, conteudo_itens: bytes, conteudo_participantes: bytes
 ) -> ConjuntoSiga:
+    arquivos = {
+        "ATA_REGISTRO_PRECO": decodificar(conteudo_atas, "ATA_REGISTRO_PRECO"),
+        "ITENS_ATAS_REGISTRO_PRECO": decodificar(conteudo_itens, "ITENS_ATAS_REGISTRO_PRECO"),
+        "PARTICIPANTES_ATAS_REGISTRO_PRECO": decodificar(
+            conteudo_participantes, "PARTICIPANTES_ATAS_REGISTRO_PRECO"
+        ),
+    }
     linhas_atas = _ler_tabela(
-        decodificar(conteudo_atas, "ATA_REGISTRO_PRECO"),
+        arquivos["ATA_REGISTRO_PRECO"].texto,
         CABECALHO_ATAS,
         "ATA_REGISTRO_PRECO",
         (),
     )
     linhas_itens = _ler_tabela(
-        decodificar(conteudo_itens, "ITENS_ATAS_REGISTRO_PRECO"),
+        arquivos["ITENS_ATAS_REGISTRO_PRECO"].texto,
         CABECALHO_ITENS,
         "ITENS_ATAS_REGISTRO_PRECO",
         (7, 8, 9),
     )
     linhas_part = _ler_tabela(
-        decodificar(conteudo_participantes, "PARTICIPANTES_ATAS_REGISTRO_PRECO"),
+        arquivos["PARTICIPANTES_ATAS_REGISTRO_PRECO"].texto,
         CABECALHO_PARTICIPANTES,
         "PARTICIPANTES_ATAS_REGISTRO_PRECO",
         (6, 7, 8, 9),
@@ -272,7 +321,12 @@ def montar(
         )
     data_extracao = datas.pop()
 
-    contagens: dict[str, int] = {"linhas_atas": len(linhas_atas)}
+    contagens: dict[str, int] = {
+        "linhas_atas": len(linhas_atas),
+        "reparos_codificacao": sum(a.reparos for a in arquivos.values()),
+        "trechos_nao_reparados": sum(a.nao_reparados for a in arquivos.values()),
+        "arquivos_utf8": sum(a.codificacao != "cp1252" for a in arquivos.values()),
+    }
 
     # --- atas: uma linha por processo; colapsa por ID Ata ---
     por_id: dict[str, list[list[str]]] = defaultdict(list)
