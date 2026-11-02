@@ -81,7 +81,10 @@ def mapear_unidade(corpo: Any) -> Unidade:
     municipio = corpo["municipio"] or {}
     if not isinstance(municipio, dict):
         raise ErroContrato("municipio não é objeto")
-    uf = str((municipio.get("uf") or {}).get("siglaUF") or "").strip().upper()
+    uf_obj = municipio.get("uf") or {}
+    if not isinstance(uf_obj, dict):
+        raise ErroContrato("municipio.uf não é objeto")
+    uf = str(uf_obj.get("siglaUF") or "").strip().upper()
     nome = str(municipio.get("nome") or "").strip()
     return Unidade(_esfera(corpo["orgao"]), uf[:2] or None, nome[:200] or None)
 
@@ -163,7 +166,7 @@ async def resolver(
         for c in consultar_agora:
             try:
                 novas[c] = await consultar(client, limitador, c)
-            except (_Indisponivel, ErroContrato) as exc:
+            except (_Indisponivel, ErroContrato, ValueError, TypeError, AttributeError) as exc:
                 falhas += 1
                 if falhas == 1:
                     log.warning("unidades_consulta_falhou", tipo=type(exc).__name__, erro=str(exc))
@@ -179,7 +182,9 @@ async def resolver(
                 "consultado_em = now()",
                 [(c[0], c[1], u.esfera, u.uf, u.municipio) for c, u in novas.items()],
             )
-        await conn.commit()
+    # Sempre fecha a transação, mesmo só com leitura: a publicação do ARP abre a própria
+    # transação depois, e não pode virar um savepoint desta (QA-001).
+    await conn.commit()
     resultado = {**cache, **novas}
     contagens = {
         "unidades": len(pedidas),

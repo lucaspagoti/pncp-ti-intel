@@ -287,13 +287,16 @@ async def ata(conn: psycopg.AsyncConnection, fonte: str, id_ata: str) -> dict[st
         return await cur.fetchone()
 
 
-async def itens(conn: psycopg.AsyncConnection, fonte: str, id_ata: str) -> list[dict[str, Any]]:
+async def itens(
+    conn: psycopg.AsyncConnection, fonte: str, id_ata: str, limite: int | None = 2000
+) -> list[dict[str, Any]]:
+    """Itens da ata; a tela corta em 2.000, a exportação (`limite=None`) leva todos."""
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             "SELECT id_item, descricao, nome_catalogo, codigo_catalogo, fornecedor, quantidade, "
             "valor_unitario, valor_valido, quantidade_empenhada, maximo_adesao FROM v_ata_itens_ti "
-            "WHERE fonte = %s AND id_ata = %s ORDER BY id_item LIMIT 2000",
-            (fonte, id_ata),
+            "WHERE fonte = %s AND id_ata = %s ORDER BY id_item LIMIT %s",
+            (fonte, id_ata, limite),
         )
         return await cur.fetchall()
 

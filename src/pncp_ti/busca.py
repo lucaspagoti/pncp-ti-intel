@@ -22,7 +22,13 @@ log = structlog.get_logger()
 
 
 async def atualizar_busca(conn: psycopg.AsyncConnection) -> bool:
-    """Refresh da MV; devolve False e registra o erro em vez de propagar."""
+    """Refresh da MV; devolve False e registra o erro em vez de propagar.
+
+    Exige a conexão fora de transação: o rollback de um refresh que falha não pode levar junto
+    uma publicação ainda não commitada.
+    """
+    if conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
+        raise RuntimeError("atualizar_busca chamada com transação aberta; publique antes")
     inicio = time.monotonic()
     try:
         await conn.execute("SELECT atualizar_busca()")

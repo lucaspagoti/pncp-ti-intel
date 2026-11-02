@@ -310,3 +310,18 @@ async def test_refresh_que_falha_devolve_false(nome_banco_teste):
         assert await atualizar_busca(conn) is False
     finally:
         await conn.close()
+
+
+async def test_csv_de_itens_nao_corta_em_2000(cliente, conn_ingest):
+    """QA-003: a tela corta em 2.000 itens; a exportação leva todos."""
+    carga = (
+        await (
+            await conn_ingest.execute("SELECT id FROM cargas WHERE fonte = 'compras_arp'")
+        ).fetchone()
+    )["id"]
+    linhas = [web_dados.item(carga, "A1", n, f"Item {n}", 1) for n in range(2, 2002)]
+    async with conn_ingest.cursor() as cur:
+        await cur.executemany(linhas[0][0], [parametros for _, parametros in linhas])
+    await atualizar(conn_ingest)
+    r = await cliente.get("/ata/compras_arp/A1/itens.csv")
+    assert len(r.text.splitlines()) == 1 + 2001

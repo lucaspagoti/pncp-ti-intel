@@ -150,7 +150,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
             raise HTTPException(404)
         if await consultas.ata(conn, fonte, id_ata) is None:
             raise HTTPException(404)
-        linhas = await consultas.itens(conn, fonte, id_ata)
+        linhas = await consultas.itens(conn, fonte, id_ata, limite=None)
         return Response(
             gerar_csv(linhas, CABECALHO_ITENS),
             media_type="text/csv; charset=utf-8",

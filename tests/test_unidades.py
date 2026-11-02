@@ -122,3 +122,56 @@ async def test_carga_do_arp_grava_esfera_uf_e_municipio(conn_ingest, conn_reader
     await arp._publicar(conn_ingest, preparado, geracao, __import__("uuid").uuid4(), d.hoje(), mapa)
     cur = await conn_reader.execute("SELECT esfera, uf, municipio FROM v_atas_ti_vigentes")
     assert await cur.fetchall() == [{"esfera": "Federal", "uf": "DF", "municipio": "Brasília"}]
+
+
+@pytest.mark.parametrize("uf", ["RJ", ["RJ"], 7])
+def test_uf_fora_do_contrato_vira_erro_de_contrato(uf):
+    corpo = {**UNIDADE, "municipio": {**UNIDADE["municipio"], "uf": uf}}
+    with pytest.raises(unidades.ErroContrato):
+        unidades.mapear_unidade(corpo)
+
+
+async def test_resposta_fora_do_contrato_nao_derruba_o_resolver(conn_ingest):
+    await conn_ingest.execute("DELETE FROM unidades_gerenciadoras")
+    corpo = {**UNIDADE, "municipio": {**UNIDADE["municipio"], "uf": "RJ"}}
+    async with cliente({CAMINHO_UNIDADE: (200, corpo)}) as c:
+        mapa, contagens = await unidades.resolver(conn_ingest, [CHAVE], c)
+    assert CHAVE not in mapa and contagens["unidades_falhas"] == 1
+
+
+async def test_cache_valido_nao_deixa_transacao_aberta_para_a_publicacao(
+    conn_ingest, nome_banco_teste
+):
+    """QA-001: só leitura do cache deixava a conexão INTRANS e a publicação virava savepoint."""
+    from dataclasses import replace
+
+    import psycopg
+    from psycopg.pq import TransactionStatus
+
+    from pncp_ti.busca import atualizar_busca
+    from pncp_ti.config import get_settings, ingest_dsn
+
+    await conn_ingest.execute("DELETE FROM unidades_gerenciadoras")
+    await conn_ingest.execute(
+        "INSERT INTO unidades_gerenciadoras (cnpj, codigo, esfera, uf) "
+        "VALUES ('00000000000191', '999999', 'Federal', 'DF')"
+    )
+    await conn_ingest.commit()
+    atas = [d.ata("1", "Aquisição de notebooks e microcomputadores")]
+    itens = {d.id_ata("1"): [d.item("1", "1", "Notebook 14 pol", nome_pdm="NOTEBOOK", pdm=None)]}
+    preparado, geracao = await arp.coletar(CONFIG, d.hoje(), client=d.ClienteFalso(atas, itens))
+    async with cliente({}) as c:  # nenhuma consulta: tudo no cache
+        mapa, _ = await unidades.resolver(conn_ingest, [("00000000000191", "999999")], c)
+    assert conn_ingest.info.transaction_status == TransactionStatus.IDLE
+    carga = __import__("uuid").uuid4()
+    await arp._publicar(conn_ingest, preparado, geracao, carga, d.hoje(), mapa)
+    assert conn_ingest.info.transaction_status == TransactionStatus.IDLE
+    # Outra conexão já vê a carga nova: a publicação foi commitada antes de qualquer refresh.
+    outra_dsn = ingest_dsn(replace(get_settings(), postgres_db=nome_banco_teste))
+    async with await psycopg.AsyncConnection.connect(outra_dsn) as outra:
+        cur = await outra.execute("SELECT ativa FROM cargas WHERE id = %s", (carga,))
+        assert (await cur.fetchone())[0] is True
+    await conn_ingest.execute("SELECT 1")  # transação aberta de propósito
+    with pytest.raises(RuntimeError):
+        await atualizar_busca(conn_ingest)
+    await conn_ingest.rollback()
