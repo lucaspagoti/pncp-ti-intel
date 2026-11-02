@@ -20,7 +20,7 @@ from psycopg_pool import AsyncConnectionPool, PoolTimeout
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from pncp_ti.config import get_settings, web_dsn
-from pncp_ti.web import consultas
+from pncp_ti.web import consultas, termos
 from pncp_ti.web.exportar import CABECALHO_ITENS, gerar_csv
 
 BASE = Path(__file__).parent
@@ -105,6 +105,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
         url_segura=_url_segura,
         preco_br=consultas.como_texto,
         dias_restantes=consultas.dias_restantes,
+        marcar=termos.marcar,
     )
     templates.env.globals.update(
         FONTES=consultas.FONTES,
@@ -146,6 +147,10 @@ def criar_app(dsn: str | None = None) -> FastAPI:
             "facetas": await consultas.facetas(conn, filtros),
             "ativos": consultas.filtros_ativos(filtros),
             "cargas": await consultas.cargas(conn),
+            "alternativas": consultas.alternativas(filtros),
+            "sugestoes": (
+                await consultas.sugestoes(conn, filtros.q) if filtros.q and not pagina.total else []
+            ),
         }
         # HTMX pede só o conteúdo da casca; a restauração do histórico pede a página inteira.
         parcial = request.headers.get("HX-Request") and not request.headers.get(

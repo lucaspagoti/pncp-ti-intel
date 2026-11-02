@@ -16,6 +16,8 @@ from zoneinfo import ZoneInfo
 import psycopg
 from psycopg.rows import dict_row
 
+from pncp_ti.web import termos
+
 TAMANHO_PAGINA = 20
 LIMITE_EXPORTACAO = 5000
 LIMITE_TEXTO = 200
@@ -145,13 +147,66 @@ _COLUNAS = (
 )
 
 
+def alternativas(f: Filtros) -> list[str]:
+    """O termo buscado e os sinônimos revisados dele (`insumos/sinonimos_busca.txt`)."""
+    return [f.q, *termos.sinonimos(f.q)] if f.q else []
+
+
+# Com termo, a busca junta os itens que casam (ADR 0036): pela cabeça (radical ou palavra exata) ou
+# pelo texto inteiro com a palavra exata, que não pega `videomonitoramento` em "monitor". `n_exato`
+# conta as cabeças com a palavra exata; `n_cabeca`, as que casam também pelo radical.
+_CASAM = """
+WITH alvo AS (SELECT {tsquery} AS tq, to_tsquery('simple', %(exato)s) AS te),
+casam AS (
+    SELECT i.fonte, i.id_ata,
+           count(*) FILTER (WHERE i.cabeca_exata @@ alvo.te) AS n_exato,
+           count(*) FILTER (WHERE i.cabeca_pt @@ alvo.tq OR i.cabeca_exata @@ alvo.te) AS n_cabeca,
+           count(*) AS n_casam,
+           min(i.valor_unitario) AS preco_min_casam,
+           max(i.valor_unitario) AS preco_max_casam,
+           array_agg(i.valor_unitario) FILTER (WHERE i.valor_unitario IS NOT NULL) AS precos_casam,
+           (array_agg(i.cabeca_texto ORDER BY COALESCE(i.cabeca_exata @@ alvo.te, false) DESC,
+                      i.cabeca_pt @@ alvo.tq DESC, i.valor_unitario NULLS LAST))[1] AS item_casado
+    FROM v_busca_itens i, alvo
+    WHERE i.cabeca_pt @@ alvo.tq OR COALESCE(i.cabeca_exata @@ alvo.te, false)
+       OR COALESCE(i.texto_exato @@ alvo.te, false)
+    GROUP BY i.fonte, i.id_ata
+)
+"""
+_EXATO = "COALESCE(objeto_exato @@ te, false)"
+# Foco no item: fatia dos itens da ata com a palavra exata na cabeça. Sem itens (busca PNCP), meio
+# crédito quando o objeto traz a palavra exata.
+_FOCO = (
+    "CASE WHEN n_itens > 0 THEN COALESCE(n_exato, 0)::float8 / n_itens "
+    f"WHEN {_EXATO} THEN 0.5 ELSE 0 END"
+)
+_NOTA = (
+    f"2 * ({_FOCO}) + 0.5 * {_EXATO}::int + 0.25 * (COALESCE(n_cabeca, 0) > 0)::int "
+    "+ 0.1 * (COALESCE(n_casam, 0) > 0)::int "
+    "+ 0.05 * ts_rank_cd(documento_peso, tq, 1|32)"
+)
+
+
+def _origem(f: Filtros) -> tuple[str, str, dict[str, Any]]:
+    """(CTE, FROM) da busca; sem termo, só a view."""
+    if not f.q:
+        return "", "v_busca_atas", {}
+    alts = alternativas(f)
+    p: dict[str, Any] = {f"q{n}": a for n, a in enumerate(alts)}
+    p["exato"] = termos.consulta_exata(alts)
+    tsquery = " || ".join(
+        f"websearch_to_tsquery('portuguese', unaccent(%(q{n})s))" for n in range(len(alts))
+    )
+    cte = _CASAM.format(tsquery=f"({tsquery})")
+    return cte, "v_busca_atas CROSS JOIN alvo LEFT JOIN casam USING (fonte, id_ata)", p
+
+
 def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
     """WHERE dos filtros; `sem` deixa um campo de fora (contagem da faceta desse campo)."""
     cond = ["true"]
     p: dict[str, Any] = {}
     if f.q:
-        p["q"] = f.q
-        cond.append("documento @@ websearch_to_tsquery('portuguese', unaccent(%(q)s))")
+        cond.append("documento @@ tq")
     if f.fonte and sem != "fonte":
         cond.append("fonte = %(fonte)s")
         p["fonte"] = f.fonte
@@ -174,7 +229,8 @@ def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
         p["vigente_ate"] = f.vigente_ate
     if f.preco_min is not None or f.preco_max is not None:
         # Um mesmo item precisa caber na faixa (mín. e máx. agregados deixariam passar uma ata
-        # com itens de R$ 100 e R$ 1.000 numa faixa de R$ 200 a R$ 500).
+        # com itens de R$ 100 e R$ 1.000 numa faixa de R$ 200 a R$ 500). Com termo, vale o preço
+        # dos itens que casam; só sem item que case vale o da ata toda.
         faixa = []
         if f.preco_min is not None:
             faixa.append("p >= %(preco_min)s")
@@ -182,17 +238,36 @@ def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
         if f.preco_max is not None:
             faixa.append("p <= %(preco_max)s")
             p["preco_max"] = f.preco_max
-        cond.append(f"EXISTS (SELECT 1 FROM unnest(precos) AS p WHERE {' AND '.join(faixa)})")
+        # Item que casa sem preço válido não herda o preço de outro item da ata.
+        precos = (
+            "CASE WHEN n_casam > 0 THEN COALESCE(precos_casam, '{}') ELSE precos END"
+            if f.q
+            else "precos"
+        )
+        cond.append(f"EXISTS (SELECT 1 FROM unnest({precos}) AS p WHERE {' AND '.join(faixa)})")
     return " AND ".join(cond), p
 
 
 def _consulta(f: Filtros, limite: int, deslocamento: int) -> tuple[str, dict[str, Any]]:
-    onde, p = _where(f)
-    rank = "ts_rank(documento, websearch_to_tsquery('portuguese', unaccent(%(q)s)))" if f.q else "0"
-    p.update(limite=limite, deslocamento=deslocamento)
+    cte, origem, p = _origem(f)
+    onde, pw = _where(f)
+    p.update(pw, limite=limite, deslocamento=deslocamento)
+    if f.q:
+        extra = (
+            f"{_NOTA} AS rank, n_casam, item_casado, "
+            "CASE WHEN n_casam > 0 THEN preco_min_casam ELSE preco_min END AS preco_min_exibido, "
+            "CASE WHEN n_casam > 0 THEN preco_max_casam ELSE preco_max END AS preco_max_exibido"
+        )
+        ordem = ORDENS[f.ordem].replace("preco_min ASC", "preco_min_exibido ASC")
+    else:
+        extra = (
+            "0 AS rank, NULL::int AS n_casam, NULL::text AS item_casado, "
+            "preco_min AS preco_min_exibido, preco_max AS preco_max_exibido"
+        )
+        ordem = ORDENS[f.ordem]
     return (
-        f"SELECT {_COLUNAS}, {rank} AS rank, count(*) OVER () AS total "
-        f"FROM v_busca_atas WHERE {onde} ORDER BY {ORDENS[f.ordem]} "
+        f"{cte}SELECT {_COLUNAS}, {extra}, count(*) OVER () AS total "
+        f"FROM {origem} WHERE {onde} ORDER BY {ordem} "
         "LIMIT %(limite)s OFFSET %(deslocamento)s",
         p,
     )
@@ -222,6 +297,21 @@ async def para_exportar(conn: psycopg.AsyncConnection, f: Filtros) -> list[dict[
         return await cur.fetchall()
 
 
+async def sugestoes(conn: psycopg.AsyncConnection, q: str) -> list[str]:
+    """ "Você quis dizer": palavras parecidas nas cabeças dos itens (`pg_trgm`), até 3."""
+    candidatas = [p for p in termos.palavras(q) if len(p) >= 4]
+    if not candidatas:
+        return []
+    palavra = max(candidatas, key=len)
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            "SELECT palavra FROM v_busca_vocabulario WHERE palavra %% %(p)s AND palavra <> %(p)s "
+            "ORDER BY similarity(palavra, %(p)s) DESC, n DESC LIMIT 3",
+            {"p": palavra},
+        )
+        return [r["palavra"] for r in await cur.fetchall()]
+
+
 async def opcoes_filtro(conn: psycopg.AsyncConnection) -> dict[str, list[str]]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute("SELECT DISTINCT uf FROM v_busca_atas WHERE uf IS NOT NULL ORDER BY 1")
@@ -233,12 +323,13 @@ async def facetas(conn: psycopg.AsyncConnection, f: Filtros) -> dict[str, dict[s
     """Contagem por fonte e por esfera sob os demais filtros; só opções com alguma ata."""
     resultado: dict[str, dict[str, int]] = {}
     for campo, expressao in (("fonte", "fonte"), ("esfera", f"COALESCE(esfera, '{SEM_ESFERA}')")):
-        onde, p = _where(f, sem=campo)
+        cte, origem, p = _origem(f)
+        onde, pw = _where(f, sem=campo)
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
-                f"SELECT {expressao} AS valor, count(*) AS n FROM v_busca_atas WHERE {onde} "
+                f"{cte}SELECT {expressao} AS valor, count(*) AS n FROM {origem} WHERE {onde} "
                 "GROUP BY 1",
-                p,
+                {**p, **pw},
             )
             contagem = {r["valor"]: r["n"] for r in await cur.fetchall()}
         ordem = FONTES if campo == "fonte" else ESFERAS

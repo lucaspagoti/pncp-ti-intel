@@ -169,6 +169,13 @@ tbody tr:last-child td { border-bottom: 0; }
 .resultados td.fonte { white-space: nowrap; }
 .resultados .vence { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); white-space: nowrap; }
 .resultados td.preco { font-weight: 700; }
+/* Assinatura da busca: o item da ata que casou com o termo, com o preço dele na coluna ao lado. */
+.resultados .casado { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2);
+                      margin-top: var(--space-2); padding-left: var(--space-2); font-size: var(--fs-sm);
+                      box-shadow: var(--shadow-marker-left); }
+.resultados .rotulo-casado { font-size: var(--fs-3xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.resultados .qtd-casado { font-size: var(--fs-xs); color: var(--muted); }
+mark { background: var(--chip-bg); color: var(--navy-dark); font-weight: 700; border-radius: var(--radius-xs); padding: 0 2px; }
 
 .pag { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); flex-wrap: wrap;
        padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border); font-size: var(--fs-sm); color: var(--muted); }

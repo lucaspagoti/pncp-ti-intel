@@ -24,12 +24,12 @@ def ata(carga, fonte_id, objeto, *, fim=FIM, orgao="ORGAO X", uf=None, esfera=No
     )
 
 
-def item(carga, ata_id, n, descricao, valor, fornecedor="ACME") -> Comando:
+def item(carga, ata_id, n, descricao, valor, fornecedor="ACME", catalogo="") -> Comando:
     return (
         "INSERT INTO ata_itens (carga_id, chave, ata_id_origem, id_item, descricao, nome_catalogo, "
         "fornecedor, quantidade, valor_unitario, valor_valido) "
-        "VALUES (%s, %s, %s, %s, %s, '', %s, 10, %s, true)",
-        (carga, f"{ata_id}-{n}", ata_id, str(n), descricao, fornecedor, valor),
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, 10, %s, true)",
+        (carga, f"{ata_id}-{n}", ata_id, str(n), descricao, catalogo, fornecedor, valor),
     )
 
 

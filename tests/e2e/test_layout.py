@@ -72,6 +72,8 @@ def test_impressao_esconde_lateral_busca_e_paginacao(page: Page, base_url):
         ("/?q=notebook", ".botao"),
         ("/?q=notebook", ".pilula"),
         ("/?q=notebook", ".nota"),
+        ("/?q=impressao", ".resultados .casado mark"),
+        ("/?q=impressao", ".resultados .qtd-casado"),
         ("/ata/siga_rj/S1", ".campos dt"),
         ("/ata/siga_rj/S1", ".ident"),
         ("/ata/siga_rj/S1", ".chip"),

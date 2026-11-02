@@ -72,14 +72,15 @@
       {% for a in p.linhas %}
         {% set local = [a.orgao or a.unidade_gerenciadora, a.esfera, a.uf] | select | join(' · ') %}
         <tr>
-          <td class="objeto"><a href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}">{{ a.objeto | truncate(160) }}</a>{% if local %}<span class="sub">{{ local }}</span>{% endif %}</td>
+          <td class="objeto"><a href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}">{{ a.objeto | truncate(160) }}</a>{% if local %}<span class="sub">{{ local }}</span>{% endif %}
+            {%- if a.item_casado %}<span class="casado"><span class="rotulo-casado">Item</span> {{ a.item_casado | marcar(alternativas) }} <span class="qtd-casado">{{ a.n_casam }} de {{ a.n_itens }} ite{{ 'm' if a.n_itens == 1 else 'ns' }}</span></span>{% endif %}</td>
           <td class="fonte" data-rotulo="Fonte"><span class="chip">{{ FONTES.get(a.fonte, a.fonte) }}</span></td>
           <td data-rotulo="Vigência"><div class="vence">{{ vigencia(a.fim) }}</div></td>
           <td class="n oculto-cel">{{ a.n_itens or '—' }}</td>
           <td class="n preco" data-rotulo="Preço unitário">
             {%- if not a.n_itens %}<span class="sub">sem itens nesta fonte</span>
-            {%- elif a.preco_min is none %}—
-            {%- else %}{{ a.preco_min | brl }}{% if a.preco_max is not none and a.preco_max != a.preco_min %} <span class="sub">até {{ a.preco_max | brl }}</span>{% endif %}{% endif -%}
+            {%- elif a.preco_min_exibido is none %}—{% if a.item_casado %}<span class="sub">sem preço do item buscado</span>{% endif %}
+            {%- else %}{{ a.preco_min_exibido | brl }}{% if a.preco_max_exibido is not none and a.preco_max_exibido != a.preco_min_exibido %} <span class="sub">até {{ a.preco_max_exibido | brl }}</span>{% endif %}{% if a.item_casado %}<span class="sub">do item buscado</span>{% endif %}{% endif -%}
           </td>
         </tr>
       {% endfor %}
@@ -88,6 +89,7 @@
   </div>
   {% else %}
   <p class="vazio">Nenhuma ata encontrada para esses filtros.
+    {%- if sugestoes %}<span class="dica">Você quis dizer {% for s in sugestoes %}<a href="/?{{ qs(f, q=s) }}" hx-get="/?{{ qs(f, q=s) }}" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">{{ s }}</a>{{ ', ' if not loop.last else '?' }}{% endfor %}</span>{% endif %}
     {%- if ativos %}<span class="dica">Tire um filtro acima ou <a href="/" hx-get="/" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">comece uma busca nova</a>.</span>
     {%- else %}<span class="dica">Busque pelo item, por exemplo: notebook, monitor, licença Microsoft.</span>{% endif %}</p>
   {% endif %}
