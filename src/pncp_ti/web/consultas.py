@@ -183,7 +183,7 @@ _FOCO = (
 _NOTA = (
     f"2 * ({_FOCO}) + 0.5 * {_EXATO}::int + 0.25 * (COALESCE(n_cabeca, 0) > 0)::int "
     "+ 0.1 * (COALESCE(n_casam, 0) > 0)::int "
-    "+ 0.05 * ts_rank_cd(documento, tq, 1|32)"
+    "+ 0.05 * ts_rank_cd(documento_peso, tq, 1|32)"
 )
 
 
@@ -230,7 +230,7 @@ def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
     if f.preco_min is not None or f.preco_max is not None:
         # Um mesmo item precisa caber na faixa (mín. e máx. agregados deixariam passar uma ata
         # com itens de R$ 100 e R$ 1.000 numa faixa de R$ 200 a R$ 500). Com termo, vale o preço
-        # dos itens que casam; sem item que case, o da ata toda.
+        # dos itens que casam; só sem item que case vale o da ata toda.
         faixa = []
         if f.preco_min is not None:
             faixa.append("p >= %(preco_min)s")
@@ -238,7 +238,12 @@ def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
         if f.preco_max is not None:
             faixa.append("p <= %(preco_max)s")
             p["preco_max"] = f.preco_max
-        precos = "COALESCE(precos_casam, precos)" if f.q else "precos"
+        # Item que casa sem preço válido não herda o preço de outro item da ata.
+        precos = (
+            "CASE WHEN n_casam > 0 THEN COALESCE(precos_casam, '{}') ELSE precos END"
+            if f.q
+            else "precos"
+        )
         cond.append(f"EXISTS (SELECT 1 FROM unnest({precos}) AS p WHERE {' AND '.join(faixa)})")
     return " AND ".join(cond), p
 
@@ -250,8 +255,8 @@ def _consulta(f: Filtros, limite: int, deslocamento: int) -> tuple[str, dict[str
     if f.q:
         extra = (
             f"{_NOTA} AS rank, n_casam, item_casado, "
-            "COALESCE(preco_min_casam, preco_min) AS preco_min_exibido, "
-            "COALESCE(preco_max_casam, preco_max) AS preco_max_exibido"
+            "CASE WHEN n_casam > 0 THEN preco_min_casam ELSE preco_min END AS preco_min_exibido, "
+            "CASE WHEN n_casam > 0 THEN preco_max_casam ELSE preco_max END AS preco_max_exibido"
         )
         ordem = ORDENS[f.ordem].replace("preco_min ASC", "preco_min_exibido ASC")
     else:

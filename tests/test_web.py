@@ -525,3 +525,42 @@ async def test_voce_quis_dizer_com_zero_resultados(cliente, conn_ingest):
     r = await cliente.get("/", params={"q": "monitr"})
     assert "Nenhuma ata encontrada" in r.text and "Você quis dizer" in r.text
     assert 'href="/?q=monitor"' in r.text
+
+
+async def test_item_buscado_sem_preco_nao_herda_preco_de_outro_item(cliente, conn_ingest):
+    """W3-R0-001: o monitor sem preço válido não vira o teclado de R$ 25."""
+    carga = (
+        await (
+            await conn_ingest.execute("SELECT id FROM cargas WHERE fonte = 'compras_arp'")
+        ).fetchone()
+    )["id"]
+    for comando, parametros in (
+        web_dados.ata(carga, "SP", "Aquisição de periféricos"),
+        web_dados.item(
+            carga, "SP", 1, "MONITOR COMPUTADOR, 24 POL", None, catalogo="MONITOR COMPUTADOR"
+        ),
+        web_dados.item(carga, "SP", 2, "TECLADO, ABNT2", 25, catalogo="TECLADO"),
+    ):
+        await conn_ingest.execute(comando, parametros)
+    await conn_ingest.execute("UPDATE ata_itens SET valor_valido = false WHERE chave = 'SP-1'")
+    await atualizar(conn_ingest)
+    r = await cliente.get("/", params={"q": "monitor"})
+    linha = r.text[r.text.index('href="/ata/compras_arp/SP"') :].split("</tr>", 1)[0]
+    assert "R$ 25,00" not in linha and "sem preço do item buscado" in linha
+    r = await cliente.get("/", params={"q": "monitor", "preco_max": "100"})
+    assert "/ata/compras_arp/SP" not in r.text
+
+
+async def test_frase_negada_nao_perde_ata_na_fronteira_entre_campos(cliente, conn_ingest):
+    """W3-R0-002: o vetor de recuperação é o da 0010; juntar objeto e cabeça criaria a frase
+    "notebook monitor" e a busca negada perderia a ata."""
+    carga = (
+        await (
+            await conn_ingest.execute("SELECT id FROM cargas WHERE fonte = 'compras_arp'")
+        ).fetchone()
+    )["id"]
+    await conn_ingest.execute(*web_dados.ata(carga, "NEG", "Notebook"))
+    await conn_ingest.execute(*web_dados.item(carga, "NEG", 1, "Monitor", 500, catalogo="MONITOR"))
+    await atualizar(conn_ingest)
+    r = await cliente.get("/", params={"q": 'notebook -"notebook monitor"'})
+    assert "/ata/compras_arp/NEG" in r.text

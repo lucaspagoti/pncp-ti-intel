@@ -29,8 +29,10 @@ palavra exata.
   do catálogo ou, sem ele, a descrição até o primeiro separador (`,` `;` `:` ou ` - `). Ela vai em
   vetor `simple` (palavra exata) e `portuguese` (radical). O texto inteiro do item vai em
   `texto_exato` (`simple`).
-- **A recuperação não muda.** O `documento` continua cobrindo o texto completo, agora com pesos:
-  objeto em A, cabeças em B e texto completo em C. Nenhuma ata some da busca; muda a ordem.
+- **A recuperação não muda.** O `documento` da 0010 continua sendo o da recuperação. Juntar
+  vetores criaria frases falsas na fronteira entre campos: na revisão, `notebook -"notebook
+  monitor"` perdia a ata com objeto "Notebook" e item "Monitor". A ordem usa outro vetor,
+  `documento_peso`, com objeto em A, cabeças em B e texto completo em C.
 - **Nota de relevância** (`consultas.py`, SQL fixo):
   - `2 × foco`, em que foco é a fatia dos itens da ata com a palavra exata na cabeça. Uma ata
     sem itens (busca PNCP) recebe 0,5 quando o objeto traz a palavra exata.
@@ -42,7 +44,9 @@ palavra exata.
   formas regulares de singular e plural e só com `[a-z0-9]+`. "monitor" casa com *monitores*,
   mas não com *monitoramento*. O texto do usuário chega ao SQL só como parâmetro.
 - **Preço pelo item buscado.** Com termo, a coluna de preço e o filtro de faixa usam os itens que
-  casam (pela cabeça ou pela palavra exata no texto). Sem item que case, valem os da ata toda.
+  casam (pela cabeça ou pela palavra exata no texto). Só quando nenhum item casa valem os da ata
+  toda. Item que casa sem preço válido aparece como "sem preço do item buscado" e não passa no
+  filtro de faixa.
 - **Linha do item que casou.** Cada resultado mostra a cabeça do item com o termo marcado, quantos
   itens casam ("2 de 2 itens") e "do item buscado" junto do preço.
 - **Sinônimos revisados.** `insumos/sinonimos_busca.txt` (revisado pelo Lucas, como o

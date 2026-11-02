@@ -5,8 +5,9 @@
   vetor `simple` (palavra exata) e `portuguese` (radical). É o que diz qual é o item principal da
   ata. O texto inteiro do item vai em `texto_exato` (`simple`), para o preço seguir o item que
   cita o termo.
-- `mv_busca_atas`: o `documento` ganha pesos (objeto A, cabeças dos itens B, texto completo C) e a
-  coluna `objeto_exato` (`simple`). A recuperação não muda: o texto completo continua no documento.
+- `mv_busca_atas`: o `documento` da 0010 continua sendo o da recuperação (juntar vetores criaria
+  frases falsas na fronteira entre campos). Para a ordem, `documento_peso` (objeto A, cabeças dos
+  itens B, texto completo C) e `objeto_exato` (`simple`).
 - `mv_busca_vocabulario`: palavras das cabeças, para o "você quis dizer" (`pg_trgm`).
 - `atualizar_busca()` atualiza as três, nesta ordem.
 
@@ -85,9 +86,10 @@ def upgrade() -> None:
         f"""
         CREATE MATERIALIZED VIEW mv_busca_atas AS
         SELECT b.*,
+               to_tsvector('portuguese', b.texto_busca) AS documento,
                setweight(to_tsvector('portuguese', unaccent(lower(COALESCE(b.objeto, '')))), 'A')
                || setweight(to_tsvector('portuguese', COALESCE(b.cabecas, '')), 'B')
-               || setweight(to_tsvector('portuguese', b.texto_busca), 'C') AS documento,
+               || setweight(to_tsvector('portuguese', b.texto_busca), 'C') AS documento_peso,
                to_tsvector('simple', unaccent(lower(COALESCE(b.objeto, '')))) AS objeto_exato
         FROM ({_busca(cabecas=True)}) b
         """

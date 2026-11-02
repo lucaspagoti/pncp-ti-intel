@@ -79,7 +79,7 @@
           <td class="n oculto-cel">{{ a.n_itens or '—' }}</td>
           <td class="n preco" data-rotulo="Preço unitário">
             {%- if not a.n_itens %}<span class="sub">sem itens nesta fonte</span>
-            {%- elif a.preco_min_exibido is none %}—
+            {%- elif a.preco_min_exibido is none %}—{% if a.item_casado %}<span class="sub">sem preço do item buscado</span>{% endif %}
             {%- else %}{{ a.preco_min_exibido | brl }}{% if a.preco_max_exibido is not none and a.preco_max_exibido != a.preco_min_exibido %} <span class="sub">até {{ a.preco_max_exibido | brl }}</span>{% endif %}{% if a.item_casado %}<span class="sub">do item buscado</span>{% endif %}{% endif -%}
           </td>
         </tr>
