@@ -14,6 +14,7 @@ from pncp_ti.fontes.arp_dados import (
     escolher,
     mapear_ata,
     mapear_item,
+    texto,
     validar_contrato,
     validar_pagina,
 )
@@ -225,3 +226,7 @@ def test_motivo_central_aponta_o_item_central_e_nao_o_primeiro_item_de_ti():
     itens = _itens(283, 8435, 1, 2, 3, 4)
     decisao = decidir_ata("Material diverso", itens, catalogo, REGRA)
     assert decisao.is_ti and decisao.motivo == "catmat70:pdm8435@item:central"
+
+
+def test_texto_utf8_lido_como_cp1252_na_origem_e_reparado():
+    assert texto("Envelhecimento SaudÃ¡vel â€“ NÃO") == "Envelhecimento Saudável – NÃO"

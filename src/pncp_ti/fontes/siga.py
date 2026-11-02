@@ -204,6 +204,14 @@ def preparar(
         arquivos["itens"].caminho.read_bytes(),
         arquivos["participantes"].caminho.read_bytes(),
     )
+    if conjunto.contagens["reparos_codificacao"] or conjunto.contagens["arquivos_utf8"]:
+        # Texto UTF-8 dentro do cp1252 na origem (ADR 0031): carrega reparado, mas fica no log.
+        log.warning(
+            "siga_texto_reparado",
+            reparos=conjunto.contagens["reparos_codificacao"],
+            nao_reparados=conjunto.contagens["trechos_nao_reparados"],
+            arquivos_utf8=conjunto.contagens["arquivos_utf8"],
+        )
     nomes: dict[str, set[str]] = {}
     for item in conjunto.itens:
         nomes.setdefault(item.ata_id_origem, set()).add(item.nome_catalogo)

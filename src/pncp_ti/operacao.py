@@ -25,6 +25,34 @@ FALHAS = {
     "pncp-ti-backup.service": "o backup de hoje falhou",
     "pncp-ti-operacao.service": "a verificação diária falhou",
 }
+# Falha da carga com fonte e motivo (ADR 0032): lido de `cargas.erro_tipo`.
+FONTES_CARGA = {
+    "siga_rj": "o SIGA RJ",
+    "compras_arp": "o Compras.gov.br",
+    "pncp_busca": "a busca PNCP",
+}
+_FORA_DO_PADRAO = "arquivo fora do padrão"
+_RESPOSTA_ESTRANHA = "resposta fora do padrão"
+_FORA_DO_AR = "fonte fora do ar"
+MOTIVOS = {
+    **dict.fromkeys(
+        ("codificacao", "cabecalho", "colunas", "csv", "vazio", "geracao", "geracao_futura",
+         "datas", "numeros", "orfaos", "conflito_ata", "cobertura_itens", "tamanho", "arquivo"),
+        _FORA_DO_PADRAO,
+    ),
+    **dict.fromkeys(
+        ("contrato", "envelope", "total_registros", "lote_inconsistente", "lote_incompleto",
+         "listagem_inconsistente", "itens_incompletos", "itens_ausentes", "itens_inconsistentes",
+         "conflito_id", "sem_id_excessivo", "pagina_vazia", "data_anomala"),
+        _RESPOSTA_ESTRANHA,
+    ),
+    **dict.fromkeys(("rede", "http", "teto_requisicoes"), _FORA_DO_AR),
+    "termos_falhos": "portal sem responder alguns termos há 3 dias",
+    "sem_atas": "nenhuma ata devolvida",
+    "queda_volume": "bem menos atas que ontem",
+    "geracao_antiga": "arquivos da origem desatualizados",
+    "concorrente": "outra atualização ainda rodando",
+}  # fmt: skip
 
 
 def alertas(cargas: list[dict], agora: datetime, termo: str | None = None) -> list[tuple[str, str]]:
@@ -82,6 +110,57 @@ def resumo(avisos: list[tuple[str, str]]) -> str | None:
     if not avisos:
         return None
     return "Atas de TI: " + "; ".join(frase for _, frase in avisos) + "."
+
+
+def _motivo(tipo: str | None) -> str | None:
+    if not tipo:
+        return None
+    if tipo in MOTIVOS:
+        return MOTIVOS[tipo]
+    # Exceções fora de ErroValidacao gravam a classe: rede do httpx e erros HTTP do compras-mcp.
+    if tipo.startswith("Compras") or tipo.endswith(("Timeout", "TimeoutError", "ConnectError")):
+        return _FORA_DO_AR
+    return None
+
+
+def frase_carga(falhas: list[dict]) -> str:
+    """A falha da carga numa frase: quais fontes e por quê, sem jargão (ADR 0032)."""
+    if not falhas:
+        return FALHAS["pncp-ti-carga.service"]
+    ordem = list(FONTES_CARGA)
+    falhas = sorted(falhas, key=lambda f: ordem.index(f["fonte"]) if f["fonte"] in ordem else 99)
+    partes = []
+    for falha in falhas:
+        nome = FONTES_CARGA.get(falha["fonte"], falha["fonte"])
+        motivo = _motivo(falha["erro_tipo"])
+        partes.append((nome, motivo))
+    if len(partes) == 1:
+        nome, motivo = partes[0]
+        detalhe = f" ({motivo})" if motivo else ""
+        return f"{nome} não atualizou hoje{detalhe}; o site segue com os dados anteriores"
+    itens = [f"{nome} ({motivo})" if motivo else nome for nome, motivo in partes]
+    sujeito = ", ".join(itens[:-1]) + " e " + itens[-1]
+    return f"{sujeito} não atualizaram hoje; o site segue com os dados anteriores"
+
+
+async def falhas_de_hoje(agora: datetime) -> list[dict]:
+    """Última carga de hoje de cada fonte, se falhou; vazio se o banco não responder."""
+    inicio = datetime.combine(agora.astimezone(SP).date(), time(), SP)
+    try:
+        async with await psycopg.AsyncConnection.connect(
+            ingest_dsn(get_settings()), row_factory=dict_row, connect_timeout=5
+        ) as conn:
+            linhas = await (
+                await conn.execute(
+                    "SELECT DISTINCT ON (fonte) fonte, status, erro_tipo FROM cargas "
+                    "WHERE iniciado_em >= %s ORDER BY fonte, iniciado_em DESC, id",
+                    (inicio,),
+                )
+            ).fetchall()
+    except Exception:
+        # O OnFailure precisa avisar mesmo com o Postgres fora: cai na frase genérica.
+        return []
+    return [linha for linha in linhas if linha["status"] == "falhou"]
 
 
 async def enfileirar(conn, agora: datetime, termo: str | None = None) -> None:
@@ -144,7 +223,10 @@ async def executar(modo: str, unidade: str | None = None) -> int:
             if not unidade or not re.fullmatch(r"pncp-ti-[a-zA-Z0-9_.@-]{1,100}", unidade):
                 raise ValueError("unidade inválida")
             # OnFailure funciona mesmo com o Postgres indisponível.
-            frase = FALHAS.get(unidade, f"o serviço {unidade} falhou")
+            if unidade == "pncp-ti-carga.service":
+                frase = frase_carga(await falhas_de_hoje(datetime.now(SP)))
+            else:
+                frase = FALHAS.get(unidade, f"o serviço {unidade} falhou")
             await publicar(f"Atas de TI: {frase}.", client)
             return 0
         async with await psycopg.AsyncConnection.connect(

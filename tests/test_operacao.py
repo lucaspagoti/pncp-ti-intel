@@ -146,14 +146,19 @@ async def test_onfailure_independe_do_banco(monkeypatch):
     async def fake(corpo, client):
         mensagens.append(corpo)
 
+    conexoes = []
+
     async def sem_banco(*args, **kwargs):
-        raise AssertionError("OnFailure não deve conectar ao Postgres")
+        conexoes.append(kwargs.get("connect_timeout"))
+        raise operacao.psycopg.OperationalError("banco fora")
 
     monkeypatch.setattr(operacao, "publicar", fake)
     monkeypatch.setattr(operacao.psycopg.AsyncConnection, "connect", sem_banco)
     assert await operacao.executar("falha", "pncp-ti-backup.service") == 0
     assert await operacao.executar("falha", "pncp-ti-carga.service") == 0
     assert await operacao.executar("falha", "pncp-ti-web.service") == 0
+    # Só a carga consulta o banco para dizer a fonte, com timeout curto e frase genérica se falhar.
+    assert conexoes == [5]
     assert mensagens == [
         "Atas de TI: o backup de hoje falhou.",
         "Atas de TI: a atualização de hoje falhou; o site segue com os dados anteriores.",
@@ -165,3 +170,41 @@ async def test_onfailure_independe_do_banco(monkeypatch):
 
 def test_meia_noite_brasilia_difere_do_dia_utc():
     assert datetime(2026, 10, 17, 1, tzinfo=UTC).astimezone(SP).date() == AGORA.date()
+
+
+def _falha(fonte, erro_tipo):
+    return {"fonte": fonte, "status": "falhou", "erro_tipo": erro_tipo}
+
+
+def test_falha_da_carga_diz_a_fonte_e_o_motivo():
+    assert operacao.frase_carga([_falha("siga_rj", "codificacao")]) == (
+        "o SIGA RJ não atualizou hoje (arquivo fora do padrão); "
+        "o site segue com os dados anteriores"
+    )
+
+
+def test_falha_de_duas_fontes_numa_frase_na_ordem_da_carga():
+    falhas = [_falha("pncp_busca", "termos_falhos"), _falha("siga_rj", "codificacao")]
+    assert operacao.frase_carga(falhas) == (
+        "o SIGA RJ (arquivo fora do padrão) e a busca PNCP (portal sem responder alguns termos "
+        "há 3 dias) não atualizaram hoje; o site segue com os dados anteriores"
+    )
+
+
+@pytest.mark.parametrize(
+    ("tipo", "esperado"),
+    [
+        ("ComprasTimeoutError", " (fonte fora do ar)"),
+        ("ReadTimeout", " (fonte fora do ar)"),
+        ("UniqueViolation", ""),
+        (None, ""),
+    ],
+)
+def test_motivo_de_excecao_sem_tipo_conhecido(tipo, esperado):
+    assert operacao.frase_carga([_falha("compras_arp", tipo)]) == (
+        f"o Compras.gov.br não atualizou hoje{esperado}; o site segue com os dados anteriores"
+    )
+
+
+def test_sem_falha_registrada_usa_a_frase_generica():
+    assert operacao.frase_carga([]) == operacao.FALHAS["pncp-ti-carga.service"]

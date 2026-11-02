@@ -449,3 +449,46 @@ async def test_publicar_com_termo_falho_reaproveita_a_carga_ativa(conn_ingest):
         ID_A: "termo_pncp:desktop",
         ID_B: "termo_pncp:desktop|notebook",  # o objeto de B também casa "desktop"
     }
+
+
+def _portal_que_cai_na_pagina_3(total: int, totais_depois: int | None = None):
+    """Páginas de 1 item; a página 3 cai até esgotar as tentativas da 1ª passada."""
+    chamadas: list[int] = []
+    quedas = {"n": 0}
+
+    def tratar(req: httpx.Request) -> httpx.Response:
+        pagina = int(req.url.params["pagina"])
+        chamadas.append(pagina)
+        if pagina == 3 and quedas["n"] < b.TENTATIVAS:
+            quedas["n"] += 1
+            raise httpx.ReadError("queda")
+        declarado = total if quedas["n"] < b.TENTATIVAS or totais_depois is None else totais_depois
+        id_ata = f"00394502000144-1-009124/2026-{pagina:06d}"
+        return httpx.Response(200, json={"items": [item(id_ata)], "total": declarado})
+
+    return chamadas, httpx.AsyncClient(transport=httpx.MockTransport(tratar))
+
+
+async def test_termo_que_cai_no_meio_retoma_da_pagina_que_falhou(monkeypatch):
+    monkeypatch.setattr(b, "TAMANHO_PAGINA", 1)
+    chamadas, c = _portal_que_cai_na_pagina_3(total=4)
+    async with c:
+        coleta = await b.coletar(["notebook"], HOJE, c)
+    assert chamadas == [1, 2] + [3] * b.TENTATIVAS + [3, 4]  # sem reler as páginas 1 e 2
+    assert coleta.contagens["termos_recuperados"] == 1
+    assert coleta.contagens["termos_falhos"] == 0
+    assert len(coleta.atas) == 4
+
+
+async def test_total_mudou_entre_as_passadas_recomeca_da_pagina_1(monkeypatch):
+    monkeypatch.setattr(b, "TAMANHO_PAGINA", 1)
+    chamadas, c = _portal_que_cai_na_pagina_3(total=4, totais_depois=5)
+    async with c:
+        coleta = await b.coletar(["notebook"], HOJE, c)
+    assert chamadas == [1, 2] + [3] * b.TENTATIVAS + [3, 1, 2, 3, 4, 5]
+    assert coleta.contagens["resultados_por_termo"] == {"notebook": 5}
+    assert len(coleta.atas) == 5
+
+
+def test_texto_utf8_lido_como_cp1252_na_origem_e_reparado():
+    assert b._texto("SECRETARIA DE SAÃšDE â€“ Saudável") == "SECRETARIA DE SAÚDE – Saudável"

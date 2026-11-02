@@ -1,11 +1,16 @@
 """Fila de notificações no Postgres descartável: só alertas de incidente (ADR 0027)."""
 
+from dataclasses import replace
 from datetime import datetime
 
 import httpx
+import pytest
 import siga_dados as d
 
+from pncp_ti import operacao
+from pncp_ti.config import get_settings
 from pncp_ti.fontes.siga import arquivos_de_diretorio, carregar
+from pncp_ti.fontes.siga_csv import ErroValidacao
 from pncp_ti.operacao import SP, enfileirar, entregar
 
 
@@ -72,3 +77,17 @@ async def test_atas_novas_nao_geram_digest_e_pendente_antigo_nao_sai(
     assert alerta["enviado_em"] is not None and alerta["tentativas"] == 1
     legado = (await fila(conn_ingest))[0]
     assert legado["enviado_em"] is None and legado["tentativas"] == 0
+
+
+async def test_falha_da_carga_le_fonte_e_motivo_da_ultima_carga_de_hoje(
+    conn_ingest, tmp_path, monkeypatch, nome_banco_teste
+):
+    await carga(conn_ingest, tmp_path, d.conjunto_basico())
+    atas, itens, part = d.conjunto_basico()
+    with pytest.raises(ErroValidacao):
+        await carga(conn_ingest, tmp_path, (b"ID;quebrado\r\n", itens, part))
+    settings = replace(get_settings(), postgres_db=nome_banco_teste)
+    monkeypatch.setattr(operacao, "get_settings", lambda: settings)
+    falhas = await operacao.falhas_de_hoje(datetime.now(SP))
+    assert [(f["fonte"], f["erro_tipo"]) for f in falhas] == [("siga_rj", "cabecalho")]
+    assert operacao.frase_carga(falhas).startswith("o SIGA RJ não atualizou hoje (arquivo fora")

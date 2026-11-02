@@ -33,6 +33,7 @@ import httpx
 import psycopg
 import structlog
 
+from pncp_ti.codificacao import reparar
 from pncp_ti.config import get_settings
 from pncp_ti.db import conectar
 from pncp_ti.fontes.siga import _copiar, _registrar_falha, tentar_trava_sessao
@@ -140,7 +141,8 @@ def casa_termo(objeto: str, termo: str) -> bool:
 def _texto(valor: Any) -> str:
     if valor is None:
         return ""
-    return " ".join(str(sanitizar(str(valor))).split())[:LIMITE_TEXTO]
+    # Texto UTF-8 lido como cp1252 na origem ("SaudÃ¡vel") volta ao original (ADR 0031).
+    return " ".join(str(sanitizar(reparar(str(valor))[0])).split())[:LIMITE_TEXTO]
 
 
 def _data(valor: Any) -> date | None:
@@ -240,13 +242,28 @@ class _TermoFalhou(Exception):
     pass
 
 
+@dataclass(slots=True)
+class _Progresso:
+    """Páginas já lidas de um termo: a passada extra continua daqui, não da página 1."""
+
+    itens: list[dict[str, Any]] = field(default_factory=list)
+    total: int | None = None
+    pagina: int = 1
+
+
 async def buscar_termo(
-    client: httpx.AsyncClient, limitador: LimitadorTaxa, termo: str
+    client: httpx.AsyncClient,
+    limitador: LimitadorTaxa,
+    termo: str,
+    progresso: _Progresso | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Todas as páginas de um termo; devolve (itens, total declarado)."""
-    itens: list[dict[str, Any]] = []
-    total = 0
-    pagina = 1
+    """Todas as páginas de um termo; devolve (itens, total declarado).
+
+    Com `progresso`, uma queda no meio guarda as páginas lidas e a chamada seguinte retoma
+    da página que falhou.
+    """
+    p = progresso if progresso is not None else _Progresso()
+    retomada = p.pagina > 1
     while True:
         corpo = await _pegar(
             client,
@@ -256,20 +273,27 @@ async def buscar_termo(
                 "tipos_documento": "ata",
                 "status": "vigente",
                 "tam_pagina": TAMANHO_PAGINA,
-                "pagina": pagina,
+                "pagina": p.pagina,
             },
         )
         da_pagina, total_pagina = validar_pagina(corpo)
-        if pagina == 1:
-            total = total_pagina  # o total da 1ª página é a referência; as seguintes não o mudam
-        itens.extend(da_pagina)
-        esperado = min(total, LIMITE_JANELA)
-        if len(itens) >= esperado:
-            return itens, total
+        if retomada:
+            retomada = False
+            if total_pagina != p.total:
+                # O índice mudou entre as passadas: as páginas guardadas podem ter se deslocado.
+                p.itens.clear()
+                p.total, p.pagina = None, 1
+                continue
+        if p.total is None:
+            p.total = total_pagina  # o total da 1ª página é a referência; as seguintes não o mudam
+        p.itens.extend(da_pagina)
+        esperado = min(p.total, LIMITE_JANELA)
+        if len(p.itens) >= esperado:
+            return p.itens, p.total
         if not da_pagina:
             # Resposta vazia antes do total declarado: o portal falhou; não é fim de lista.
-            raise _TermoFalhou(f"página vazia com {len(itens)} de {esperado} itens")
-        pagina += 1
+            raise _TermoFalhou(f"página vazia com {len(p.itens)} de {esperado} itens")
+        p.pagina += 1
 
 
 async def _coletar_termo(
@@ -281,12 +305,19 @@ async def _coletar_termo(
     contagens: dict[str, Any],
     sem_resultado: list[str],
     totais: dict[str, int],
+    progresso: _Progresso,
 ) -> bool:
     """Busca um termo e acumula as atas que o casam; `False` se o portal não respondeu."""
     try:
-        itens, total = await buscar_termo(client, limitador, termo)
+        itens, total = await buscar_termo(client, limitador, termo, progresso)
     except _TermoFalhou as exc:
-        log.warning("pncp_busca_termo_falhou_tentativa", termo=termo, motivo=str(exc))
+        log.warning(
+            "pncp_busca_termo_falhou_tentativa",
+            termo=termo,
+            motivo=str(exc),
+            pagina=progresso.pagina,
+            itens=len(progresso.itens),
+        )
         return False
     totais[termo] = total
     contagens["itens_lidos"] += len(itens)
@@ -343,12 +374,24 @@ async def coletar(
     }
     sem_resultado: list[str] = []
     totais: dict[str, int] = {}
+    progresso: dict[str, _Progresso] = {}  # só dos termos que falharam: a passada extra retoma
     try:
         falhos: list[str] = []
         for termo in termos:
-            if not await _coletar_termo(
-                client, limitador, termo, hoje, atas, contagens, sem_resultado, totais
+            progresso[termo] = _Progresso()
+            if await _coletar_termo(
+                client,
+                limitador,
+                termo,
+                hoje,
+                atas,
+                contagens,
+                sem_resultado,
+                totais,
+                progresso[termo],
             ):
+                del progresso[termo]
+            else:
                 falhos.append(termo)
         # Segunda chance: o portal falha de forma intermitente e costuma voltar minutos depois.
         for _ in range(PASSADAS_EXTRA):
@@ -358,8 +401,17 @@ async def coletar(
             ainda: list[str] = []
             for termo in falhos:
                 if await _coletar_termo(
-                    client, limitador, termo, hoje, atas, contagens, sem_resultado, totais
+                    client,
+                    limitador,
+                    termo,
+                    hoje,
+                    atas,
+                    contagens,
+                    sem_resultado,
+                    totais,
+                    progresso[termo],
                 ):
+                    del progresso[termo]
                     contagens["termos_recuperados"] += 1
                 else:
                     ainda.append(termo)

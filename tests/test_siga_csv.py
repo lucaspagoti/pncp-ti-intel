@@ -126,25 +126,85 @@ def test_linha_truncada_falha_com_numero_de_colunas():
 
 
 def test_cp1252_decodifica_travessao_e_aspas_tipograficas():
-    assert decodificar("ITEM – 3”".encode("cp1252"), "x") == "ITEM – 3”"
+    r = decodificar("ITEM – 3”".encode("cp1252"), "x")
+    assert (r.texto, r.codificacao, r.reparos) == ("ITEM – 3”", "cp1252", 0)
 
 
-def test_utf8_e_rejeitado():
-    with pytest.raises(ErroValidacao) as exc:
-        decodificar("AÇÃO ÚNICA".encode(), "x")
-    assert exc.value.tipo == "codificacao"
-    with pytest.raises(ErroValidacao):
-        decodificar(b"\xef\xbb\xbfID Ata", "x")
+def test_arquivo_inteiro_em_utf8_e_aceito():
+    r = decodificar("AÇÃO ÚNICA – SAÚDE".encode(), "x")
+    assert (r.texto, r.codificacao, r.reparos) == ("AÇÃO ÚNICA – SAÚDE", "utf-8", 0)
+
+
+def test_utf8_com_bom_e_aceito():
+    r = decodificar(b"\xef\xbb\xbf" + "ID Ata;Número".encode(), "x")
+    assert (r.texto, r.codificacao) == ("ID Ata;Número", "utf-8-sig")
 
 
 def test_texto_legitimo_com_a_til_nao_e_mojibake():
-    assert decodificar("AQUISIÇÃO DE AÇÃO – NÃO".encode("cp1252"), "x").startswith("AQUISIÇÃO")
+    for texto in ("AQUISIÇÃO DE AÇÃO – NÃO", "SÃO ÂNGULO Nº 5", "MAÇÔ E “LÔ – 2"):
+        r = decodificar(texto.encode("cp1252"), "x")
+        assert (r.texto, r.reparos) == (texto, 0)
+
+
+def test_valor_em_utf8_dentro_do_cp1252_e_reparado():
+    # Caso real de 29/10/2026: nome de unidade gravado em UTF-8 num arquivo cp1252.
+    conteudo = "AQUISIÇÃO;".encode("cp1252") + "Saudável".encode() + b"\r\n"
+    r = decodificar(conteudo, "x")
+    assert (r.texto, r.codificacao, r.reparos) == ("AQUISIÇÃO;Saudável\r\n", "cp1252", 1)
+
+
+def test_maiuscula_com_byte_indefinido_em_cp1252_e_reparada():
+    # "Á" em UTF-8 é C3 81; 0x81 não existe em cp1252 e antes derrubava a carga.
+    conteudo = "AÇÃO ".encode("cp1252") + "ÁGUA ÍNDIO CONEXÕES".encode()
+    assert decodificar(conteudo, "x").texto == "AÇÃO ÁGUA ÍNDIO CONEXÕES"
+
+
+def test_pontuacao_em_utf8_e_texto_duplamente_codificado_sao_reparados():
+    conteudo = (
+        "Preço ".encode("cp1252") + "– “x” ".encode() + "é".encode().decode("cp1252").encode()
+    )
+    assert decodificar(conteudo, "x").texto == "Preço – “x” é"
 
 
 def test_byte_indefinido_em_cp1252_falha():
     with pytest.raises(ErroValidacao) as exc:
         decodificar(b"abc\x81def", "x")
     assert exc.value.tipo == "codificacao"
+
+
+def test_texto_quebrado_nao_reparavel_acima_do_limite_falha(monkeypatch):
+    monkeypatch.setattr(siga_csv, "reparar", lambda texto: (texto, 0))
+    with pytest.raises(ErroValidacao) as exc:
+        decodificar("Preço SaudÃ¡vel\r\nlinha 2\r\n".encode("cp1252"), "x")
+    assert exc.value.tipo == "codificacao"
+
+
+def _com_unidade(unidade: bytes) -> tuple[bytes, bytes, bytes]:
+    atas, itens, part = d.conjunto_basico()
+    return atas, itens, part.replace(b"SEPLAG - SUBSECRETARIA", unidade)
+
+
+def test_carga_repara_unidade_e_chave_e_a_mesma_quando_a_origem_corrigir():
+    nome = "SEIJES - Envelhecimento Saudável"
+    quebrado = _montar(_com_unidade(nome.encode()))
+    corrigido = _montar(_com_unidade(nome.encode("cp1252")))
+    linhas = d.conjunto_basico()[2].count(b"SEPLAG - SUBSECRETARIA")
+    assert quebrado.contagens["reparos_codificacao"] == linhas
+    assert corrigido.contagens["reparos_codificacao"] == 0
+    assert quebrado.contagens["trechos_nao_reparados"] == 0
+    assert nome in {p.unidade for p in quebrado.participantes}
+    assert sorted(p.chave for p in quebrado.participantes) == sorted(
+        p.chave for p in corrigido.participantes
+    )
+
+
+def test_conjunto_inteiro_em_utf8_carrega_igual_ao_cp1252():
+    cp1252 = d.conjunto_basico()
+    utf8 = tuple(b.decode("cp1252").encode() for b in cp1252)
+    a, b = _montar(cp1252), _montar(utf8)
+    assert b.contagens["arquivos_utf8"] == 3
+    assert [x.objeto for x in a.atas] == [x.objeto for x in b.atas]
+    assert sorted(i.chave for i in a.itens) == sorted(i.chave for i in b.itens)
 
 
 def test_orfaos_acima_do_limite_falham():
