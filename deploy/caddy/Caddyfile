@@ -10,6 +10,17 @@
 	admin off
 	# Sem o redirecionador HTTP->HTTPS na :80 de todas as interfaces.
 	auto_https disable_redirects
+	# Erros (502 com a web fora, por exemplo) registram a requisição original: o token do Access
+	# também sai deste logger, que não passa pelo filtro do log de acesso.
+	log default {
+		output stderr
+		format filter {
+			wrap console
+			fields {
+				request>headers>Cf-Access-Jwt-Assertion delete
+			}
+		}
+	}
 }
 
 # O log guarda o Cf-Connecting-IP (IP real atrás do tunnel), mas não o token do Access.

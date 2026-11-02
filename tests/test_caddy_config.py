@@ -84,6 +84,9 @@ def test_token_do_access_nao_vai_para_a_web_nem_para_o_log():
     protegido = _expandido(SNIPPETS["protegido"])
     assert "header_up -Cf-Access-Jwt-Assertion" in protegido
     assert "request>headers>Cf-Access-Jwt-Assertion delete" in SNIPPETS["registro"]
+    # O 502 (web fora) registra a requisição original no logger padrão, não no de acesso.
+    padrao = GLOBAL[GLOBAL.index("log default {") :]
+    assert "request>headers>Cf-Access-Jwt-Assertion delete" in padrao
     for corpo in SITES.values():
         assert "import registro" in corpo or "import protegido" in corpo
 
