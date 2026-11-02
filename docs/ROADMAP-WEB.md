@@ -20,7 +20,8 @@ Sem mudar a web.
 - **Aceite:** o Codex roda a esteira no snapshot da W0 e aprova.
 
 Conhecido para a W2: o botão "Buscar" da web atual não tem nome acessível (o `<label>` em volta
-só tem `&nbsp;`); o E2E o localiza por CSS até lá.
+só tem `&nbsp;`); o E2E o localiza por CSS até lá. Resolvido na W2: o E2E o acha pelo papel e
+pelo nome.
 
 ## W1 · Backend da web (sprint 2)
 
@@ -56,6 +57,17 @@ Entrega o MVP: as duas telas do protótipo com dados reais, nada além delas (AD
 - E2E: desktop 1366 e celular 390, HTMX, impressão, contraste e captura de referência visual.
 - **Aceite da R4:** o Lucas pesquisa "outsourcing de impressão", "notebook" e
   "licença Microsoft" com os dados reais.
+
+Como ficou a entrega:
+
+- o HTMX troca a casca inteira (lateral e folha), para facetas, pílulas e contador acompanharem
+  os resultados; a restauração do histórico (`HX-History-Restore-Request`) recebe a página
+  inteira;
+- 20 atas por página e os rótulos de fonte e de ordenação do protótipo;
+- a seção "Participantes: demandado × consumido" saiu do detalhe porque não está no protótipo
+  (ADR 0033); a view `v_ata_consumo_item` continua no banco;
+- as capturas de referência ficam em `qa-out/e2e/referencia/` (artefato do CI), sem
+  comparação de pixel.
 
 ## Rito de cada sprint
 

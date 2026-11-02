@@ -3,16 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}'>
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"historyCacheSize":0}'>
 <title>{% block titulo %}Atas de TI vigentes{% endblock %}</title>
-<link rel="stylesheet" href="/static/estilo.css">
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/tokens-projeto.css">
+<link rel="stylesheet" href="/static/app.css">
 <script src="/static/htmx.min.js" defer></script>
 </head>
 <body>
-<header><div class="in"><a href="/">Atas de TI vigentes</a><span class="meta">pesquisa de preços e adesão</span></div></header>
-<main>
-{% block conteudo %}{% endblock %}
-<p class="aviso">Dados públicos de SIGA RJ, Compras.gov.br e portal PNCP. Confira sempre na origem antes de qualquer uso formal; nada aqui substitui a análise humana.</p>
-</main>
+{% block corpo %}{% endblock %}
 </body>
 </html>

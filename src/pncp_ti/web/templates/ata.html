@@ -1,37 +1,59 @@
 {% extends "base.html" %}
-{% block titulo %}Ata {{ a.numero }}{% endblock %}
-{% block conteudo %}
-<p><a href="/" class="btn sec">‹ Busca</a></p>
-<h1>{{ a.objeto }}</h1>
-<div class="card"><dl>
-  <dt>Fonte</dt><dd>{{ FONTES.get(a.fonte, a.fonte) }}</dd>
-  <dt>Órgão</dt><dd>{{ a.orgao or '—' }}{% if a.unidade_gerenciadora %} · {{ a.unidade_gerenciadora }}{% endif %}</dd>
-  <dt>Ata</dt><dd>{{ a.numero }}</dd>
-  <dt>Vigência</dt><dd>{{ a.inicio | data }} a {{ a.fim | data }}</dd>
-  {% if a.esfera or a.uf %}<dt>Local</dt><dd>{{ a.esfera or '' }} {{ a.uf or '' }} {{ a.municipio or '' }}</dd>{% endif %}
-  {% if a.licitacao %}<dt>Licitação</dt><dd>{{ a.licitacao }}</dd>{% endif %}
-  {% if a.processos %}<dt>Processo(s)</dt><dd>{{ a.processos | join(', ') }}</dd>{% endif %}
-  {% if a.valor_total is not none %}<dt>Valor total</dt><dd>{{ a.valor_total | brl }}</dd>{% endif %}
-  <dt>Critério de TI</dt><dd>{{ a.motivo_ti or '—' }}</dd>
-  <dt>Primeira vez vista</dt><dd>{{ a.primeira_vez_vista | data }}</dd>
-  {% if a.link_origem | url_segura %}<dt>Origem</dt><dd><a href="{{ a.link_origem | url_segura }}" rel="noopener noreferrer" target="_blank">Abrir no portal</a></dd>{% else %}<dt>Origem</dt><dd>sem link público por ata (SIGA RJ: consultar o processo SEI)</dd>{% endif %}
-</dl></div>
-<h2>Itens</h2>
-{% if itens %}
-<div class="tab"><table>
-<tr><th>Item</th><th>Descrição</th><th>Fornecedor</th><th class="n">Qtd.</th><th class="n">Preço unitário</th></tr>
-{% for i in itens %}<tr>
-  <td>{{ i.id_item }}</td><td>{{ i.descricao }}{% if i.nome_catalogo %}<br><span class="meta">{{ i.nome_catalogo }}</span>{% endif %}</td>
-  <td>{{ i.fornecedor or '—' }}</td><td class="n">{{ i.quantidade | numero }}</td><td class="n">{{ i.valor_unitario | brl }}</td>
-</tr>{% endfor %}
-</table></div>
-{% else %}<p>Esta fonte não traz itens para esta ata.</p>{% endif %}
-{% if consumo %}
-<h2>Participantes: demandado × consumido</h2>
-<div class="tab"><table>
-<tr><th>Item</th><th>Unidade</th><th class="n">Demandado</th><th class="n">Consumido</th></tr>
-{% for c in consumo %}<tr><td>{{ c.item }}</td><td>{{ c.unidade_participante }}</td><td class="n">{{ c.qtd_demandada | numero }}</td><td class="n">{{ c.qtd_consumida | numero }}</td></tr>{% endfor %}
-</table></div>
-<p class="meta">Não é saldo disponível: há linhas com consumo maior que a demanda na origem.</p>
-{% endif %}
+{% from "_comum.html" import icone, marca, rodape, vigencia %}
+{% block titulo %}Ata {{ a.numero or '' }} · Atas de TI{% endblock %}
+{% block corpo %}
+{% set link = a.link_origem | url_segura %}
+<div class="casca">
+  <aside class="lateral">
+    {{ marca() }}
+    <a class="voltar" href="/">{{ icone('voltar') }} Voltar à busca</a>
+    <nav class="nesta-ata" aria-label="Nesta ata">
+      <span class="titulo-filtros">Nesta ata</span>
+      <a href="#dados" aria-current="true">Dados da ata</a>
+      <a href="#itens">Itens e preços</a>
+    </nav>
+    {{ rodape(cargas) }}
+  </aside>
+
+  <main class="folha">
+    <header class="cab-folha" id="dados">
+      <div class="linha-titulo">
+        <div><span class="chip">{{ FONTES.get(a.fonte, a.fonte) }}</span></div>
+        <div class="acoes-registro linha-titulo">
+          {%- if itens %}<a class="botao-sec" href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}/itens.csv">{{ icone('baixar') }} Exportar itens</a>{% endif -%}
+          {%- if link %}<a class="botao" href="{{ link }}" rel="noopener noreferrer" target="_blank">Conferir no portal {{ icone('externo') }}</a>{% endif -%}
+        </div>
+      </div>
+      <h1>{{ a.objeto }}</h1>
+      {% set ident = [('Ata ' ~ a.numero) if a.numero, ('nº de controle ' ~ a.numero_controle_pncp) if a.numero_controle_pncp] | select | join(' · ') %}
+      {% if ident %}<p class="ident">{{ ident }}</p>{% endif %}
+    </header>
+    {% set local = [a.esfera, a.uf, a.municipio] | select | join(' · ') %}
+    <dl class="campos">
+      <div><dt>Órgão gerenciador</dt><dd>{{ a.orgao or a.unidade_gerenciadora or '—' }}</dd></div>
+      <div><dt>Local</dt><dd>{{ local or '—' }}</dd></div>
+      <div><dt>Vigência</dt><dd>{% if a.inicio %}{{ a.inicio | data }} a {% else %}até {% endif %}{{ a.fim | data }} {{ vigencia(a.fim, com_data=false) }}</dd></div>
+      {% if a.valor_total is not none %}<div><dt>Valor total registrado</dt><dd>{{ a.valor_total | brl }}</dd></div>{% endif %}
+      <div><dt>Critério de TI</dt><dd>{{ a.motivo_ti or '—' }}</dd></div>
+      <div><dt>Primeira vez vista</dt><dd>{{ a.primeira_vez_vista | data }}</dd></div>
+    </dl>
+    <div class="secao" id="itens"><h2>Itens e preços <span class="contador">{{ itens | length | numero }}</span></h2></div>
+    {% if itens %}
+    <div class="tabela itens">
+      <table>
+        <thead><tr><th>Item</th><th>Descrição e fornecedor</th><th class="n">Qtd. registrada</th><th class="n">Limite p/ adesão</th><th class="n">Preço unitário</th></tr></thead>
+        <tbody>
+        {% for i in itens %}
+          {% set sub = [[i.codigo_catalogo, i.nome_catalogo] | select | join(' '), i.fornecedor] | select | join(' · ') %}
+          <tr><td class="oculto-cel">{{ i.id_item }}</td><td>{{ i.descricao }}{% if sub %}<span class="sub">{{ sub }}</span>{% endif %}</td><td class="n" data-rotulo="Qtd. registrada">{{ i.quantidade | numero }}</td><td class="n" data-rotulo="Limite p/ adesão">{{ i.maximo_adesao | numero }}</td><td class="n unit" data-rotulo="Preço unitário">{{ i.valor_unitario | brl }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Limite para adesão como registrado na fonte. Confira o edital e a ata antes de pedir adesão.</p>
+    {% else %}
+    <p class="nota">Esta fonte não traz itens para esta ata. Confira na origem.</p>
+    {% endif %}
+  </main>
+</div>
 {% endblock %}

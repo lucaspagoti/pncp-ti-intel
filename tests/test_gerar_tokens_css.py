@@ -47,3 +47,20 @@ def test_verificar_acusa_css_divergente(tmp_path):
     assert gerar.main(["--origem", str(origem), "--destino", str(destino), "--verificar"]) == 0
     destino.write_text(destino.read_text() + "/* à mão */", encoding="utf-8")
     assert gerar.main(["--origem", str(origem), "--destino", str(destino), "--verificar"]) == 1
+
+
+def test_gera_e_verifica_varios_destinos(tmp_path):
+    origem = tmp_path / "tokens.json"
+    origem.write_text(json.dumps(TOKENS), encoding="utf-8")
+    a, b = tmp_path / "a" / "tokens.css", tmp_path / "b" / "tokens.css"
+    args = ["--origem", str(origem), "--destino", str(a), "--destino", str(b)]
+    assert gerar.main(args) == 0
+    assert a.read_text() == b.read_text() == gerar.gerar(TOKENS)
+    b.write_text("", encoding="utf-8")
+    assert gerar.main([*args, "--verificar"]) == 1
+
+
+def test_prototipo_e_web_tem_o_mesmo_tokens_css():
+    """Os dois destinos versionados saem do mesmo gerador (o DS fica fora do Git)."""
+    prototipo, web = gerar.DESTINOS
+    assert prototipo.read_text(encoding="utf-8") == web.read_text(encoding="utf-8")

@@ -1,33 +1,6 @@
 {% extends "base.html" %}
-{% block conteudo %}
-<h1>Atas de registro de preços de TI vigentes</h1>
-<form class="busca" method="get" action="/" hx-get="/" hx-target="#resultados" hx-push-url="true" hx-trigger="submit, change from:select">
-  <label class="q">Buscar objeto ou item
-    <input type="search" name="q" value="{{ f.q }}" maxlength="200" placeholder="notebook, outsourcing de impressão, licença Microsoft…" autofocus>
-  </label>
-  <label>Fonte
-    <select name="fonte"><option value="">Todas</option>
-    {% for k, v in FONTES.items() %}<option value="{{ k }}" {{ 'selected' if f.fonte == k }}>{{ v }}</option>{% endfor %}</select>
-  </label>
-  <label>Esfera
-    <select name="esfera"><option value="">Todas</option>
-    {% for e in ESFERAS %}<option value="{{ e }}" {{ 'selected' if f.esfera == e }}>{{ e }}</option>{% endfor %}</select>
-  </label>
-  <label>UF
-    <select name="uf"><option value="">Todas</option>
-    {% for u in opcoes.ufs %}<option value="{{ u }}" {{ 'selected' if f.uf == u }}>{{ u }}</option>{% endfor %}</select>
-  </label>
-  <label>Órgão contém<input name="orgao" value="{{ f.orgao }}" maxlength="200"></label>
-  <label>Vigente até pelo menos<input type="date" name="vigente_ate" value="{{ f.vigente_ate or '' }}"></label>
-  <label>Preço unitário mín. (R$)<input name="preco_min" inputmode="decimal" value="{{ f.preco_min | preco_br }}"></label>
-  <label>Preço unitário máx. (R$)<input name="preco_max" inputmode="decimal" value="{{ f.preco_max | preco_br }}"></label>
-  <label>Ordenar por
-    <select name="ordem">
-      {% for o, nome in (('relevancia','Relevância'),('vencimento','Vencimento'),('novas','Mais novas'),('preco','Menor preço')) %}
-      <option value="{{ o }}" {{ 'selected' if f.ordem == o }}>{{ nome }}</option>{% endfor %}
-    </select>
-  </label>
-  <label>&nbsp;<button type="submit">Buscar</button></label>
+{% block corpo %}
+<form id="filtros" method="get" action="/" hx-get="/" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">
+<div class="casca" id="casca">{% include "_resultados.html" %}</div>
 </form>
-<div id="resultados">{% include "_resultados.html" %}</div>
 {% endblock %}

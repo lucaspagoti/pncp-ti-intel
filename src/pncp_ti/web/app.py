@@ -104,7 +104,12 @@ def criar_app(dsn: str | None = None) -> FastAPI:
         preco_br=consultas.como_texto,
         dias_restantes=consultas.dias_restantes,
     )
-    templates.env.globals.update(FONTES=consultas.FONTES, ESFERAS=consultas.ESFERAS)
+    templates.env.globals.update(
+        FONTES=consultas.FONTES,
+        ESFERAS=consultas.ESFERAS,
+        ORDENS=consultas.ROTULOS_ORDEM,
+        TAMANHO_PAGINA=consultas.TAMANHO_PAGINA,
+    )
 
     @app.middleware("http")
     async def seguranca(request: Request, call_next):
@@ -138,10 +143,12 @@ def criar_app(dsn: str | None = None) -> FastAPI:
             "facetas": await consultas.facetas(conn, filtros),
             "ativos": consultas.filtros_ativos(filtros),
             "cargas": await consultas.cargas(conn),
-            "ordens": list(consultas.ORDENS),
         }
-        # HTMX pede só o bloco de resultados.
-        modelo = "_resultados.html" if request.headers.get("HX-Request") else "index.html"
+        # HTMX pede só o conteúdo da casca; a restauração do histórico pede a página inteira.
+        parcial = request.headers.get("HX-Request") and not request.headers.get(
+            "HX-History-Restore-Request"
+        )
+        modelo = "_resultados.html" if parcial else "index.html"
         return templates.TemplateResponse(request, modelo, contexto)
 
     @app.get("/ata/{fonte}/{id_ata:path}/itens.csv")
@@ -167,7 +174,6 @@ def criar_app(dsn: str | None = None) -> FastAPI:
         contexto = {
             "a": registro,
             "itens": await consultas.itens(conn, fonte, id_ata),
-            "consumo": await consultas.consumo(conn, fonte, id_ata),
             "cargas": await consultas.cargas(conn),
         }
         return templates.TemplateResponse(request, "ata.html", contexto)

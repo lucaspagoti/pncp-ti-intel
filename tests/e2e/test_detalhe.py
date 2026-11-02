@@ -1,4 +1,4 @@
-"""Detalhe da ata: itens, preço formatado, participantes e link de origem."""
+"""Detalhe da ata: campos, itens, preço formatado, exportação e link de origem."""
 
 from __future__ import annotations
 
@@ -14,15 +14,26 @@ def test_detalhe_pela_busca(page: Page, base_url):
     )
     expect(page.get_by_role("cell", name="Impressão A4 monocromática")).to_be_visible()
     expect(page.get_by_role("cell", name="R$ 0,12")).to_be_visible()
-    origem = page.get_by_role("link", name="Abrir no portal")
+    expect(page.locator(".campos")).to_contain_text("MINISTERIO")
+    origem = page.get_by_role("link", name="Conferir no portal")
     expect(origem).to_have_attribute("href", "https://pncp.gov.br/app/atas/1")
     expect(origem).to_have_attribute("rel", "noopener noreferrer")
+    page.get_by_role("link", name="Voltar à busca").click()
+    expect(page).to_have_url(f"{base_url}/")
 
 
-def test_detalhe_siga_mostra_participantes(page: Page, base_url):
+def test_exportar_itens(page: Page, base_url):
     page.goto(f"{base_url}/ata/siga_rj/S1")
-    expect(page.get_by_role("heading", name="Participantes: demandado × consumido")).to_be_visible()
-    expect(page.get_by_role("cell", name="SEFAZ")).to_be_visible()
+    with page.expect_download() as download:
+        page.get_by_role("link", name="Exportar itens").click()
+    assert download.value.suggested_filename == "itens_ata.csv"
+
+
+def test_ata_sem_itens(page: Page, base_url):
+    page.goto(f"{base_url}/ata/compras_arp/A2")
+    expect(page.get_by_text("Esta fonte não traz itens para esta ata.")).to_be_visible()
+    expect(page.get_by_role("link", name="Exportar itens")).to_have_count(0)
+    expect(page.locator(".campos .chip.crit")).to_have_text("vence em 5 dias")
 
 
 def test_ata_inexistente_da_404(page: Page, base_url):

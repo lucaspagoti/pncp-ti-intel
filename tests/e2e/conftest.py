@@ -21,7 +21,9 @@ import web_dados
 from pncp_ti.config import get_settings, ingest_dsn, web_dsn
 from pncp_ti.web.app import criar_app
 
-ATAS_PAGINACAO = 30  # mais que TAMANHO_PAGINA (25)
+ATAS_PAGINACAO = 30  # mais que TAMANHO_PAGINA (20)
+DESKTOP = {"width": 1366, "height": 768}
+CELULAR = {"width": 390, "height": 844}
 
 
 def pytest_collection_modifyitems(config, items):
@@ -79,6 +81,12 @@ def base_url(nome_banco_teste):
     yield f"http://127.0.0.1:{porta}"
     servidor.should_exit = True
     thread.join(timeout=10)
+
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    """Desktop de referência da W2 (1366); os testes de celular trocam para 390."""
+    return {**browser_context_args, "viewport": DESKTOP}
 
 
 @pytest.fixture

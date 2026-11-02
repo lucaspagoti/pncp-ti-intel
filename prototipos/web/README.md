@@ -7,7 +7,8 @@ Duas telas estáticas, com dados de exemplo e sem backend: `index.html` (busca) 
 
 - Abra `index.html` no navegador. Não há JS nem estilo inline, o que é compatível com a CSP da web
   real (`style-src 'self'`).
-- `tokens.css` é gerado; não edite. Os valores vêm do design system de referência, que fica fora do
+- `tokens.css` é gerado; não edite. O mesmo gerador escreve `src/pncp_ti/web/static/tokens.css`,
+  e o `--verificar` confere os dois. Os valores vêm do design system de referência, que fica fora do
   Git em `insumos/design-system/`:
 
   ```

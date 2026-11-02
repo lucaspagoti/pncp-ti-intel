@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 import psycopg
 from psycopg.rows import dict_row
 
-TAMANHO_PAGINA = 25
+TAMANHO_PAGINA = 20
 LIMITE_EXPORTACAO = 5000
 LIMITE_TEXTO = 200
 ORDENS = {
@@ -25,7 +25,13 @@ ORDENS = {
     "novas": "primeira_vez_vista DESC NULLS LAST, id_ata",
     "preco": "preco_min ASC NULLS LAST, id_ata",
 }
-FONTES = {"siga_rj": "SIGA RJ", "compras_arp": "Compras.gov.br", "pncp_busca": "Busca PNCP"}
+ROTULOS_ORDEM = {
+    "relevancia": "Relevância",
+    "vencimento": "Vence primeiro",
+    "novas": "Mais novas",
+    "preco": "Menor preço",
+}
+FONTES = {"siga_rj": "SIGA RJ", "compras_arp": "Compras ARP", "pncp_busca": "PNCP"}
 SEM_ESFERA = "Não informada"
 ESFERAS = ("Federal", "Estadual", "Municipal", "Distrital", "Não se aplica", SEM_ESFERA)
 DIAS_CRIT = 30
@@ -297,16 +303,5 @@ async def itens(
             "valor_unitario, valor_valido, quantidade_empenhada, maximo_adesao FROM v_ata_itens_ti "
             "WHERE fonte = %s AND id_ata = %s ORDER BY id_item LIMIT %s",
             (fonte, id_ata, limite),
-        )
-        return await cur.fetchall()
-
-
-async def consumo(conn: psycopg.AsyncConnection, fonte: str, id_ata: str) -> list[dict[str, Any]]:
-    async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(
-            "SELECT id_item, item, unidade_participante, qtd_demandada, qtd_consumida "
-            "FROM v_ata_consumo_item WHERE fonte = %s AND id_ata = %s "
-            "ORDER BY id_item, unidade_participante LIMIT 2000",
-            (fonte, id_ata),
         )
         return await cur.fetchall()
