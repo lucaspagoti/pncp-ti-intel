@@ -183,16 +183,17 @@ ADR 0029); o aceite da R4 é o da W2.
 ## R5 · Exposição no domínio
 
 **Entregas**
-- Decisão D7. Caddy com TLS (Let's Encrypt) e autenticação na frente da web; Postgres continua em
-  loopback.
+- Decisão D7. Cloudflare Tunnel + Access e Caddy com autenticação na frente da web; Postgres
+  continua em loopback.
 - Checklist OWASP Top 10 (web).
 
 **Critério de aceite**
 - Acesso externo funciona só com credencial e recusa sem ela.
 
-**Status (16/10/2026):** configuração pronta e demonstrada **só em loopback** (401 sem credencial ou
-com senha errada, 200 com credencial). Não foi exposta: a escolha entre Cloudflare Tunnel + Access
-e Caddy com Let's Encrypt é do Lucas (ADR 0024, proposta; checklist em `docs/owasp-web.md`).
+**Status (02/11/2026):** o Lucas escolheu a opção A da ADR 0024: `atas.myhomelablp.site` pelo
+Cloudflare Tunnel, com o Access (só o e-mail dele) e o `basic_auth` do Caddy na frente. O Caddy
+recebe o tunnel em `127.0.0.1:8444`. Passo a passo em `deploy/caddy/README.md`, checklist em
+`docs/owasp-web.md`. O aceite é a demonstração de fora, sem e com credencial.
 
 ## R6 · Operação
 
