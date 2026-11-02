@@ -33,6 +33,7 @@ import httpx
 import psycopg
 import structlog
 
+from pncp_ti.busca import atualizar_busca
 from pncp_ti.codificacao import reparar
 from pncp_ti.config import get_settings
 from pncp_ti.db import conectar
@@ -694,7 +695,7 @@ async def principal(validar_apenas: bool, termos_arquivo: Path = ARQUIVO_TERMOS)
             segundos=round(time.monotonic() - inicio),
             **resultado.contagens,
         )
-        return 0
+        return 0 if await atualizar_busca(conn) else 1
     except ErroValidacao as exc:
         log.error("pncp_busca_falha", tipo=exc.tipo, mensagem=str(exc))
         return codigo_saida(exc)

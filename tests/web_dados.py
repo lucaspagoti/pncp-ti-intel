@@ -33,6 +33,9 @@ def item(carga, ata_id, n, descricao, valor, fornecedor="ACME") -> Comando:
     )
 
 
+REFRESH: Comando = ("SELECT atualizar_busca()", ())  # a web lê a busca materializada (0010)
+
+
 def comandos(siga: UUID | None = None, arp: UUID | None = None) -> list[Comando]:
     """Cargas ativas do SIGA e do ARP com três atas, itens e um participante."""
     siga, arp = siga or uuid4(), arp or uuid4()

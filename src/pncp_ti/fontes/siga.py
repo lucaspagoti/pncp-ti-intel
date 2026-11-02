@@ -31,6 +31,7 @@ import httpx
 import psycopg
 import structlog
 
+from pncp_ti.busca import atualizar_busca
 from pncp_ti.classificar.in05 import classificar_ata, versao_regra
 from pncp_ti.config import get_settings
 from pncp_ti.db import conectar
@@ -514,7 +515,7 @@ async def principal(argumentos: argparse.Namespace) -> int:
             status=resultado.status,
             **resultado.contagens,
         )
-        return 0
+        return 0 if await atualizar_busca(conn) else 1
     except ErroValidacao as exc:
         log.error("siga_falha", tipo=exc.tipo, mensagem=str(exc))
         return 1

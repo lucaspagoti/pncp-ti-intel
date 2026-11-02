@@ -19,17 +19,17 @@ def test_filtro_de_fonte_troca_resultados_sem_recarregar(page: Page, base_url):
         page.get_by_label("Fonte").select_option("siga_rj")
     expect(page.locator(RESULTADOS)).to_have_text(["Aquisição de notebooks para a rede estadual"])
     expect(page).to_have_url(
-        f"{base_url}/?q=&fonte=siga_rj&esfera=&uf=&orgao=&vence_ate=&preco_min=&preco_max=&ordem=relevancia"
+        f"{base_url}/?q=&fonte=siga_rj&esfera=&uf=&orgao=&vigente_ate=&preco_min=&preco_max=&ordem=relevancia"
     )
     assert page.evaluate("window.__sem_recarga") is True
 
 
-def test_vence_ate(page: Page, base_url):
+def test_vigente_ate_pelo_menos(page: Page, base_url):
     page.goto(base_url)
-    page.get_by_label("Vence até").fill(str(date.today() + timedelta(days=10)))
+    page.get_by_label("Vigente até pelo menos").fill(str(date.today() + timedelta(days=100)))
     page.locator(BUSCAR).click()
     expect(page.locator(RESULTADOS)).to_have_count(1)
-    expect(page.locator(RESULTADOS)).to_contain_text(["licença Microsoft"])
+    expect(page.locator(RESULTADOS)).to_contain_text(["toner"])
 
 
 def test_faixa_de_preco(page: Page, base_url):

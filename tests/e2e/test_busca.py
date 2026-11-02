@@ -16,7 +16,7 @@ def test_busca_notebook_lista_a_ata(page: Page, base_url):
     page.locator(BUSCAR).click()
     expect(page.locator(RESULTADOS)).to_have_text(["Aquisição de notebooks para a rede estadual"])
     expect(page).to_have_url(
-        f"{base_url}/?q=notebook&fonte=&esfera=&uf=&orgao=&vence_ate=&preco_min=&preco_max=&ordem=relevancia"
+        f"{base_url}/?q=notebook&fonte=&esfera=&uf=&orgao=&vigente_ate=&preco_min=&preco_max=&ordem=relevancia"
     )
 
 

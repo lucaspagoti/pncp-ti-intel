@@ -3,6 +3,12 @@
 Arquitetura e limites: ADR 0022. Instalação dos timers: `docs/operacao-timer.md`.
 Os arquivos entregues não ativam systemd nem modificam o homelab automaticamente.
 
+## Busca da web (ADR 0035)
+
+Cada carga publicada atualiza a busca materializada da web (`busca_atualizada` no journal). Se
+o refresh falhar (`busca_refresh_falhou`), a web continua com a busca anterior. Para refazer:
+`make refresh-busca`, que leva uns 10 s e não bloqueia a web. Depois, rode `make smoke-web`.
+
 ## Preparar
 
 Configure `.env` privado (`chmod 600 .env`) com senhas dos papéis e chave HMAC existente.

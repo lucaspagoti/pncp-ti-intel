@@ -45,11 +45,16 @@ foi abandonado em 13/10/2026.
   Units entregues sem ativação; uma semana sem intervenção ainda precisa ser demonstrada.
 - **Backlog implementado:** view `v_ata_precos_ti` com unidades explícitas conservadoras,
   MCP próprio stdio (`make mcp`) com consultas fixas e papel `mcp_reader`, e
-  [manual/runbook](docs/manual-operacao.md). Migração nova: **0009**, após a 0008;
-  coordenar numeração com as branches paralelas R3/R4 do Claude antes de integrar.
+  [manual/runbook](docs/manual-operacao.md).
+- **W1 — Backend do MVP da web** (ADR 0034 e 0035, migração **0010**):
+  - busca materializada atualizada ao fim de cada carga (`make refresh-busca` refaz à mão);
+  - esfera e UF do ARP pelo cadastro de unidades do PNCP;
+  - facetas;
+  - CSV de itens;
+  - `scripts/smoke_web.sh` (`make smoke-web`).
 
 `make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
-(`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, ADR 0024). O banco local está na migração 0008.
+(`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, ADR 0024). O banco local está na migração 0010 depois do deploy da W1.
 
 ## Como rodar
 

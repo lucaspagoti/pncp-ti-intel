@@ -46,6 +46,7 @@ def _semear(dsn: str) -> None:
         conn.execute("DELETE FROM cargas")
         for comando, parametros in comandos:
             conn.execute(comando, parametros)
+        conn.execute("SELECT atualizar_busca()")
 
 
 def _porta_livre() -> int:

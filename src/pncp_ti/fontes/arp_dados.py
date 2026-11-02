@@ -46,6 +46,7 @@ class AtaArp:
     valor_total: Decimal | None
     quantidade_itens: int | None
     atualizado_em: str
+    codigo_unidade: str = ""  # codigoUnidadeGerenciadora: chave do cadastro de unidades (ADR 0034)
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +181,7 @@ def mapear_ata(bruto: Mapping[str, Any], hoje: date, id_origem: str | None = Non
         valor_total=_decimal(bruto.get("valorTotal")),
         quantidade_itens=_inteiro(bruto.get("quantidadeItens")),
         atualizado_em=_texto(bruto.get("dataHoraAtualizacao")),
+        codigo_unidade=_texto(bruto.get("codigoUnidadeGerenciadora")),
     )
 
 
