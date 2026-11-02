@@ -403,3 +403,13 @@ async def test_paginacao_de_20_em_20(cliente, conn_ingest):
     r = await cliente.get("/", params={"q": "cabo", "pagina": "2"})
     assert "Mostrando 21 a 25 de 25" in r.text
     assert '<span class="botao-sec" aria-disabled="true">Próxima</span>' in r.text
+
+
+async def test_descricao_longa_vira_resumo_com_especificacao(cliente, conn_ingest):
+    longa = "Notebook " + "especificação detalhada " * 20
+    await conn_ingest.execute("UPDATE ata_itens SET descricao = %s WHERE chave = 'S1-1'", (longa,))
+    await atualizar(conn_ingest)
+    r = await cliente.get("/ata/siga_rj/S1")
+    assert "<summary>Ver especificação completa</summary>" in r.text
+    assert r.text.count(longa.strip()) == 2  # no <details> (tela) e no bloco de impressão
+    assert "Mouse óptico</td>" in r.text or "Mouse óptico<span" in r.text  # curta fica inteira

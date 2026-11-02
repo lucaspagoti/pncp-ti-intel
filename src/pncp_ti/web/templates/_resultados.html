@@ -72,7 +72,7 @@
       {% for a in p.linhas %}
         {% set local = [a.orgao or a.unidade_gerenciadora, a.esfera, a.uf] | select | join(' · ') %}
         <tr>
-          <td class="objeto"><a href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}">{{ a.objeto | truncate(220) }}</a>{% if local %}<span class="sub">{{ local }}</span>{% endif %}</td>
+          <td class="objeto"><a href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}">{{ a.objeto | truncate(160) }}</a>{% if local %}<span class="sub">{{ local }}</span>{% endif %}</td>
           <td class="fonte" data-rotulo="Fonte"><span class="chip">{{ FONTES.get(a.fonte, a.fonte) }}</span></td>
           <td data-rotulo="Vigência"><div class="vence">{{ vigencia(a.fim) }}</div></td>
           <td class="n oculto-cel">{{ a.n_itens or '—' }}</td>
@@ -87,7 +87,9 @@
     </table>
   </div>
   {% else %}
-  <p class="vazio">Nenhuma ata encontrada para esses filtros.</p>
+  <p class="vazio">Nenhuma ata encontrada para esses filtros.
+    {%- if ativos %}<span class="dica">Tire um filtro acima ou <a href="/" hx-get="/" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">comece uma busca nova</a>.</span>
+    {%- else %}<span class="dica">Busque pelo item, por exemplo: notebook, monitor, licença Microsoft.</span>{% endif %}</p>
   {% endif %}
   <nav class="pag" aria-label="Paginação"><span>Página {{ p.pagina }} de {{ p.paginas }}</span>
     <div class="acoes">

@@ -45,7 +45,7 @@
         <tbody>
         {% for i in itens %}
           {% set sub = [[i.codigo_catalogo, i.nome_catalogo] | select | join(' '), i.fornecedor] | select | join(' · ') %}
-          <tr><td class="oculto-cel num-item">{{ i.id_item }}</td><td>{{ i.descricao }}{% if sub %}<span class="sub">{{ sub }}</span>{% endif %}</td><td class="n" data-rotulo="Qtd. registrada">{{ i.quantidade | numero }}</td><td class="n" data-rotulo="Limite p/ adesão">{{ i.maximo_adesao | numero }}</td><td class="n unit" data-rotulo="Preço unitário">{{ i.valor_unitario | brl }}</td></tr>
+          <tr><td class="oculto-cel num-item">{{ i.id_item }}</td><td class="desc">{% if (i.descricao or "") | length > LIMITE_DESCRICAO %}<span class="tela">{{ i.descricao | truncate(LIMITE_DESCRICAO) }}</span><details class="espec tela"><summary>Ver especificação completa</summary><p>{{ i.descricao }}</p></details><span class="impressao">{{ i.descricao }}</span>{% else %}{{ i.descricao }}{% endif %}{% if sub %}<span class="sub">{{ sub }}</span>{% endif %}</td><td class="n" data-rotulo="Qtd. registrada">{{ i.quantidade | numero }}</td><td class="n" data-rotulo="Limite p/ adesão">{{ i.maximo_adesao | numero }}</td><td class="n unit" data-rotulo="Preço unitário">{{ i.valor_unitario | brl }}</td></tr>
         {% endfor %}
         </tbody>
       </table>

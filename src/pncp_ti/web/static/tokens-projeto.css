@@ -28,6 +28,9 @@
   --shadow-2: 0 1px 2px var(--sombra-tinta-leve), 0 var(--space-1) var(--space-5) var(--sombra-tinta-leve);
   --shadow-3: var(--shadow-pop);
 
+  /* Alvo de toque mínimo no celular (44 px), da escala de espaço do DS. */
+  --alvo-toque: calc(var(--space-6) + var(--space-3));
+
   /* Anel de foco e realce de linha, derivados do navy. */
   --anel-foco: 0 0 0 3px color-mix(in srgb, var(--navy) 22%, transparent);
   --linha-realce: color-mix(in srgb, var(--chip-bg) 70%, var(--panel));

@@ -37,6 +37,8 @@ CABECALHOS_SEGURANCA = {
     "Cache-Control": "no-store",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }
+# Descrição de item maior que isso vira resumo com a especificação completa num <details>.
+LIMITE_DESCRICAO = 160
 OPCOES_CONEXAO = "-c default_transaction_read_only=on -c statement_timeout=8000"
 
 
@@ -109,6 +111,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
         ESFERAS=consultas.ESFERAS,
         ORDENS=consultas.ROTULOS_ORDEM,
         TAMANHO_PAGINA=consultas.TAMANHO_PAGINA,
+        LIMITE_DESCRICAO=LIMITE_DESCRICAO,
     )
 
     @app.middleware("http")

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block corpo %}
-<form id="filtros" method="get" action="/" hx-get="/" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">
+<form id="filtros" method="get" action="/" hx-get="/" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true" hx-indicator="#casca">
 <div class="casca" id="casca">{% include "_resultados.html" %}</div>
 </form>
 {% endblock %}

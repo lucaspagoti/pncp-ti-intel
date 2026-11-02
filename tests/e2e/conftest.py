@@ -50,6 +50,8 @@ def _semear(dsn: str) -> None:
     # Nº de item com zeros à esquerda e descrição longa, como no ARP real: o número não quebra.
     descricao = "Locação de multifuncional laser monocromática com manutenção e suprimentos " * 3
     comandos += [web_dados.item(arp, "LONGO", f"{n:05}", descricao, 0.17) for n in (1, 2)]
+    # R2-001: descrição sem espaço não pode tirar o preço da folha impressa.
+    comandos.append(web_dados.item(arp, "LONGO", "00003", "Y" * 250, 9.99))
     with psycopg.connect(dsn) as conn:
         conn.execute("DELETE FROM cargas")
         for comando, parametros in comandos:
