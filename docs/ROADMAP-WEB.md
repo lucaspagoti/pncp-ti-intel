@@ -1,4 +1,4 @@
-# Roadmap da web (W0–W2)
+# Roadmap da web (W0–W3)
 
 Fecha a R4 (`docs/FASES.md`), cujo aceite é a demonstração do Lucas. Fica fora das fases R. Cada
 fase é uma sprint. Decisões em 19/10/2026: o Codex é o QA executor (ADR 0029), o Playwright
@@ -68,6 +68,18 @@ Como ficou a entrega:
   (ADR 0033); a view `v_ata_consumo_item` continua no banco;
 - as capturas de referência ficam em `qa-out/e2e/referencia/` (artefato do CI), sem
   comparação de pixel.
+
+## W3 · Busca focada no item principal (primeira release)
+
+Decidida pelo Lucas em 02/11/2026, depois de "monitor" trazer uma ata de CFTV em primeiro (ADR 0036).
+
+- Migração 0011: `mv_busca_itens` (a cabeça do item em vetor exato e com radical),
+  `mv_busca_vocabulario` e `documento` com pesos. `atualizar_busca()` atualiza as três.
+- Nota de relevância pelo foco no item, preço do item buscado, linha do item que casou com o termo
+  marcado, sinônimos revisados (`insumos/sinonimos_busca.txt`) e "você quis dizer".
+- Avaliação `pncp_ti.busca_avaliacao`: precisão@10 de 20 buscas, antes e depois.
+- **Aceite:** "monitor" com o top 10 só de atas cujo item principal é monitor; as três buscas da
+  R4 sem piora; busca abaixo de 500 ms.
 
 ## Rito de cada sprint
 

@@ -1,0 +1,14 @@
+# Sinônimos da busca da web (ADR 0036). Revisado pelo Lucas, como o termos_ti.txt.
+# Uma linha por grupo: termos equivalentes separados por "=". Vale quando a busca é exatamente um
+# dos termos; a busca passa a aceitar os outros do grupo (até 3) e a ordem segue o item principal.
+# Lista inicial curta, pensada nos nomes do catálogo (CATMAT/PDM) que diferem do uso comum.
+notebook = computador portátil = laptop
+desktop = microcomputador = computador de mesa
+impressora = multifuncional
+projetor = projetor multimídia = datashow
+pendrive = pen drive = unidade flash
+webcam = câmera web
+hd externo = disco rígido externo
+ssd = unidade de estado sólido
+access point = ponto de acesso
+headset = fone de ouvido = fone ouvido

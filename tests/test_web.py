@@ -413,3 +413,115 @@ async def test_descricao_longa_vira_resumo_com_especificacao(cliente, conn_inges
     assert "<summary>Ver especificação completa</summary>" in r.text
     assert r.text.count(longa.strip()) == 2  # no <details> (tela) e no bloco de impressão
     assert "Mouse óptico</td>" in r.text or "Mouse óptico<span" in r.text  # curta fica inteira
+
+
+async def _semear_monitores(conn_ingest):
+    """O caso do Lucas (02/11/2026): "monitor" trazia primeiro uma ata de CFTV."""
+    arp = (
+        await (
+            await conn_ingest.execute("SELECT id FROM cargas WHERE fonte = 'compras_arp'")
+        ).fetchone()
+    )["id"]
+    cftv = [
+        web_dados.item(
+            arp,
+            "CFTV",
+            n,
+            f"CÂMERA DIGITAL, videomonitoramento {n}",
+            900,
+            catalogo="CÂMERA DIGITAL",
+        )
+        for n in range(1, 12)
+    ]
+    cftv.append(
+        web_dados.item(
+            arp, "CFTV", 12, "MONITOR IMAGEM, TAMANHO TELA 55 POL", 4000, catalogo="MONITOR IMAGEM"
+        )
+    )
+    comandos = [
+        web_dados.ata(
+            arp,
+            "CFTV",
+            "Solução de videomonitoramento com monitoramento remoto e controle de acesso",
+        ),
+        *cftv,
+        web_dados.ata(arp, "CFTV2", "Videomonitoramento e monitoramento de imagens"),
+        web_dados.item(
+            arp, "CFTV2", 1, "CÂMERA DIGITAL, videomonitoramento", 900, catalogo="CÂMERA DIGITAL"
+        ),
+        web_dados.ata(arp, "MON", "Aquisição de equipamentos de informática"),
+        web_dados.item(
+            arp,
+            "MON",
+            1,
+            "MONITOR COMPUTADOR, TAMANHO TELA 23 A 30 POL",
+            618,
+            catalogo="MONITOR COMPUTADOR",
+        ),
+        web_dados.item(
+            arp,
+            "MON",
+            2,
+            "MONITOR COMPUTADOR, TAMANHO TELA 31 A 40 POL",
+            3230,
+            catalogo="MONITOR COMPUTADOR",
+        ),
+        web_dados.ata(arp, "PC", "Registro de preços de computadores"),
+        web_dados.item(
+            arp,
+            "PC",
+            1,
+            "MICROCOMPUTADOR, MEMÓRIA 16 GB, com monitor 24 pol",
+            4500,
+            catalogo="MICROCOMPUTADOR",
+        ),
+        web_dados.item(arp, "PC", 2, "TECLADO, ABNT2", 60, catalogo="TECLADO"),
+    ]
+    for comando, parametros in comandos:
+        await conn_ingest.execute(comando, parametros)
+    await atualizar(conn_ingest)
+
+
+async def test_monitor_traz_primeiro_a_ata_cujo_item_principal_e_monitor(cliente, conn_ingest):
+    await _semear_monitores(conn_ingest)
+    r = await cliente.get("/", params={"q": "monitor"})
+    ordem = re.findall(r'href="/ata/compras_arp/(\w+)"', r.text)
+    # Ata de monitores; CFTV com um item que é monitor; computador que cita monitor na
+    # especificação; e por último o CFTV que só casa pelo radical de "monitoramento".
+    assert ordem == ["MON", "CFTV", "PC", "CFTV2"], ordem
+    # A linha mostra o item que casou e o preço dele, não o menor preço da ata.
+    assert "<mark>Monitor</mark> computador" in r.text and "2 de 2 itens" in r.text
+    assert "R$ 618,00" in r.text and "do item buscado" in r.text
+    # "monitores" (plural) dá a mesma ordem; o radical de "monitoramento" não puxa o CFTV para cima.
+    plural = re.findall(
+        r'href="/ata/compras_arp/(\w+)"', (await cliente.get("/", params={"q": "monitores"})).text
+    )
+    assert plural[0] == "MON"
+
+
+async def test_preco_filtrado_pelo_item_buscado(cliente, conn_ingest):
+    await _semear_monitores(conn_ingest)
+    # O teclado de R$ 60 não faz a ata de computadores passar numa faixa de monitor barato.
+    r = await cliente.get("/", params={"q": "monitor", "preco_max": "100"})
+    assert "/ata/compras_arp/PC" not in r.text
+    r = await cliente.get("/", params={"q": "monitor", "preco_max": "700"})
+    assert "/ata/compras_arp/MON" in r.text
+
+
+async def test_sinonimo_amplia_a_busca(cliente, conn_ingest):
+    carga = (
+        await (
+            await conn_ingest.execute("SELECT id FROM cargas WHERE fonte = 'compras_arp'")
+        ).fetchone()
+    )["id"]
+    await conn_ingest.execute(*web_dados.ata(carga, "LAP", "Aquisição de computador portátil"))
+    await atualizar(conn_ingest)
+    r = await cliente.get("/", params={"q": "notebook"})
+    assert "/ata/compras_arp/LAP" in r.text and "/ata/siga_rj/S1" in r.text
+
+
+async def test_voce_quis_dizer_com_zero_resultados(cliente, conn_ingest):
+    await _semear_monitores(conn_ingest)
+    r = await cliente.get("/", params={"q": "monitr"})
+    assert "Nenhuma ata encontrada" in r.text and "Você quis dizer" in r.text
+    assert 'href="/?q=monitor"' in r.text

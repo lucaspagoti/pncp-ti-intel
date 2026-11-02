@@ -7,7 +7,8 @@ Os arquivos entregues não ativam systemd nem modificam o homelab automaticament
 
 Cada carga publicada atualiza a busca materializada da web (`busca_atualizada` no journal). Se
 o refresh falhar (`busca_refresh_falhou`), a web continua com a busca anterior. Para refazer:
-`make refresh-busca`, que leva uns 10 s e não bloqueia a web. Depois, rode `make smoke-web`.
+`make refresh-busca`, que atualiza a busca das atas, a dos itens e o vocabulário das sugestões
+(uns 15 s) sem bloquear a web. Depois, rode `make smoke-web`.
 
 ## Preparar
 
