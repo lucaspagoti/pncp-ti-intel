@@ -155,6 +155,10 @@ Histórico (17/10/2026): mergeada (PR #13) e com carga real.
 - Lista revisada pelo Lucas em 19/10: sai `gestao de documentos`, `impressora` e `toner` ficam
   com ruído aceito, e a última palavra do termo aceita só plural (corrige `tablet` → "tablete"). ✅
 - Termo que o portal não responde reaproveita a carga ativa por até 3 dias (ADR 0028, PR #21).
+- R3.1 (09/11/2026, ADR 0037): o portal derruba ~60% das conexões de script; o termo pendente
+  passa a defasado aos 3 dias (a carga publica e a operação avisa) e só derruba a carga aos 14.
+  Retry curto para queda instantânea, telemetria de rede em `cargas.contagens` e nova tentativa
+  da busca no `carga_diaria.sh`. Próximo passo: coletor incremental pela API oficial (ADR 0038).
 
 Em aberto, a critério do Lucas: `informatica` sozinha e `tic`/`ti` (cerca de 1.500 atas perdidas
 contra o ARP), que exigem regra melhor ou curadoria (ADR 0026).

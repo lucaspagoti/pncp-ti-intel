@@ -57,6 +57,7 @@ def sem_espera(monkeypatch):
     monkeypatch.setattr(b, "REQUISICOES_POR_SEGUNDO", 1000.0)
     monkeypatch.setattr(b, "ESPERA_BASE", 0.0)
     monkeypatch.setattr(b, "ESPERA_PASSADA", 0.0)
+    monkeypatch.setattr(b, "ESPERA_RESET", (0.0, 0.0))
 
 
 def test_mapear_aceita_ata_vigente_e_monta_link():
@@ -392,18 +393,39 @@ def test_termo_sem_base_anterior_publica_vazio_e_fica_pendente():
     assert coleta.contagens["atas_reaproveitadas"] == 0
 
 
-def test_pendencia_herdada_mantem_a_data_e_falha_ao_passar_do_limite():
-    ainda = (HOJE - timedelta(days=b.DIAS_PENDENTE - 1)).isoformat()
+def test_pendencia_herdada_mantem_a_data_e_falha_ao_passar_do_teto():
+    ainda = (HOJE - timedelta(days=b.DIAS_TETO_PENDENTE - 1)).isoformat()
     coleta = _coleta([_ata(ID_A, "notebook", termo="notebook")], ["software"])
     b.reaproveitar(coleta, {}, {"software": ainda}, HOJE)
     assert coleta.contagens["termos_pendentes"] == {"software": ainda}
 
-    passou = (HOJE - timedelta(days=b.DIAS_PENDENTE)).isoformat()
+    passou = (HOJE - timedelta(days=b.DIAS_TETO_PENDENTE)).isoformat()
     coleta = _coleta([_ata(ID_A, "notebook", termo="notebook")], ["software"])
     with pytest.raises(ErroValidacao) as exc:
         b.reaproveitar(coleta, {}, {"software": passou}, HOJE)
     assert exc.value.tipo == "termos_falhos"
     assert "software" in str(exc.value)
+
+
+def test_termo_pendente_ha_3_dias_fica_defasado_e_a_carga_publica():
+    """ADR 0037: um termo instável não para mais a fonte inteira no 3º dia."""
+    novo = (HOJE - timedelta(days=b.DIAS_PENDENTE - 1)).isoformat()
+    velho = (HOJE - timedelta(days=b.DIAS_PENDENTE)).isoformat()
+    coleta = _coleta(
+        [_ata(ID_A, "notebook", termo="notebook")], ["software", "materiais de informatica"]
+    )
+    anteriores = {ID_B: _ata(ID_B, "Aquisição de materiais de informática")}
+    b.reaproveitar(coleta, anteriores, {"software": novo, "materiais de informatica": velho}, HOJE)
+    c = coleta.contagens
+    assert c["termos_defasados"] == {"materiais de informatica": velho}
+    assert c["termos_pendentes"] == {"software": novo, "materiais de informatica": velho}
+    assert ID_B in coleta.atas  # as atas do termo defasado continuam publicadas
+
+
+def test_sem_termo_pendente_nao_ha_defasado():
+    coleta = _coleta([_ata(ID_A, "notebook", termo="notebook")], [])
+    b.reaproveitar(coleta, {}, {}, HOJE)
+    assert coleta.contagens["termos_defasados"] == {}
 
 
 def test_termo_que_volta_a_responder_limpa_a_pendencia():
@@ -559,3 +581,120 @@ async def test_reordenacao_que_preserva_a_ultima_pagina_guardada_rele_o_termo(mo
         coleta = await b.coletar(["notebook"], HOJE, c)
     assert chamadas == [1, 2] + [3] * b.TENTATIVAS + [2, 3, 4, 1, 2, 3, 4]
     assert sorted(coleta.atas) == sorted(ids)
+
+
+async def test_queda_instantanea_tenta_logo_e_corpo_cortado_usa_backoff(monkeypatch):
+    """Reset antes da resposta: espera curta; leitura cortada no meio: backoff (ADR 0037)."""
+    esperas: list[float] = []
+
+    async def dormir(segundos: float) -> None:
+        if segundos >= 0.1:  # o limitador de taxa também dorme (frações de milissegundo)
+            esperas.append(segundos)
+
+    monkeypatch.setattr(b.asyncio, "sleep", dormir)
+    monkeypatch.setattr(b, "ESPERA_RESET", (0.5, 0.5))
+    monkeypatch.setattr(b, "ESPERA_BASE", 2.0)
+    chamadas = {"n": 0}
+
+    class CorpoCortado(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'{"items": ['
+            raise httpx.ReadError("corte no meio")
+
+    def tratar(req: httpx.Request) -> httpx.Response:
+        chamadas["n"] += 1
+        if chamadas["n"] <= 2:
+            raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+        if chamadas["n"] <= 4:
+            return httpx.Response(200, stream=CorpoCortado())
+        if chamadas["n"] == 5:
+            return httpx.Response(429)
+        return httpx.Response(200, json={"items": [item()], "total": 1})
+
+    telemetria = b.Telemetria()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        itens, total = await b.buscar_termo(
+            c, b.LimitadorTaxa(1000), "notebook", telemetria=telemetria
+        )
+    assert total == 1 and len(itens) == 1
+    assert esperas == [0.5, 0.5, 2.0, 4.0, 8.0]
+    contagens = telemetria.contagens()
+    assert contagens["requisicoes"] == 6
+    assert contagens["falhas_por_tipo"] == {"http_429": 1, "leitura": 2, "reset": 2}
+    assert contagens["taxa_falha"] == round(5 / 6, 3)
+    assert contagens["falhas_por_termo"] == {"notebook": {"requisicoes": 6, "falhas": 5}}
+
+
+def test_backoff_tem_teto(monkeypatch):
+    monkeypatch.setattr(b, "ESPERA_BASE", 2.0)
+    assert b._espera("timeout", 20) == b.ESPERA_MAXIMA
+
+
+async def test_coleta_grava_a_telemetria_nas_contagens():
+    def tratar(req: httpx.Request) -> httpx.Response:
+        if req.url.params["q"] == "ruim":
+            raise httpx.ConnectError("queda")
+        return httpx.Response(200, json={"items": [item()], "total": 1})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        coleta = await b.coletar(["notebook", "ruim"], HOJE, c)
+    c = coleta.contagens
+    assert c["requisicoes"] == 1 + b.TENTATIVAS * (1 + b.PASSADAS_EXTRA)
+    assert c["falhas_por_tipo"] == {"reset": b.TENTATIVAS * (1 + b.PASSADAS_EXTRA)}
+    assert set(c["falhas_por_termo"]) == {"ruim"}
+    assert c["passadas_extra"] == b.PASSADAS_EXTRA
+
+
+async def test_orcamento_de_tempo_corta_as_passadas_extra(monkeypatch):
+    monkeypatch.setattr(b, "ORCAMENTO_SEGUNDOS", 0)
+
+    def tratar(req: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("queda")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(tratar)) as c:
+        coleta = await b.coletar(["notebook"], HOJE, c)
+    assert coleta.contagens["orcamento_esgotado"] is True
+    assert coleta.contagens["passadas_extra"] == 0
+    assert coleta.contagens["requisicoes"] == b.TENTATIVAS
+    assert coleta.falhos == ["notebook"]
+
+
+async def test_carga_que_falha_guarda_a_telemetria(conn_ingest):
+    """Revisão R0-01: a carga recusada (ex.: teto de 14 dias) não perde as métricas de rede."""
+    from pncp_ti.fontes.siga import _registrar_falha
+
+    carga_id = uuid4()
+    contagens = {"requisicoes": 61, "falhas_por_tipo": {"reset": 60}, "taxa_falha": 0.984}
+    exc = ErroValidacao("termos_falhos", "1 de 57 termos sem resposta há 14 dias ou mais: x")
+    await _registrar_falha(conn_ingest, carga_id, exc, {}, b.FONTE, contagens)
+    linha = await (
+        await conn_ingest.execute(
+            "SELECT status, erro_tipo, contagens FROM cargas WHERE id = %s", (carga_id,)
+        )
+    ).fetchone()
+    assert (linha["status"], linha["erro_tipo"]) == ("falhou", "termos_falhos")
+    assert linha["contagens"] == contagens
+
+
+async def test_principal_registra_a_falha_com_as_contagens_da_coleta(monkeypatch):
+    registradas = []
+
+    class Conexao:
+        async def close(self):
+            pass
+
+    async def conectar():
+        return Conexao()
+
+    async def coletar(termos, hoje):
+        return b.Coleta({}, {"termos": 1, "requisicoes": 7, "taxa_falha": 1.0}, [], ["x"])
+
+    async def registrar(conn, carga_id, exc, geracao, fonte, contagens=None):
+        registradas.append((exc.tipo, contagens))
+
+    monkeypatch.setattr(b, "_conectar_com_trava", conectar)
+    monkeypatch.setattr(b, "coletar", coletar)
+    monkeypatch.setattr(b, "_registrar_falha", registrar)
+    monkeypatch.setattr(b, "ler_termos", lambda _arquivo: ["x"])
+    assert await b.principal(False) == 2  # sem_atas é determinístico
+    assert registradas == [("sem_atas", {"termos": 1, "requisicoes": 7, "taxa_falha": 1.0})]

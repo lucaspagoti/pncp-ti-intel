@@ -1,6 +1,7 @@
 # 0028 — Busca PNCP reaproveita a carga ativa para termo que falhar
 
-- Status: aceita pelo Lucas (19/10/2026).
+- Status: aceita pelo Lucas (19/10/2026). Alterada pela ADR 0037 (limite de 3 dias vira aviso;
+  a carga só falha aos 14 dias).
 - Altera a ADR 0023 (R3: "se ainda falhar, a carga não publica") e abre uma exceção, só para
   a busca PNCP, à regra "uma falha não publica carga parcial" (ADR 0005, `AGENTS.md`).
 

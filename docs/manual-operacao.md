@@ -40,13 +40,44 @@ Ausência da métrica não alerta: é termo que não respondeu no dia e reaprove
 (ADR 0028); total zero alerta (ADR 0030).
 
 Termo da busca PNCP que o portal não responde fica em `contagens.termos_pendentes`
-(`{termo: data da primeira falha}`) e reaproveita as atas da carga ativa. A carga só falha,
-e avisa no WhatsApp, quando um termo fica pendente por 3 dias seguidos (ADR 0028). Para ver
-as pendências:
+(`{termo: data da primeira falha}`) e reaproveita as atas da carga ativa. Com 3 dias ou mais
+o termo vai também para `contagens.termos_defasados`: a carga publica e a verificação das 08:30
+avisa ("a busca PNCP está com N termos sem atualizar há X dias"). A carga só falha, e o
+`OnFailure` avisa, quando um termo fica pendente por 14 dias (ADR 0037). Para ver as pendências:
 
 ```sql
-SELECT contagens->'termos_pendentes' FROM cargas WHERE fonte = 'pncp_busca' AND ativa;
+SELECT contagens->'termos_pendentes', contagens->'termos_defasados'
+FROM cargas WHERE fonte = 'pncp_busca' AND ativa;
 ```
+
+### Portal PNCP derrubando conexões (ADR 0037)
+
+`pncp.gov.br/api/search/` derruba boa parte das conexões de clientes que não são navegador,
+antes de qualquer resposta (`RemoteProtocolError`/`ReadError` em 0 s). Em 06/11/2026 foram
+~60%, com a mesma taxa a 0,5 s ou 3 s entre requisições: não é excesso de requisições nossas.
+A coleta tenta de novo em 0,5–2 s nessa queda (12 tentativas), usa backoff só para timeout,
+corpo cortado, 429 e 5xx, faz até 4 passadas extras a cada 5 min e não começa passada depois
+de 90 min. O `carga_diaria.sh` repete a busca (e o SIGA) uma vez, 30 min depois, se ela sair
+com código 1 e houver folga até 3h30 de carga.
+
+Para ver a taxa de falha da noite:
+
+```sql
+SELECT iniciado_em::date, contagens->'requisicoes', contagens->'taxa_falha',
+       contagens->'falhas_por_tipo', contagens->'falhas_por_termo'
+FROM cargas WHERE fonte = 'pncp_busca' ORDER BY iniciado_em DESC LIMIT 7;
+```
+
+`taxa_falha` acima de 0,5 por vários dias é o padrão do portal, não incidente nosso. Se um
+termo ficar defasado por mais de uma semana, abra chamado no PNCP (Fale Conosco do portal)
+com este texto, ajustando os números da consulta acima:
+
+> A API de busca do PNCP (`https://pncp.gov.br/api/search/?tipos_documento=ata&status=vigente`)
+> encerra a conexão sem resposta em cerca de 60% das requisições feitas por clientes HTTP
+> (curl, Python httpx), com uma requisição a cada 3 segundos; o mesmo ocorre em
+> `https://pncp.gov.br/app/`. A API de consultas (`/api/consulta/v1/atas/atualizacao`) responde
+> normalmente no mesmo horário e da mesma origem. Há limite documentado de uso para a busca, ou
+> uma forma recomendada de consultá-la por automação?
 
 Um termo que cai no meio da paginação guarda as páginas já lidas, e a passada extra continua
 da página que falhou, depois de reler a última página guardada. O termo recomeça da página 1

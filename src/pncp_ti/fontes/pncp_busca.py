@@ -3,9 +3,10 @@
 Uma consulta paginada por termo de `insumos/termos_ti.txt` (`tipos_documento=ata`,
 `status=vigente`), dedupe por `numero_controle_pncp` e troca atômica da carga `pncp_busca`.
 A API de busca não é documentada: o contrato é validado a cada resposta e uma mudança
-falha alto. Termo que o portal não responde reaproveita as atas da carga ativa por até
-`DIAS_PENDENTE` dias (ADR 0028). A busca não traz itens nem preços; o ARP tem preferência
-na view quando a mesma ata existe nas duas fontes (migração 0007).
+falha alto. Termo que o portal não responde reaproveita as atas da carga ativa (ADR 0028); a
+partir de `DIAS_PENDENTE` dias ele fica defasado e a operação avisa, e só depois de
+`DIAS_TETO_PENDENTE` dias a carga falha (ADR 0037). A busca não traz itens nem preços; o ARP
+tem preferência na view quando a mesma ata existe nas duas fontes (migração 0007).
 
     python -m pncp_ti.fontes.pncp_busca             # busca e carrega
     python -m pncp_ti.fontes.pncp_busca --validar   # busca e valida, sem gravar
@@ -17,6 +18,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import random
 import re
 import time
 import unicodedata
@@ -50,12 +52,19 @@ ARQUIVO_TERMOS = Path(__file__).resolve().parents[3] / "insumos" / "termos_ti.tx
 TAMANHO_PAGINA = 500
 LIMITE_JANELA = 10_000  # o índice de busca não pagina além disso por consulta
 REQUISICOES_POR_SEGUNDO = 2.0
-TENTATIVAS = 6
+# O portal derruba ~60% das conexões de clientes de script antes de responder, em 0 s e
+# independente do ritmo (medido em 06/11/2026, ADR 0037). Para essa queda, nova conexão logo;
+# backoff exponencial só para timeout, leitura cortada no meio, 429 e 5xx.
+TENTATIVAS = 12
+ESPERA_RESET = (0.5, 2.0)  # segundos, sorteados: queda antes de qualquer resposta
 ESPERA_BASE = 2.0
+ESPERA_MAXIMA = 30.0
 PISO_ATAS = 0.5
-PASSADAS_EXTRA = 2  # novas tentativas dos termos que falharam, depois da passada principal
-ESPERA_PASSADA = 60.0  # segundos antes de cada passada extra: o portal costuma voltar em minutos
-DIAS_PENDENTE = 3  # dias seguidos em que um termo pode faltar antes de a carga falhar (ADR 0028)
+PASSADAS_EXTRA = 4  # novas tentativas dos termos que falharam, depois da passada principal
+ESPERA_PASSADA = 300.0  # segundos antes de cada passada extra: a queda vem em rajadas
+ORCAMENTO_SEGUNDOS = 90 * 60  # passadas extras não começam depois disso (TimeoutStartSec=5h)
+DIAS_PENDENTE = 3  # termo pendente há esse tempo fica defasado e a operação avisa (ADR 0028)
+DIAS_TETO_PENDENTE = 14  # termo pendente há esse tempo derruba a carga (ADR 0037)
 LIMITE_BYTES = 25 * 1024 * 1024  # uma página de 500 atas tem ~2 MB
 ID_PNCP_ATA = re.compile(r"\d{14}-\d-\d{6}/\d{4}-\d{6}")
 LIMITE_TEXTO = 4000
@@ -213,29 +222,89 @@ def mapear(item: dict[str, Any], termo: str, hoje: date) -> AtaBusca | None:
     )
 
 
+@dataclass(slots=True)
+class Telemetria:
+    """Requisições e falhas por tipo, no total e por termo (ADR 0037).
+
+    Tipos: `reset` (conexão derrubada antes de qualquer resposta), `timeout`, `leitura`
+    (corpo cortado no meio), `json`, `http_429` e `http_5xx`.
+    """
+
+    requisicoes: int = 0
+    falhas: dict[str, int] = field(default_factory=dict)
+    por_termo: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    def registrar(self, termo: str, falha: str | None) -> None:
+        self.requisicoes += 1
+        t = self.por_termo.setdefault(termo, {"requisicoes": 0, "falhas": 0})
+        t["requisicoes"] += 1
+        if falha:
+            self.falhas[falha] = self.falhas.get(falha, 0) + 1
+            t["falhas"] += 1
+
+    def contagens(self) -> dict[str, Any]:
+        total = sum(self.falhas.values())
+        return {
+            "requisicoes": self.requisicoes,
+            "falhas_por_tipo": dict(sorted(self.falhas.items())),
+            "taxa_falha": round(total / self.requisicoes, 3) if self.requisicoes else 0.0,
+            # Só os termos que tiveram falha: o jsonb da carga fica pequeno.
+            "falhas_por_termo": {k: v for k, v in sorted(self.por_termo.items()) if v["falhas"]},
+        }
+
+
+def _espera(falha: str, seguidas: int) -> float:
+    """Queda instantânea pede nova conexão logo; o resto, backoff exponencial com teto."""
+    if falha == "reset":
+        return random.uniform(*ESPERA_RESET)
+    return min(ESPERA_BASE * 2 ** (seguidas - 1), ESPERA_MAXIMA)
+
+
 async def _pegar(
-    client: httpx.AsyncClient, limitador: LimitadorTaxa, params: Mapping[str, str | int]
+    client: httpx.AsyncClient,
+    limitador: LimitadorTaxa,
+    params: Mapping[str, str | int],
+    telemetria: Telemetria | None = None,
 ) -> Any:
-    """GET com retry/backoff: o portal derruba conexões e responde vazio de forma intermitente."""
+    """GET com retry: o portal derruba conexões e responde vazio de forma intermitente."""
     ultimo: str = ""
+    lentas = 0  # falhas que pedem backoff (não conta as quedas instantâneas)
+    termo = str(params.get("q", ""))
     for tentativa in range(1, TENTATIVAS + 1):
         await limitador.aguardar()
+        falha: str | None = None
+        respondeu = False
         try:
             async with client.stream("GET", URL_BUSCA, params=params) as resposta:
+                respondeu = True
                 if resposta.status_code == 200:
                     corpo = bytearray()
                     async for bloco in resposta.aiter_bytes(1 << 16):
                         corpo.extend(bloco)
                         if len(corpo) > LIMITE_BYTES:
                             raise ErroValidacao("contrato", "resposta da busca acima do limite")
-                    return json.loads(corpo)
+                    dados = json.loads(corpo)
+                    if telemetria is not None:
+                        telemetria.registrar(termo, None)
+                    return dados
                 ultimo = f"HTTP {resposta.status_code}"
             if resposta.status_code < 500 and resposta.status_code != 429:
+                if telemetria is not None:
+                    telemetria.registrar(termo, f"http_{resposta.status_code}")
                 raise ErroValidacao("contrato", f"busca respondeu {ultimo}")
-        except (httpx.TransportError, json.JSONDecodeError) as exc:
-            ultimo = type(exc).__name__
+            falha = "http_429" if resposta.status_code == 429 else "http_5xx"
+        except httpx.TimeoutException as exc:
+            ultimo, falha = type(exc).__name__, "timeout"
+        except httpx.TransportError as exc:
+            ultimo, falha = type(exc).__name__, "leitura" if respondeu else "reset"
+        except json.JSONDecodeError as exc:
+            ultimo, falha = type(exc).__name__, "json"
+        if telemetria is not None:
+            telemetria.registrar(termo, falha)
+        if falha != "reset":
+            lentas += 1
         if tentativa < TENTATIVAS:
-            await asyncio.sleep(ESPERA_BASE * 2 ** (tentativa - 1))
+            await asyncio.sleep(_espera(falha, lentas))
     raise _TermoFalhou(ultimo)
 
 
@@ -268,10 +337,14 @@ def _parametros(termo: str, pagina: int) -> dict[str, str | int]:
 
 
 async def _continua_igual(
-    client: httpx.AsyncClient, limitador: LimitadorTaxa, termo: str, p: _Progresso
+    client: httpx.AsyncClient,
+    limitador: LimitadorTaxa,
+    termo: str,
+    p: _Progresso,
+    telemetria: Telemetria | None = None,
 ) -> bool:
     """Relê a última página guardada: mesmo total e mesmos ids, senão o índice mudou."""
-    corpo = await _pegar(client, limitador, _parametros(termo, p.pagina - 1))
+    corpo = await _pegar(client, limitador, _parametros(termo, p.pagina - 1), telemetria)
     itens, total = validar_pagina(corpo)
     return total == p.total and _ids(itens) == p.ultima
 
@@ -281,6 +354,7 @@ async def buscar_termo(
     limitador: LimitadorTaxa,
     termo: str,
     progresso: _Progresso | None = None,
+    telemetria: Telemetria | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """Todas as páginas de um termo; devolve (itens, total declarado).
 
@@ -289,7 +363,7 @@ async def buscar_termo(
     """
     p = progresso if progresso is not None else _Progresso()
     retomada = p.pagina > 1
-    if retomada and not await _continua_igual(client, limitador, termo, p):
+    if retomada and not await _continua_igual(client, limitador, termo, p, telemetria):
         # O índice mudou entre as passadas: as páginas guardadas podem ter se deslocado.
         p.pagina, retomada = 1, False
     if p.pagina == 1:
@@ -297,7 +371,7 @@ async def buscar_termo(
         p.itens.clear()
         p.total, p.ultima = None, []
     while True:
-        corpo = await _pegar(client, limitador, _parametros(termo, p.pagina))
+        corpo = await _pegar(client, limitador, _parametros(termo, p.pagina), telemetria)
         da_pagina, total_pagina = validar_pagina(corpo)
         if p.total is None:
             p.total = total_pagina  # o total da 1ª página é a referência; as seguintes não o mudam
@@ -330,10 +404,11 @@ async def _coletar_termo(
     sem_resultado: list[str],
     totais: dict[str, int],
     progresso: _Progresso,
+    telemetria: Telemetria | None = None,
 ) -> bool:
     """Busca um termo e acumula as atas que o casam; `False` se o portal não respondeu."""
     try:
-        itens, total = await buscar_termo(client, limitador, termo, progresso)
+        itens, total = await buscar_termo(client, limitador, termo, progresso, telemetria)
     except _TermoFalhou as exc:
         log.warning(
             "pncp_busca_termo_falhou_tentativa",
@@ -399,6 +474,9 @@ async def coletar(
     sem_resultado: list[str] = []
     totais: dict[str, int] = {}
     progresso: dict[str, _Progresso] = {}  # só dos termos que falharam: a passada extra retoma
+    telemetria = Telemetria()
+    inicio = time.monotonic()
+    passadas = 0
     try:
         falhos: list[str] = []
         for termo in termos:
@@ -413,6 +491,7 @@ async def coletar(
                 sem_resultado,
                 totais,
                 progresso[termo],
+                telemetria,
             ):
                 del progresso[termo]
             else:
@@ -421,6 +500,11 @@ async def coletar(
         for _ in range(PASSADAS_EXTRA):
             if not falhos:
                 break
+            if time.monotonic() - inicio + ESPERA_PASSADA > ORCAMENTO_SEGUNDOS:
+                contagens["orcamento_esgotado"] = True
+                log.warning("pncp_busca_orcamento_esgotado", termos_falhos=len(falhos))
+                break
+            passadas += 1
             await asyncio.sleep(ESPERA_PASSADA)
             ainda: list[str] = []
             for termo in falhos:
@@ -434,6 +518,7 @@ async def coletar(
                     sem_resultado,
                     totais,
                     progresso[termo],
+                    telemetria,
                 ):
                     del progresso[termo]
                     contagens["termos_recuperados"] += 1
@@ -447,6 +532,9 @@ async def coletar(
         if proprio:
             await client.aclose()
     contagens["atas_unicas"] = len(atas)
+    contagens["passadas_extra"] = passadas
+    contagens.update(telemetria.contagens())
+    log.info("pncp_busca_rede", **telemetria.contagens())
     # Total declarado pelo portal por termo (antes do filtro de frase): o alerta da R6 lê daqui.
     contagens["resultados_por_termo"] = totais
     return Coleta(atas, contagens, sem_resultado, falhos)
@@ -464,24 +552,23 @@ def reaproveitar(
     pendentes_ativos: Mapping[str, str],
     hoje: date,
 ) -> None:
-    """Completa a coleta com as atas da carga ativa dos termos que falharam (ADR 0028).
+    """Completa a coleta com as atas da carga ativa dos termos que falharam (ADR 0028/0037).
 
     Sem isso, as atas exclusivas do termo perdido sumiriam da base. Entra de novo a ata ativa
     ainda vigente cujo objeto casa o termo, pelo mesmo filtro da coleta. Cada termo falho fica
-    pendente desde a primeira falha; passado `DIAS_PENDENTE`, a carga falha como antes.
+    pendente desde a primeira falha; a partir de `DIAS_PENDENTE` fica defasado (a carga publica
+    e a operação avisa) e, passado `DIAS_TETO_PENDENTE`, a carga falha.
     """
     pendentes = {t: pendentes_ativos.get(t, hoje.isoformat()) for t in coleta.falhos}
-    vencidos = sorted(
-        t
-        for t, desde in pendentes.items()
-        if (hoje - date.fromisoformat(desde)).days >= DIAS_PENDENTE
-    )
+    idade = {t: (hoje - date.fromisoformat(desde)).days for t, desde in pendentes.items()}
+    vencidos = sorted(t for t, dias in idade.items() if dias >= DIAS_TETO_PENDENTE)
     if vencidos:
         raise ErroValidacao(
             "termos_falhos",
             f"{len(vencidos)} de {coleta.contagens['termos']} termos sem resposta há "
-            f"{DIAS_PENDENTE} dias ou mais: {', '.join(vencidos)}",
+            f"{DIAS_TETO_PENDENTE} dias ou mais: {', '.join(vencidos)}",
         )
+    defasados = {t: pendentes[t] for t in sorted(pendentes) if idade[t] >= DIAS_PENDENTE}
     reaproveitados: list[str] = []
     novas = 0
     for termo in coleta.falhos:
@@ -496,9 +583,15 @@ def reaproveitar(
                 coleta.atas[anterior.id_origem] = anterior
                 novas += 1
     for termo in coleta.falhos:
-        log.warning("pncp_busca_termo_pendente", termo=termo, desde=pendentes[termo])
+        log.warning(
+            "pncp_busca_termo_pendente",
+            termo=termo,
+            desde=pendentes[termo],
+            defasado=termo in defasados,
+        )
     c = coleta.contagens
     c["termos_pendentes"] = pendentes
+    c["termos_defasados"] = defasados
     c["termos_reaproveitados"] = reaproveitados
     c["atas_reaproveitadas"] = novas
     c["atas_unicas"] = len(coleta.atas)
@@ -665,6 +758,7 @@ async def principal(validar_apenas: bool, termos_arquivo: Path = ARQUIVO_TERMOS)
     conn: psycopg.AsyncConnection | None = None
     carga_id = uuid4()
     geracao: dict[str, dict[str, object]] = {}
+    contagens: dict[str, Any] = {}
     inicio = time.monotonic()
     try:
         hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
@@ -672,6 +766,7 @@ async def principal(validar_apenas: bool, termos_arquivo: Path = ARQUIVO_TERMOS)
         conn = await (conectar(get_settings()) if validar_apenas else _conectar_com_trava())
         try:
             coleta = await coletar(termos, hoje)
+            contagens = coleta.contagens  # a telemetria fica também na carga que falhar
             geracao = _geracao(coleta, termos)
             validar(coleta)
             if validar_apenas:
@@ -686,7 +781,7 @@ async def principal(validar_apenas: bool, termos_arquivo: Path = ARQUIVO_TERMOS)
             resultado = await publicar(conn, coleta, geracao, carga_id, hoje)
         except Exception as exc:
             if not validar_apenas:
-                await _registrar_falha(conn, carga_id, exc, geracao, FONTE)
+                await _registrar_falha(conn, carga_id, exc, geracao, FONTE, contagens)
             raise
         log.info(
             "pncp_busca_carga",

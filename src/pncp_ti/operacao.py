@@ -6,7 +6,7 @@ import argparse
 import asyncio
 import os
 import re
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -48,7 +48,7 @@ MOTIVOS = {
         _RESPOSTA_ESTRANHA,
     ),
     **dict.fromkeys(("rede", "http", "teto_requisicoes"), _FORA_DO_AR),
-    "termos_falhos": "portal sem responder alguns termos há 3 dias",
+    "termos_falhos": "portal sem responder alguns termos há 14 dias",
     "sem_atas": "nenhuma ata devolvida",
     "queda_volume": "bem menos atas que ontem",
     "geracao_antiga": "arquivos da origem desatualizados",
@@ -83,6 +83,9 @@ def alertas(cargas: list[dict], agora: datetime, termo: str | None = None) -> li
             referencia = ativa["concluido_em"]
         if referencia is None or agora - referencia > timedelta(hours=48):
             avisos.append((f"{fonte}:velha", f"{nome} sem atualizar há mais de 2 dias"))
+    defasado = _pncp_defasado(cargas, agora)
+    if defasado:
+        avisos.append(("pncp:defasada", defasado))
     if termo:
         pncp = [c for c in cargas if c["fonte"] == "pncp_busca"]
         recente = max(
@@ -104,6 +107,26 @@ def alertas(cargas: list[dict], agora: datetime, termo: str | None = None) -> li
                     )
                 )
     return avisos
+
+
+def _pncp_defasado(cargas: list[dict], agora: datetime) -> str | None:
+    """Termos da busca PNCP que o portal não responde há 3 dias ou mais (ADR 0037).
+
+    A carga publica reaproveitando as atas anteriores desses termos; o aviso diz quantos e
+    há quanto tempo o mais antigo está parado, numa frase só (ADR 0030).
+    """
+    ativa = next((c for c in cargas if c["fonte"] == "pncp_busca" and c["ativa"]), None)
+    defasados = (ativa or {}).get("contagens", {}).get("termos_defasados") or {}
+    if not isinstance(defasados, dict) or not defasados:
+        return None
+    hoje = agora.astimezone(SP).date()
+    try:
+        dias = max((hoje - date.fromisoformat(d)).days for d in defasados.values())
+    except (TypeError, ValueError):
+        return None
+    n = len(defasados)
+    termos = "1 termo" if n == 1 else f"{n} termos"
+    return f"a busca PNCP está com {termos} sem atualizar há {dias} dias (portal instável)"
 
 
 def resumo(avisos: list[tuple[str, str]]) -> str | None:
