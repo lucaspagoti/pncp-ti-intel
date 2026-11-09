@@ -59,9 +59,9 @@ CVE-2026-111943
 # - CVE-2026-109518: apt/libapt-pkg 3.0.3 (RCE no download de pacote). O apt não roda
 #   no contêiner em operação: nada instala pacote depois do build. O digest mais novo
 #   de postgres:16 (sha256:f9a7b9eb…, 05/11) já traz o apt 3.0.4.
-# - CVE-2026-76844 e CVE-2026-85091: zlib1g 1.3.1-1+b1 (heap overflow em gz_vacate,
-#   corrigido em +deb13u1). Nenhum digest de postgres:16 traz a correção. O Postgres só
-#   escuta em 127.0.0.1 (ADR 0008/0012) e o caminho gz_* é escrita de arquivo gzip,
+# - CVE-2026-76844 (ponteiro residual em gz_write após falha de write()) e CVE-2026-85091
+#   (heap overflow em gz_vacate): zlib1g 1.3.1-1+b1, corrigidas em +deb13u1. Nenhum digest de postgres:16 traz a correção. O Postgres só
+#   escuta em 127.0.0.1 (ADR 0008/0012) e as duas estão na escrita de arquivo gzip (API gz_*),
 #   que o servidor não usa no tráfego; o `make backup` (pg_dump -Fc) comprime o nosso
 #   próprio banco. Risco residual baixo, não nulo: o texto das atas é de terceiros.
 # Revisitar: no primeiro digest de postgres:16 com zlib1g >= 1:1.3.dfsg+really1.3.1-1+deb13u1,
