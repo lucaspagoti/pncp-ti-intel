@@ -406,6 +406,7 @@ async def _registrar_falha(
     exc: BaseException,
     geracao: dict[str, dict[str, object]],
     fonte: str = FONTE,
+    contagens: Mapping[str, object] | None = None,
 ) -> None:
     # Só tipo e mensagem curta. Exceção do driver pode trazer "Failing row contains (...)",
     # então fora de ErroValidacao grava apenas a classe e o SQLSTATE.
@@ -417,9 +418,16 @@ async def _registrar_falha(
     await conn.rollback()
     await conn.execute(
         "INSERT INTO cargas (id, fonte, data_referencia, status, concluido_em, geracao, "
-        "erro_tipo, erro_mensagem) VALUES (%s, %s, (now() AT TIME ZONE "
-        "'America/Sao_Paulo')::date, 'falhou', now(), %s, %s, %s)",
-        (carga_id, fonte, json.dumps(geracao), tipo, mensagem[:500]),
+        "contagens, erro_tipo, erro_mensagem) VALUES (%s, %s, (now() AT TIME ZONE "
+        "'America/Sao_Paulo')::date, 'falhou', now(), %s, %s, %s, %s)",
+        (
+            carga_id,
+            fonte,
+            json.dumps(geracao),
+            json.dumps(dict(contagens or {})),
+            tipo,
+            mensagem[:500],
+        ),
     )
     await conn.commit()
 

@@ -758,6 +758,7 @@ async def principal(validar_apenas: bool, termos_arquivo: Path = ARQUIVO_TERMOS)
     conn: psycopg.AsyncConnection | None = None
     carga_id = uuid4()
     geracao: dict[str, dict[str, object]] = {}
+    contagens: dict[str, Any] = {}
     inicio = time.monotonic()
     try:
         hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
@@ -765,6 +766,7 @@ async def principal(validar_apenas: bool, termos_arquivo: Path = ARQUIVO_TERMOS)
         conn = await (conectar(get_settings()) if validar_apenas else _conectar_com_trava())
         try:
             coleta = await coletar(termos, hoje)
+            contagens = coleta.contagens  # a telemetria fica também na carga que falhar
             geracao = _geracao(coleta, termos)
             validar(coleta)
             if validar_apenas:
@@ -779,7 +781,7 @@ async def principal(validar_apenas: bool, termos_arquivo: Path = ARQUIVO_TERMOS)
             resultado = await publicar(conn, coleta, geracao, carga_id, hoje)
         except Exception as exc:
             if not validar_apenas:
-                await _registrar_falha(conn, carga_id, exc, geracao, FONTE)
+                await _registrar_falha(conn, carga_id, exc, geracao, FONTE, contagens)
             raise
         log.info(
             "pncp_busca_carga",

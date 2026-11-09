@@ -657,3 +657,44 @@ async def test_orcamento_de_tempo_corta_as_passadas_extra(monkeypatch):
     assert coleta.contagens["passadas_extra"] == 0
     assert coleta.contagens["requisicoes"] == b.TENTATIVAS
     assert coleta.falhos == ["notebook"]
+
+
+async def test_carga_que_falha_guarda_a_telemetria(conn_ingest):
+    """Revisão R0-01: a carga recusada (ex.: teto de 14 dias) não perde as métricas de rede."""
+    from pncp_ti.fontes.siga import _registrar_falha
+
+    carga_id = uuid4()
+    contagens = {"requisicoes": 61, "falhas_por_tipo": {"reset": 60}, "taxa_falha": 0.984}
+    exc = ErroValidacao("termos_falhos", "1 de 57 termos sem resposta há 14 dias ou mais: x")
+    await _registrar_falha(conn_ingest, carga_id, exc, {}, b.FONTE, contagens)
+    linha = await (
+        await conn_ingest.execute(
+            "SELECT status, erro_tipo, contagens FROM cargas WHERE id = %s", (carga_id,)
+        )
+    ).fetchone()
+    assert (linha["status"], linha["erro_tipo"]) == ("falhou", "termos_falhos")
+    assert linha["contagens"] == contagens
+
+
+async def test_principal_registra_a_falha_com_as_contagens_da_coleta(monkeypatch):
+    registradas = []
+
+    class Conexao:
+        async def close(self):
+            pass
+
+    async def conectar():
+        return Conexao()
+
+    async def coletar(termos, hoje):
+        return b.Coleta({}, {"termos": 1, "requisicoes": 7, "taxa_falha": 1.0}, [], ["x"])
+
+    async def registrar(conn, carga_id, exc, geracao, fonte, contagens=None):
+        registradas.append((exc.tipo, contagens))
+
+    monkeypatch.setattr(b, "_conectar_com_trava", conectar)
+    monkeypatch.setattr(b, "coletar", coletar)
+    monkeypatch.setattr(b, "_registrar_falha", registrar)
+    monkeypatch.setattr(b, "ler_termos", lambda _arquivo: ["x"])
+    assert await b.principal(False) == 2  # sem_atas é determinístico
+    assert registradas == [("sem_atas", {"termos": 1, "requisicoes": 7, "taxa_falha": 1.0})]
