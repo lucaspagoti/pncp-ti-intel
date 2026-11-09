@@ -188,7 +188,7 @@ def test_falha_de_duas_fontes_numa_frase_na_ordem_da_carga():
     falhas = [_falha("pncp_busca", "termos_falhos"), _falha("siga_rj", "codificacao")]
     assert operacao.frase_carga(falhas) == (
         "o SIGA RJ (arquivo fora do padrão) e a busca PNCP (portal sem responder alguns termos "
-        "há 3 dias) não atualizaram hoje; o site segue com os dados anteriores"
+        "há 14 dias) não atualizaram hoje; o site segue com os dados anteriores"
     )
 
 
@@ -218,3 +218,35 @@ async def test_leitura_bloqueada_no_banco_cai_na_frase_generica(monkeypatch):
     monkeypatch.setattr(operacao, "PRAZO_BANCO", 0.05)
     monkeypatch.setattr(operacao, "_ler_falhas", bloqueada)
     assert await operacao.falhas_de_hoje(AGORA) == []
+
+
+def test_termo_defasado_da_busca_pncp_avisa_numa_frase():
+    """ADR 0037: a carga publica com termo pendente há 3+ dias; a operação avisa."""
+    base = [carga("siga_rj"), carga("compras_arp")]
+    contagens = {
+        "termos_defasados": {"materiais de informatica": "2026-10-09", "toner": "2026-10-13"}
+    }
+    avisos = dict(alertas([*base, carga("pncp_busca", contagens=contagens)], AGORA))
+    assert avisos["pncp:defasada"] == (
+        "a busca PNCP está com 2 termos sem atualizar há 7 dias (portal instável)"
+    )
+    um = {"termos_defasados": {"toner": "2026-10-13"}}
+    avisos = dict(alertas([*base, carga("pncp_busca", contagens=um)], AGORA))
+    assert avisos["pncp:defasada"].startswith("a busca PNCP está com 1 termo sem atualizar há 3")
+
+
+@pytest.mark.parametrize("defasados", [None, {}, {"x": "não é data"}, ["lista"]])
+def test_sem_termo_defasado_valido_nao_avisa(defasados):
+    contagens = {} if defasados is None else {"termos_defasados": defasados}
+    cargas = [carga("siga_rj"), carga("compras_arp"), carga("pncp_busca", contagens=contagens)]
+    assert "pncp:defasada" not in codigos(cargas)
+
+
+def test_defasado_so_conta_na_carga_ativa():
+    contagens = {"termos_defasados": {"toner": "2026-10-01"}}
+    cargas = [
+        carga("siga_rj"),
+        carga("compras_arp"),
+        carga("pncp_busca", ativa=False, status="substituida", contagens=contagens),
+    ]
+    assert "pncp:defasada" not in codigos(cargas)
