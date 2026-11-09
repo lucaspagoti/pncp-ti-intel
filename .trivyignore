@@ -54,6 +54,23 @@ CVE-2026-78669
 CVE-2026-97031
 CVE-2026-111943
 
+# 09/11/2026 — pacotes Debian da imagem pinada (sha256:ca0bd484…), HIGH com correção
+# no Debian, mas ainda sem imagem oficial postgres:16 que traga as duas:
+# - CVE-2026-109518: apt/libapt-pkg 3.0.3 (RCE no download de pacote). O apt não roda
+#   no contêiner em operação: nada instala pacote depois do build. O digest mais novo
+#   de postgres:16 (sha256:f9a7b9eb…, 05/11) já traz o apt 3.0.4.
+# - CVE-2026-76844 (ponteiro residual em gz_write após falha de write()) e CVE-2026-85091
+#   (heap overflow em gz_vacate): zlib1g 1.3.1-1+b1, corrigidas em +deb13u1. Nenhum digest de postgres:16 traz a correção. O Postgres só
+#   escuta em 127.0.0.1 (ADR 0008/0012) e as duas estão na escrita de arquivo gzip (API gz_*),
+#   que o servidor não usa no tráfego; o `make backup` (pg_dump -Fc) comprime o nosso
+#   próprio banco. Risco residual baixo, não nulo: o texto das atas é de terceiros.
+# Revisitar: no primeiro digest de postgres:16 com zlib1g >= 1:1.3.dfsg+really1.3.1-1+deb13u1,
+# re-pinar docker-compose.yml, CI e scripts/pg_descartavel.sh e remover as três linhas.
+# Prazo: 09/12/2026, mesmo sem imagem nova (aí reavaliar com o Lucas).
+CVE-2026-109518
+CVE-2026-76844
+CVE-2026-85091
+
 # /etc/ssl/private/ssl-cert-snakeoil.key — chave placeholder padrão do pacote
 # Debian `ssl-cert`, presente em toda imagem Debian/Postgres oficial. Não é
 # segredo real; não usamos SSL no Postgres local (docker-compose.yml não
