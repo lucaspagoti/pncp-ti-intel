@@ -35,8 +35,9 @@ recursivo. A operação tem timer independente da carga e não deixa de rodar se
 Ela repete a fila pendente na próxima execução; reenvio manual está no runbook.
 
 A varredura das atas PNCP (`pncp-ti-semente`, ADR 0038) roda no **primeiro domingo do mês às
-10:00**, depois do backup, e leva ~7 h no ritmo do portal (`TimeoutStartSec=14h`). Ela não
-segura a trava da fonte enquanto lê, então não atrapalha a carga diária, e guarda cada página em
+10:00**, depois do backup, e leva ~7 h no ritmo do portal (`TimeoutStartSec=14h`). Ela só
+pega a trava da fonte no fim, para conferir o que mudou e publicar (se a carga diária estiver
+rodando, espera até ~1h30), então não atrapalha a madrugada. Guarda cada página em
 `~/.local/state/pncp-ti/semente_pncp_atas.jsonl`: se cair, a próxima execução (manual ou do
 timer) retoma da página seguinte, desde que o checkpoint tenha até 3 dias. É aditiva: só tira da
 base a ata que a API mostra cancelada, vencida ou sem termo. Falha dela avisa numa frase própria

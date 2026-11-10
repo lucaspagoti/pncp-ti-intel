@@ -66,7 +66,7 @@ from pncp_ti.fontes.pncp_busca import (
     _sem_acento,
     _texto,
 )
-from pncp_ti.fontes.siga import _registrar_falha
+from pncp_ti.fontes.siga import _registrar_falha, tentar_trava_sessao
 from pncp_ti.fontes.siga_csv import ErroValidacao
 from pncp_ti.ingest.rate_limit import LimitadorTaxa
 
@@ -89,6 +89,8 @@ PROGRESSO_A_CADA = 50  # páginas
 RETOMADAS = 3  # a semente espera e retoma da página que falhou
 ESPERA_RETOMADA = 600.0
 DIAS_CHECKPOINT = 3  # checkpoint mais velho que isso é descartado
+ESPERA_TRAVA = 60.0  # a semente espera a carga diária soltar a trava da fonte
+TENTATIVAS_TRAVA = 90
 ARQUIVO_CHECKPOINT = (
     Path(os.environ.get("PNCP_TI_ESTADO", Path.home() / ".local/state/pncp-ti"))
     / "semente_pncp_atas.jsonl"
@@ -552,8 +554,9 @@ async def coletar(
 class Checkpoint:
     """Páginas já lidas da semente, uma por linha (JSON), para retomar depois de uma queda.
 
-    Guarda só as atas cujo objeto casa algum termo (é o que a semente usa), com os campos que
-    `mapear` lê; a primeira linha identifica a varredura (janela, termos e data de início).
+    Guarda as atas cujo objeto casa algum termo e as que estão na base (para tirar a que deixou
+    de casar), com os campos que `mapear` lê; a primeira linha identifica a varredura (janela,
+    termos e data de início).
     """
 
     def __init__(self, caminho: Path) -> None:
@@ -620,15 +623,33 @@ class Checkpoint:
         self.caminho.unlink(missing_ok=True)
 
 
+async def _travar_esperando(conn: psycopg.AsyncConnection) -> None:
+    """Trava de sessão da fonte, esperando a carga diária terminar (até ~1h30)."""
+    for tentativa in range(TENTATIVAS_TRAVA):
+        if await tentar_trava_sessao(conn, busca.CHAVE_TRAVA):
+            return
+        if tentativa == 0:
+            log.info("pncp_atas_semente_esperando_trava")
+        await asyncio.sleep(ESPERA_TRAVA)
+    raise ErroValidacao("concorrente", "a carga da fonte não soltou a trava para a semente")
+
+
 async def coletar_semente(
     conn: psycopg.AsyncConnection,
     client: PNCPClient,
     termos: Sequence[str],
     hoje: date,
     checkpoint: Checkpoint,
+    travar: bool = True,
 ) -> tuple[Coleta, Delta]:
-    """A varredura completa, com retomada; a base é lida só no fim."""
+    """A varredura completa, com retomada.
+
+    Lê as páginas sem a trava da fonte; no fim pega a trava de sessão (que vale até a
+    publicação), relê o que mudou desde o início da varredura pelo delta e só então lê a base.
+    Assim a versão lida horas antes não desfaz o que um delta publicou no meio.
+    """
     pads = padroes(termos)
+    na_base = set(await _ativa(conn, hoje))
     cab, guardados, proxima, total, lidos, declarado = checkpoint.abrir(
         filtros_semente(hoje), termos, hoje
     )
@@ -645,7 +666,8 @@ async def coletar_semente(
                 casam = [
                     {c: i.get(c) for c in CAMPOS_GUARDADOS}
                     for i in p.itens
-                    if termos_que_casam(_texto(i.get("objetoContratacao")), pads)
+                    if str(i.get("numeroControlePNCPAta") or "").strip() in na_base
+                    or termos_que_casam(_texto(i.get("objetoContratacao")), pads)
                 ]
                 checkpoint.gravar(p, casam)
                 guardados.extend(casam)
@@ -659,7 +681,13 @@ async def coletar_semente(
             retomadas += 1
             log.warning("pncp_atas_retomada", pagina=proxima, retomada=retomadas)
             await asyncio.sleep(ESPERA_RETOMADA)
-    delta = ler_delta(guardados, pads, hoje)
+    if travar:
+        await _travar_esperando(conn)
+    # O que mudou desde a véspera do início vem por último: na mesma data, vale o delta.
+    inicio = date.fromisoformat(cab["inicio"]) - timedelta(days=SOBREPOSICAO_DIAS)
+    janela = {"dataInicial": _dia(inicio), "dataFinal": _dia(hoje)}
+    recentes, _ = await paginar(client, limitador, ROTA_DELTA, janela, telemetria)
+    delta = ler_delta([*guardados, *recentes], pads, hoje)
     delta.lidos = lidos
     marca = await _marca(conn)
     base = await _ativa(conn, hoje)
@@ -667,6 +695,8 @@ async def coletar_semente(
         "modo": "semente",
         "motivo_modo": "semente",
         "janela": filtros,
+        "janela_recuperacao": janela,
+        "registros_recuperacao": len(recentes),
         "retomadas": retomadas,
         # A semente não lê o delta: mantém a marca d'água anterior para não abrir buraco.
         "marca_dagua": marca or cab["inicio"],
@@ -690,14 +720,15 @@ async def principal(
     try:
         hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
         termos = busca.ler_termos(termos_arquivo)
-        # A semente leva horas e não segura a trava da fonte (a carga diária roda no meio): a
-        # publicação pega a trava da transação e a base é relida só no fim.
+        # A semente leva horas e só pega a trava da fonte no fim (a carga diária roda no meio).
         trava = not (validar_apenas or semente)
         conn = await (busca._conectar_com_trava() if trava else conectar(get_settings()))
         try:
             async with PNCPClient(base_url=URL_CONSULTA, timeout=TIMEOUT, max_retries=0) as client:
                 if semente:
-                    coleta, delta = await coletar_semente(conn, client, termos, hoje, checkpoint)
+                    coleta, delta = await coletar_semente(
+                        conn, client, termos, hoje, checkpoint, travar=not validar_apenas
+                    )
                 else:
                     coleta, delta = await coletar(conn, client, termos, hoje)
             contagens = coleta.contagens

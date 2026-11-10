@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, timedelta
 from uuid import uuid4
 
 import httpx
+import psycopg
 import pytest
 from compras_mcp.clients.pncp import PNCPClient
+from psycopg.rows import dict_row
 
+from pncp_ti.config import get_settings, ingest_dsn
 from pncp_ti.fontes import pncp_atas as pa
 from pncp_ti.fontes import pncp_busca as b
+from pncp_ti.fontes.siga import tentar_trava_sessao
 from pncp_ti.fontes.siga_csv import ErroValidacao
 
 HOJE = date(2026, 11, 10)  # terça
@@ -375,32 +380,56 @@ async def _publicar(conn, coleta, dia):
     return await b.publicar(conn, coleta, b._geracao(coleta, TERMOS), uuid4(), dia)
 
 
+class Api:
+    """API falsa: lista por vigência (páginas) e delta configuráveis entre as chamadas."""
+
+    def __init__(self, paginas: dict[int, list[dict]]):
+        self.paginas = paginas
+        self.delta: list[dict] = []
+        self.cair_na: int | None = None
+        self.vistas: list[int] = []
+        self.janelas: list[dict] = []
+
+    def __call__(self, req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/atualizacao"):
+            self.janelas.append(dict(req.url.params))
+            return httpx.Response(200, json=envelope(self.delta))
+        n = int(req.url.params["pagina"])
+        self.vistas.append(n)
+        if n == self.cair_na:
+            return httpx.Response(503)
+        total = sum(len(v) for v in self.paginas.values())
+        return httpx.Response(
+            200, json=envelope(self.paginas[n], total=total, paginas=len(self.paginas))
+        )
+
+
+async def _ids(conn, carga_id) -> dict[str, str]:
+    linhas = await (
+        await conn.execute("SELECT id_origem, motivo_ti FROM atas WHERE carga_id = %s", (carga_id,))
+    ).fetchall()
+    return {r["id_origem"]: r["motivo_ti"] for r in linhas}
+
+
 async def test_semente_retoma_e_delta_continua_da_marca(conn_ingest, tmp_path, monkeypatch):
     """Ponta a ponta no banco: semente que cai e retoma, delta, reserva e delta de novo."""
     monkeypatch.setattr(pa, "RETOMADAS", 0)
     ck = pa.Checkpoint(tmp_path / "semente.jsonl")
-    paginas_vistas = []
-    cair = {"sim": True}
-
-    def tratar(req: httpx.Request) -> httpx.Response:
-        if req.url.path.endswith("/atualizacao"):
-            delta = [item(ID_B, cancelado=True), item(ID_C, objetoContratacao="Notebook")]
-            return httpx.Response(200, json=envelope(delta))
-        n = int(req.url.params["pagina"])
-        paginas_vistas.append(n)
-        if n == 2 and cair["sim"]:
-            return httpx.Response(503)
-        lista = [item(ID_A)] if n == 1 else [item(ID_B, objetoContratacao="Impressoras")]
-        return httpx.Response(200, json=envelope(lista, total=2, paginas=2))
-
-    async with cliente(tratar) as c:
+    api = Api({1: [item(ID_A)], 2: [item(ID_B, objetoContratacao="Impressoras")]})
+    api.cair_na = 2
+    async with cliente(api) as c:
         with pytest.raises(ErroValidacao):
             await pa.coletar_semente(conn_ingest, c, TERMOS, HOJE, ck)
-    cair["sim"] = False
-    paginas_vistas.clear()
-    async with cliente(tratar) as c:
+    api.cair_na, api.vistas = None, []
+    async with cliente(api) as c:
         coleta, _ = await pa.coletar_semente(conn_ingest, c, TERMOS, HOJE, ck)
-    assert set(paginas_vistas) == {2}  # retomou: a página 1 veio do checkpoint
+    assert set(api.vistas) == {2}  # retomou: a página 1 veio do checkpoint
+    assert api.janelas[-1] == {  # recuperação desde a véspera do início
+        "dataInicial": "20261109",
+        "dataFinal": "20261110",
+        "pagina": "1",
+        "tamanhoPagina": "500",
+    }
     assert coleta.contagens["modo"] == "semente"
     assert coleta.contagens["registros_lidos"] == 2
     assert set(coleta.atas) == {ID_A, ID_B}
@@ -408,26 +437,81 @@ async def test_semente_retoma_e_delta_continua_da_marca(conn_ingest, tmp_path, m
     assert r1.contagens["marca_dagua"] == HOJE.isoformat()  # sem marca anterior: o início
 
     amanha = HOJE + timedelta(days=1)
-    async with cliente(tratar) as c:
+    api.delta = [item(ID_B, cancelado=True), item(ID_C, objetoContratacao="Notebook")]
+    async with cliente(api) as c:
         coleta, _ = await pa.coletar(conn_ingest, c, TERMOS, amanha)
     assert coleta.contagens["janela"] == {"dataInicial": "20261109", "dataFinal": "20261111"}
     r2 = await _publicar(conn_ingest, coleta, amanha)
-    linhas = await (
-        await conn_ingest.execute(
-            "SELECT id_origem, motivo_ti FROM atas WHERE carga_id = %s", (r2.carga_id,)
-        )
-    ).fetchall()
-    assert {r["id_origem"]: r["motivo_ti"] for r in linhas} == {
+    assert await _ids(conn_ingest, r2.carga_id) == {
         ID_A: "termo_pncp:notebook",
         ID_C: "termo_pncp:notebook",
     }
     assert r2.contagens["atas_removidas"] == 1
 
-    # A reserva (busca do portal) publica sem marca d'água; o delta segue da última da API.
+    # A reserva (busca do portal) acha só A: C, que só a API trouxe, continua (R0-01).
     depois = amanha + timedelta(days=1)
-    reserva = b.Coleta(dict(coleta.atas), {"atas_unicas": 2}, sem_resultado=[], falhos=[])
-    await _publicar(conn_ingest, reserva, depois)
-    async with cliente(tratar) as c:
+    so_a = {ID_A: coleta.atas[ID_A]}
+    reserva = b.Coleta(so_a, {"atas_unicas": 1, "termos": 3}, sem_resultado=[], falhos=[])
+    r3 = await b.publicar(
+        conn_ingest, reserva, b._geracao(reserva, TERMOS), uuid4(), depois, TERMOS
+    )
+    assert set(await _ids(conn_ingest, r3.carga_id)) == {ID_A, ID_C}
+    assert r3.contagens["atas_preservadas_api"] == 1
+    # O delta segue da última marca d'água da API, não da reserva.
+    api.delta = []
+    async with cliente(api) as c:
         coleta, _ = await pa.coletar(conn_ingest, c, TERMOS, depois + timedelta(days=1))
     assert coleta.contagens["motivo_modo"] == "delta"
     assert coleta.contagens["janela"]["dataInicial"] == "20261110"
+    assert set(coleta.atas) == {ID_A, ID_C}
+
+
+async def test_semente_nao_desfaz_o_delta_publicado_durante_a_leitura(conn_ingest, tmp_path):
+    """R0-02/R0-03: a semente leu A e B horas antes; no meio, um delta tirou A e trouxe C."""
+    ck = pa.Checkpoint(tmp_path / "semente.jsonl")
+    ontem = HOJE - timedelta(days=1)
+    ck.abrir(pa.filtros_semente(ontem), TERMOS, ontem)
+    ck.gravar(pa.Pagina(1, 1, 2, [item(ID_A), item(ID_B)]), [item(ID_A), item(ID_B)])
+    publicada = {ID_B: ata(ID_B, "Aquisição de notebooks"), ID_C: ata(ID_C, "Notebook")}
+    meio = b.Coleta(publicada, {"atas_unicas": 2}, sem_resultado=[], falhos=[])
+    await _publicar(conn_ingest, meio, HOJE)
+    api = Api({1: []})
+    api.delta = [item(ID_A, cancelado=True, dataAtualizacaoGlobal="2026-11-10")]
+    async with cliente(api) as c:
+        coleta, _ = await pa.coletar_semente(conn_ingest, c, TERMOS, HOJE, ck)
+    assert api.vistas == []  # checkpoint completo: só a recuperação foi à API
+    assert set(coleta.atas) == {ID_B, ID_C}  # A cancelada não volta; C do delta fica
+    assert coleta.contagens["janela_recuperacao"]["dataInicial"] == "20261108"
+
+
+async def test_semente_tira_ata_da_base_que_deixou_de_ser_ti(conn_ingest, tmp_path):
+    """R0-04: a API mostra a ata da base com objeto que não casa termo nenhum."""
+    base = {ID_A: ata(ID_A, "Aquisição de notebooks"), ID_B: ata(ID_B, "Notebook")}
+    await _publicar(conn_ingest, b.Coleta(base, {"atas_unicas": 2}, [], []), HOJE)
+    api = Api({1: [item(ID_A, objetoContratacao="Mobiliário escolar"), item(ID_C)]})
+    async with cliente(api) as c:
+        coleta, _ = await pa.coletar_semente(
+            conn_ingest, c, TERMOS, HOJE, pa.Checkpoint(tmp_path / "s.jsonl")
+        )
+    assert set(coleta.atas) == {ID_B, ID_C}
+    assert coleta.contagens["atas_removidas"] == 1
+
+
+async def test_semente_espera_a_trava_da_carga_diaria(
+    conn_ingest, nome_banco_teste, tmp_path, monkeypatch
+):
+    """R0-03: a base só é lida com a trava da fonte; com a diária rodando, a semente espera."""
+    monkeypatch.setattr(pa, "TENTATIVAS_TRAVA", 2)
+    monkeypatch.setattr(pa, "ESPERA_TRAVA", 0.0)
+    dsn = ingest_dsn(replace(get_settings(), postgres_db=nome_banco_teste))
+    outra = await psycopg.AsyncConnection.connect(dsn, row_factory=dict_row)
+    try:
+        assert await tentar_trava_sessao(outra, b.CHAVE_TRAVA)
+        async with cliente(Api({1: [item()]})) as c:
+            with pytest.raises(ErroValidacao) as exc:
+                await pa.coletar_semente(
+                    conn_ingest, c, TERMOS, HOJE, pa.Checkpoint(tmp_path / "s.jsonl")
+                )
+        assert exc.value.tipo == "concorrente"
+    finally:
+        await outra.close()

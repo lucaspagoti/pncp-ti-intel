@@ -58,16 +58,21 @@ Medições de 09/11/2026 no banco descartável (`pncp-ti-qa-r31`):
 3. **Varredura mensal, aditiva, fora da carga diária.** `--semente` lê `/v1/atas` com vigência
    de hoje até hoje + 364 dias (a API recusa período maior que 365), em unit própria
    (`pncp-ti-semente`, primeiro domingo do mês às 10:00, `TimeoutStartSec=14h`). Ela é aplicada
-   como um delta grande: só tira da base a ata que a API mostra cancelada, vencida ou sem termo;
-   a ata que a paginação pulou continua. Versão da API com data anterior à da base é ignorada,
-   para a varredura de horas não desfazer um delta publicado no meio. Não segura a trava da
-   fonte enquanto lê (a publicação usa a trava da transação e relê a base no fim), guarda cada
-   página num checkpoint em `~/.local/state/pncp-ti/` e retoma da página seguinte (até 3
-   retomadas em processo, e entre execuções se o checkpoint tiver até 3 dias). Mantém a marca
-   d'água anterior. Falha dela avisa numa frase própria e não interrompe o delta.
+   como um delta grande: só tira da base a ata que a API mostra cancelada, vencida ou sem termo
+   (o checkpoint guarda as atas que casam termo e as que já estão na base); a ata que a
+   paginação pulou continua. Lê as páginas sem a trava da fonte, guarda cada uma num checkpoint
+   em `~/.local/state/pncp-ti/` e retoma da página seguinte (até 3 retomadas em processo, e
+   entre execuções se o checkpoint tiver até 3 dias). No fim pega a trava de sessão da fonte
+   (espera até ~1h30 se a carga diária estiver rodando) e, já com ela, relê pelo delta o que
+   mudou desde a véspera do início da varredura, que vale sobre o que ela leu, e só então lê a
+   base e publica. Versão da API com data anterior à da base também é ignorada. Assim a
+   varredura de horas não desfaz um delta publicado no meio. Mantém a marca d'água anterior.
+   Falha dela avisa numa frase própria e não interrompe o delta.
 4. **Reserva automática.** Se `pncp_atas` sair com código diferente de 0, o `carga_diaria.sh`
-   roda a busca do portal (`pncp_busca`, ADR 0037) na hora, que publica na mesma fonte. A
-   verificação das 08:30 avisa quando a carga ativa não veio da API (`pncp:reserva`). A
+   roda a busca do portal (`pncp_busca`, ADR 0037) na hora, que publica na mesma fonte. Sobre
+   uma carga da API, a reserva mantém as atas ativas vigentes, não canceladas e que casam termo
+   que ela não achou (`atas_preservadas_api`): o delta seguinte só lê o que mudou e não as
+   devolveria. A verificação das 08:30 avisa quando a carga ativa não veio da API (`pncp:reserva`). A
    aposentadoria da busca do portal fica para decisão do Lucas depois de um período de uso.
 5. **Telemetria.** `cargas.contagens` grava `coletor`, `modo`, `motivo_modo`, `janela`,
    `marca_dagua`, registros declarados, lidos e divergentes, atas novas, removidas e com versão
