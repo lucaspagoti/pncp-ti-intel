@@ -8,11 +8,11 @@ from playwright.sync_api import Page, expect
 
 def test_resultado_mostra_o_item_que_casou(page: Page, base_url):
     page.goto(f"{base_url}/?q=impressao")
-    casado = page.locator(".resultados .casado").first
+    casado = page.locator(".resultados .ata-item").first
     expect(casado).to_contain_text("Impressão A4 monocromática")
     expect(casado.locator("mark")).to_have_text("Impressão")
     expect(casado).to_contain_text("1 de 1 item")
-    expect(page.locator(".resultados td.preco").first).to_contain_text("do item buscado")
+    expect(page.locator(".resultados .preco-nota").first).to_contain_text("do item buscado")
 
 
 def test_voce_quis_dizer_leva_a_busca_corrigida(page: Page, base_url):

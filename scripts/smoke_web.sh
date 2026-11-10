@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke da web em execução (rito de deploy, docs/ROADMAP-WEB.md): saúde, as três buscas do
+# Smoke da web em execução (rito de deploy, docs/ROADMAP-WEB.md): saúde, home, as três buscas do
 # aceite da R4, cabeçalhos de segurança, detalhe de uma ata e as duas exportações CSV.
 # Só lê. Uso: scripts/smoke_web.sh [URL]   (padrão: $WEB_URL ou http://127.0.0.1:8000)
 set -uo pipefail
@@ -24,6 +24,13 @@ read -r status _ <<<"$(pegar "$base/saude")"
 
 grep -qi "^content-security-policy: default-src 'none'" "$tmp/cab" \
     && ok "CSP" || falha "CSP ausente"
+
+read -r status _ <<<"$(pegar "$base/")"
+[ "$status" = 200 ] && grep -q 'name="q"' "$tmp/corpo" && ! grep -q 'href="/ata/' "$tmp/corpo" \
+    && ok "home" || falha "home (HTTP $status)"
+read -r status _ <<<"$(pegar "$base/?explorar=1")"
+[ "$status" = 200 ] && grep -q 'href="/ata/' "$tmp/corpo" \
+    && ok "todas as atas" || falha "todas as atas (HTTP $status)"
 
 detalhe=""
 for termo in "outsourcing de impressão" "notebook" "licença Microsoft"; do

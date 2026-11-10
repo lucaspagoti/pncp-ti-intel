@@ -1,4 +1,4 @@
-/* Identidade visual da web de atas (ADR 0038). Única fonte dos valores: protótipo e web
+/* Identidade visual da web de atas (ADR 0039). Única fonte dos valores: protótipo e web
    carregam este arquivo, e nenhum outro CSS tem hex, rgba ou tamanho de fonte avulso.
    Contrastes medidos sobre --surface (branco) e, quando diferente, sobre --bg. */
 :root {
@@ -23,6 +23,7 @@
   /* Tipo: fonte do sistema (San Francisco no Mac e no iPhone, Segoe no Windows), dois pesos. */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI",
           Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fs-0: 11px; --lh-0: 16px;   /* rótulo em caixa alta, contador */
   --fs-1: 13px; --lh-1: 18px;   /* metadados, rótulos */
   --fs-2: 15px; --lh-2: 22px;   /* corpo */
   --fs-3: 17px; --lh-3: 24px;   /* título de cartão, campo de busca */
@@ -44,6 +45,7 @@
   --r-card: 16px;
   --r-pill: 999px;
   --borda: 1px;
+  --progresso: 3px;       /* altura da barra de progresso */
   --icone: 16px;
   --alvo: 32px;           /* controle compacto */
   --alvo-toque: 44px;     /* mínimo no toque */
@@ -62,6 +64,7 @@
   --dur-1: 180ms;
   --dur-2: 320ms;
   --desloca: 24px;
+  --dur-carga: 1100ms;    /* volta completa da barra de progresso */
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,8 +1,7 @@
-{# Peças comuns às duas telas do MVP (prototipos/web/, ADR 0033). #}
+{# Peças comuns às telas da web (prototipos/web/, ADR 0033 e 0039). #}
 {% macro icone(nome) -%}
 <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-{%- if nome == 'ata' %}<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>
-{%- elif nome == 'baixar' %}<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>
+{%- if nome == 'baixar' %}<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>
 {%- elif nome == 'buscar' %}<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
 {%- elif nome == 'fechar' %}<path d="M6 6l12 12M18 6 6 18"/>
 {%- elif nome == 'voltar' %}<path d="M15 6l-6 6 6 6"/>
@@ -11,21 +10,43 @@
 {%- endmacro %}
 
 {% macro marca() -%}
-<a class="marca" href="/"><span class="selo">{{ icone('ata') }}</span><span><strong>Atas de TI</strong><small>vigentes · pesquisa de preços</small></span></a>
+<a class="marca" href="/">Atas de TI</a>
+{%- endmacro %}
+
+{% macro fontes_dos_dados(cargas) -%}
+{# A carga mais antiga entre as ativas: o corte só vale para todas a partir dela. #}
+{% set datas = cargas | map(attribute='data_referencia') | select | list %}
+{% if datas %}Dados de <strong>{{ datas | min | data }}</strong>.<br>{% endif %}SIGA RJ, Compras.gov.br e portal PNCP.
+{%- endmacro %}
+
+{% macro data_corte(cargas) -%}
+{% set datas = cargas | map(attribute='data_referencia') | select | list %}{{ datas | min | data if datas else '—' }}
 {%- endmacro %}
 
 {% macro rodape(cargas) -%}
-{# A carga mais antiga entre as ativas: o corte só vale para todas a partir dela. #}
-{% set datas = cargas | map(attribute='data_referencia') | select | list %}
-<p class="rodape-lateral">{% if datas %}Dados de <strong>{{ datas | min | data }}</strong>.<br>{% endif %}SIGA RJ, Compras.gov.br e portal PNCP.</p>
+<p class="rodape-lateral">{{ fontes_dos_dados(cargas) }}</p>
 {%- endmacro %}
 
-{% macro vigencia(fim, com_data=true) -%}
+{# Prazo no cartão da lista: texto, com ponto de cor só quando vence em até 90 dias. #}
+{% macro prazo(fim) -%}
 {% set dias, nivel = fim | dias_restantes %}
-{%- if com_data %}{{ fim | data }}{% endif -%}
-{%- if dias is not none -%}
-{%- set texto = 'vence hoje' if dias == 0 else 'vence amanhã' if dias == 1 else 'vence em %d dias' % dias -%}
-{%- if nivel %}<span class="chip {{ nivel }}">{{ texto }}</span>
-{%- elif com_data %}<span class="sub">em {{ dias }} dias</span>{% endif -%}
+{%- if dias is none -%}
+{%- elif nivel -%}<p class="prazo {{ nivel }}">{{ 'vence hoje' if dias == 0 else 'vence amanhã' if dias == 1 else 'vence em %d dias' % dias }}</p>
+{%- else -%}<p class="prazo">até {{ fim | data }}</p>
 {%- endif -%}
+{%- endmacro %}
+
+{# Situação ao lado da vigência, no detalhe. #}
+{% macro situacao(fim) -%}
+{% set dias, nivel = fim | dias_restantes %}
+{%- if dias is not none -%}
+<span class="prazo {{ nivel }}">{{ 'vence hoje' if dias == 0 else 'vence amanhã' if dias == 1 else 'vence em %d dias' % dias if nivel else 'em %d dias' % dias }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro aviso_dados() -%}
+<div class="dispensavel" data-dispensar data-chave="dados-publicos">
+  <div class="cartao aviso"><p>Dados públicos de terceiros. Confira sempre na origem antes de qualquer uso formal.</p>
+    <button type="button" class="fechar" data-acao="fechar" aria-label="Fechar aviso">{{ icone('fechar') }}</button></div>
+</div>
 {%- endmacro %}

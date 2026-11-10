@@ -17,7 +17,7 @@ Abra `index.html` no navegador. Sem estilo inline nem script inline, como exige 
   contraste medido de cada cor. A web usa uma cópia idêntica em `src/pncp_ti/web/static/`.
   Valor novo entra aqui, com o contraste quando for cor; nenhum outro CSS tem hex ou `rgba`.
 - `prototipo.css` — só `var(--token)`.
-- `prototipo.js` — dispensar com animação interrompível; vira parte do `app.js` da web na W6.
+- `prototipo.js` — fechar o aviso e remover pílulas com animação; vira parte do `app.js` da web na W6.
 
 ## Princípios
 
@@ -25,21 +25,21 @@ Abra `index.html` no navegador. Sem estilo inline nem script inline, como exige 
 - **Um número em destaque por cartão.** O preço é o único texto em 22 px; o resto é 13 a 17 px.
   Dois pesos: 400 e 600.
 - **Separação por espaço e fundo.** Cartão branco sobre `--bg`, sombra de repouso; a elevação
-  (`--shadow-lift`) marca o cartão sob o cursor e o aviso de Desfazer. Borda só em controle
+  (`--shadow-lift`) marca o cartão sob o cursor e o cursor sobre a ata. Borda só em controle
   (3:1) e fio de tabela.
-- **Movimento que se pode interromper.** Só transições CSS, que voltam do ponto em que estão
-  quando a classe sai. Uma curva, duas durações; nada se move com `prefers-reduced-motion`.
+- **Seleção que se vê.** A opção de filtro marcada é azul sólida, com marcador de rádio; campo
+  preenchido ganha borda azul.
+- **Movimento curto.** Só transições CSS, uma curva, duas durações; nada se move com
+  `prefers-reduced-motion`.
 
 ## Dispensar
 
 | O quê | Como | Volta |
 |---|---|---|
-| Ata do resultado | botão × (ou arrastar para o lado no toque) | "Desfazer" no aviso, por 6 s; "Mostrar" na barra |
 | Aviso de dados públicos | botão × | não volta; o mesmo texto fica no rodapé do detalhe |
 | Filtro ativo | × da pílula | a pílula sai e a lista troca |
 
-- O bloco fecha com a linha da grade indo de `1fr` a `0fr`: nada é medido em JS.
-- O gesto move o cartão pela propriedade `--dx` (CSSOM, permitido pela CSP).
-- Atas ocultas e avisos fechados ficam no `localStorage` (`pncp-ti:atas-ocultas`,
-  `pncp-ti:avisos-fechados`); sem armazenamento, nada é lembrado e nada quebra.
-- Pelo teclado, ocultar leva o foco ao "Desfazer"; Esc fecha o aviso.
+- O aviso fecha com a linha da grade indo de `1fr` a `0fr`: nada é medido em JS.
+- Aviso fechado fica no `localStorage` (`pncp-ti:avisos-fechados`); sem armazenamento, nada é
+  lembrado e nada quebra.
+- O cartão de ata não tem botão de ocultar: ele inteiro é o link para o detalhe.

@@ -290,6 +290,28 @@ async def buscar(conn: psycopg.AsyncConnection, f: Filtros) -> Pagina:
     return Pagina(linhas, total, f.pagina, max(1, -(-total // TAMANHO_PAGINA)))
 
 
+def janela_paginas(atual: int, total: int, vizinhas: int = 1) -> list[int | None]:
+    """Números da paginação: a primeira, a última e as vizinhas da atual; `None` é reticências."""
+    visiveis = {1, total, *range(max(1, atual - vizinhas), min(total, atual + vizinhas) + 1)}
+    janela: list[int | None] = []
+    anterior = 0
+    for numero in sorted(visiveis):
+        if numero - anterior == 2:
+            janela.append(anterior + 1)  # uma lacuna de uma só página vale mais que "…"
+        elif numero - anterior > 2:
+            janela.append(None)
+        janela.append(numero)
+        anterior = numero
+    return janela
+
+
+async def total_atas(conn: psycopg.AsyncConnection) -> int:
+    """Atas vigentes na base inteira, para a home."""
+    async with conn.cursor() as cur:
+        await cur.execute("SELECT count(*) FROM v_busca_atas")
+        return (await cur.fetchone())[0]
+
+
 async def para_exportar(conn: psycopg.AsyncConnection, f: Filtros) -> list[dict[str, Any]]:
     sql, p = _consulta(f, LIMITE_EXPORTACAO, 0)
     async with conn.cursor(row_factory=dict_row) as cur:

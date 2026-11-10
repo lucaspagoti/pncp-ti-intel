@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block titulo %}{% if f.q %}{{ f.q }} · {% endif %}Atas de TI{% endblock %}
 {% block corpo %}
 <form id="filtros" method="get" action="/" hx-get="/" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true" hx-indicator="#casca">
 <div class="casca" id="casca">{% include "_resultados.html" %}</div>

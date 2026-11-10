@@ -1,4 +1,4 @@
-/* Web de atas de TI vigentes: protótipo da identidade própria (ADR 0038). Todo valor vem de
+/* Web de atas de TI vigentes: protótipo da identidade própria (ADR 0039). Todo valor vem de
    tokens.css. Superfície neutra, um acento só, cartões arredondados que se dispensam com
    transições CSS: tirar a classe no meio do caminho volta do ponto em que estava. */
 
@@ -41,6 +41,7 @@ input[type="text"], input[type="search"], input[type="date"], select {
 }
 input::placeholder { color: var(--ink-2); }
 input:focus-visible, select:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+.lateral input[type="text"]:not(:placeholder-shown) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 
 /* ---------- Busca ---------- */
 .busca { display: flex; align-items: center; gap: var(--s-2); }
@@ -84,13 +85,21 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--a
 .grupo legend, .rotulo { display: block; padding: 0; margin-bottom: var(--s-1); font-size: var(--fs-1); line-height: var(--lh-1); font-weight: var(--w-strong); color: var(--ink); }
 .opcao { position: relative; display: flex; justify-content: space-between; gap: var(--s-2); align-items: center;
          min-height: var(--alvo); padding: 0 var(--s-3); margin: 0 calc(var(--s-3) * -1); border-radius: var(--r-control);
-         font-size: var(--fs-2); color: var(--ink); cursor: pointer; transition: background-color var(--dur-1) var(--ease); }
-.opcao input { position: absolute; opacity: 0; pointer-events: none; }
+         font-size: var(--fs-2); color: var(--ink); cursor: pointer;
+         transition: background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease); }
+.opcao input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.opcao > span:first-child { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+/* Marcador de seleção única: anel vazio; na opção marcada, anel e ponto brancos sobre o fundo azul. */
+.opcao > span:first-child::before { content: ""; flex: none; width: var(--icone); height: var(--icone); border-radius: var(--r-pill);
+         border: 1.5px solid var(--control-line); transition: border-color var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease); }
 .opcao:hover { background: var(--surface); }
-.opcao:has(input:checked) { background: var(--accent-soft); color: var(--accent-strong); font-weight: var(--w-strong); }
-.opcao:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+.opcao:has(input:checked) { background: var(--accent); color: var(--on-accent); font-weight: var(--w-strong); }
+.opcao:has(input:checked):hover { background: var(--accent-strong); }
+.opcao:has(input:checked) > span:first-child::before { border-color: var(--on-accent);
+         background: radial-gradient(circle, var(--on-accent) 0 36%, transparent 40%); }
+.opcao:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .opcao .qtd { font-size: var(--fs-1); color: var(--ink-2); font-weight: var(--w-regular); }
-.opcao:has(input:checked) .qtd { color: var(--accent-strong); }
+.opcao:has(input:checked) .qtd { color: var(--on-accent); }
 .faixa { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
 .rodape-lateral { margin-top: auto; font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink-2); }
 
@@ -120,41 +129,36 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--a
 .pilula.saindo { opacity: 0; transform: scale(.85); }
 .ativos .botao-texto { min-height: 30px; }
 
-.ocultas { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-3); font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink-2); }
-.ocultas[hidden] { display: none; }
-.ocultas .botao-texto { min-height: 26px; }
-
-/* ---------- Dispensável: cartão, aviso, qualquer bloco ---------- */
+/* ---------- Aviso dispensável ---------- */
 /* A linha da grade vai de 1fr a 0fr: a altura fecha sem medir nada em JS. */
 .dispensavel { display: grid; grid-template-rows: 1fr; margin-bottom: var(--s-3);
                transition: grid-template-rows var(--dur-2) var(--ease), margin-bottom var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease); }
 .dispensavel > * { min-height: 0; overflow: hidden; }
-.dispensavel > .cartao { transform: translateX(var(--dx, 0px)); transition: transform var(--dur-2) var(--ease), box-shadow var(--dur-1) var(--ease); }
+.dispensavel > .cartao { transition: transform var(--dur-2) var(--ease); }
 .dispensavel.saindo { grid-template-rows: 0fr; margin-bottom: 0; opacity: 0; }
-.dispensavel.saindo > .cartao { transform: translateX(calc(var(--dx, 0px) + var(--lado, -1) * var(--desloca))) scale(.98); }
-.dispensavel.arrastando > .cartao { transition: none; }
+.dispensavel.saindo > .cartao { transform: translateX(calc(var(--desloca) * -1)) scale(.98); }
 .dispensavel.oculta { display: none; }
 
 /* ---------- Cartão de ata ---------- */
 .cartao { position: relative; background: var(--surface); border-radius: var(--r-card); box-shadow: var(--shadow-rest); }
-.ata { touch-action: pan-y; }
+.lista-atas { display: flex; flex-direction: column; gap: var(--s-3); }
 .ata:hover, .ata:focus-within { box-shadow: var(--shadow-lift); }
 .ata-corpo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-2) var(--s-6); padding: var(--s-4) var(--s-5) var(--s-4); }
 .ata-texto { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 .ata-objeto { font-size: var(--fs-3); line-height: var(--lh-3); font-weight: var(--w-strong); letter-spacing: -.01em; }
 .ata-objeto a { color: var(--ink); }
-/* O cartão inteiro é o link; o botão de ocultar fica por cima. */
+/* O cartão inteiro é o link. */
 .ata-objeto a::after { content: ""; position: absolute; inset: 0; border-radius: var(--r-card); }
 .ata-objeto a:focus-visible { outline: none; }
 .ata-objeto a:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; }
 .ata-meta { font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink-2); }
 .ata-meta span + span::before { content: "·"; margin: 0 var(--s-2); }
 .ata-item { margin-top: var(--s-2); font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink-2); }
-.ata-item .rotulo-item { font-size: 11px; font-weight: var(--w-strong); letter-spacing: var(--tracking-rotulo); text-transform: uppercase; margin-right: var(--s-2); }
+.ata-item .rotulo-item { font-size: var(--fs-0); font-weight: var(--w-strong); letter-spacing: var(--tracking-rotulo); text-transform: uppercase; margin-right: var(--s-2); }
 .ata-item .nome-item { color: var(--ink); margin-right: var(--s-2); }
 mark { background: var(--accent-soft); color: var(--accent-strong); border-radius: var(--r-xs); padding: 0 2px; }
 
-.ata-numeros { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; padding-right: var(--s-6); }
+.ata-numeros { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
 .preco { font-size: var(--fs-4); line-height: var(--lh-4); font-weight: var(--w-strong); letter-spacing: -.01em; white-space: nowrap; }
 .preco .moeda { font-size: var(--fs-1); font-weight: var(--w-regular); color: var(--ink-2); margin-right: 3px; }
 .preco-nota { font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink-2); white-space: nowrap; }
@@ -164,18 +168,12 @@ mark { background: var(--accent-soft); color: var(--accent-strong); border-radiu
 .prazo.crit { color: var(--crit); font-weight: var(--w-strong); }
 .prazo.warn::before, .prazo.crit::before { content: ""; width: 6px; height: 6px; border-radius: var(--r-pill); background: currentColor; }
 
-.ocultar { position: absolute; z-index: 1; top: var(--s-3); right: var(--s-3); display: grid; place-items: center;
-           width: var(--alvo); height: var(--alvo); border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink-2);
-           cursor: pointer; opacity: 0; transition: opacity var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease); }
-.ata:hover .ocultar, .ata:focus-within .ocultar { opacity: 1; }
-.ocultar:hover { background: var(--bg); color: var(--ink); }
-@media (hover: none) { .ocultar { opacity: 1; } }
-
-/* ---------- Aviso dispensável ---------- */
+.fechar { display: grid; place-items: center; flex: none; width: var(--alvo); height: var(--alvo); border: 0; border-radius: var(--r-pill);
+          background: transparent; color: var(--ink-2); cursor: pointer; transition: background-color var(--dur-1) var(--ease); }
+.fechar:hover { background: var(--bg); color: var(--ink); }
 .aviso { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-5);
          font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink-2); }
 .aviso p { flex: 1; padding: var(--s-1) 0; }
-.aviso .ocultar { position: static; opacity: 1; flex: none; }
 
 /* ---------- Vazio e paginação ---------- */
 .vazio { padding: var(--s-7) var(--s-5); text-align: center; display: flex; flex-direction: column; gap: var(--s-2); align-items: center; }
@@ -190,17 +188,6 @@ mark { background: var(--accent-soft); color: var(--accent-strong); border-radiu
 .pag .reticencias { color: var(--ink-2); }
 .pag .seta { color: var(--accent); font-weight: var(--w-strong); padding: 0 var(--s-3); }
 .pag span.seta { color: var(--ink-2); font-weight: var(--w-regular); }
-
-/* ---------- Aviso de Desfazer ---------- */
-.toast { position: fixed; z-index: 10; left: 50%; bottom: var(--s-5); display: flex; align-items: center; gap: var(--s-3);
-         padding: var(--s-1) var(--s-1) var(--s-1) var(--s-5); border-radius: var(--r-pill); background: var(--toast); color: var(--on-toast);
-         font-size: var(--fs-2); white-space: nowrap; box-shadow: var(--shadow-lift);
-         transform: translate(-50%, calc(100% + var(--s-5))); opacity: 0; visibility: hidden;
-         transition: transform var(--dur-2) var(--ease), opacity var(--dur-1) var(--ease), visibility 0s linear var(--dur-2); }
-.toast.visivel { transform: translate(-50%, 0); opacity: 1; visibility: visible; transition-delay: 0s; }
-.toast button { min-height: var(--alvo-toque); padding: 0 var(--s-4); border: 0; border-radius: var(--r-pill); background: transparent;
-                color: var(--on-toast-accent); font-weight: var(--w-strong); cursor: pointer; }
-.toast button:focus-visible { outline-color: var(--on-toast-accent); outline-offset: -4px; }
 
 /* ---------- Detalhe ---------- */
 .detalhe { max-width: var(--coluna); margin: 0 auto; padding: var(--s-5) var(--s-5) var(--s-7); display: flex; flex-direction: column; gap: var(--s-4); }
@@ -223,8 +210,9 @@ mark { background: var(--accent-soft); color: var(--accent-strong); border-radiu
 .contagem { font-size: var(--fs-1); color: var(--ink-2); }
 
 .cartao.itens { overflow: clip; }
+.tabela { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
-th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: left; white-space: nowrap;
+th { background: var(--surface); text-align: left; white-space: nowrap;
      font-size: var(--fs-1); line-height: var(--lh-1); font-weight: var(--w-regular); color: var(--ink-2);
      padding: var(--s-2) var(--s-3); box-shadow: inset 0 -1px 0 var(--line); }
 td { padding: var(--s-4) var(--s-3); vertical-align: top; border-top: var(--borda) solid var(--line); }
@@ -240,8 +228,8 @@ td.unit { font-weight: var(--w-strong); }
 details.espec summary { display: inline-flex; margin-top: var(--s-1); cursor: pointer; list-style: none;
                         font-size: var(--fs-1); line-height: var(--lh-1); font-weight: var(--w-strong); color: var(--accent); }
 details.espec summary::-webkit-details-marker { display: none; }
-details.espec summary::after { content: "Ver especificação completa"; }
-details.espec[open] summary::after { content: "Ocultar especificação"; }
+details.espec summary .ocultar-espec, details.espec[open] summary .ver { display: none; }
+details.espec[open] summary .ocultar-espec { display: inline; }
 details.espec::details-content { height: 0; overflow: clip; opacity: 0;
   transition: height var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease), content-visibility var(--dur-2) allow-discrete; }
 details.espec[open]::details-content { height: auto; opacity: 1; }
@@ -265,7 +253,7 @@ details.espec p { padding-top: var(--s-2); }
   .rodape-lateral { display: none; }
   .botao-filtros { display: inline-flex; }
   .botao-filtros .qtd-ativos { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 var(--s-1);
-                               border-radius: var(--r-pill); background: var(--accent); color: var(--on-accent); font-size: 11px; }
+                               border-radius: var(--r-pill); background: var(--accent); color: var(--on-accent); font-size: var(--fs-0); }
   .alternar:focus-visible + .botao-filtros { outline: 2px solid var(--accent); outline-offset: 2px; }
   .alternar:not(:checked) ~ .painel-filtros { display: none; }
   .painel-filtros { background: var(--surface); border-radius: var(--r-card); box-shadow: var(--shadow-rest); padding: var(--s-4) var(--s-5); }
@@ -279,7 +267,6 @@ details.espec p { padding-top: var(--s-2); }
   .resumo h1 { font-size: var(--fs-4); line-height: var(--lh-4); }
   .resumo-acoes .botao-sec { display: none; }
   .ata-corpo { grid-template-columns: minmax(0, 1fr); padding: var(--s-4); }
-  .ata-objeto { padding-right: var(--s-6); }
   .ata-numeros { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; gap: var(--s-1) var(--s-3); text-align: left; padding: var(--s-1) 0 0; }
   .prazo { margin-top: 0; }
   .detalhe { padding: var(--s-4) var(--s-4) var(--s-7); }
@@ -302,17 +289,18 @@ details.espec p { padding-top: var(--s-2); }
   .nota-adesao { padding: 0 var(--s-4); }
   .botao, .botao-sec, .ordem select { min-height: var(--alvo-toque); }
   .pilula a { width: var(--alvo-toque); height: var(--alvo-toque); margin: calc(var(--s-3) * -1) calc(var(--s-2) * -1) calc(var(--s-3) * -1) 0; }
-  .ocultar { width: var(--alvo-toque); height: var(--alvo-toque); top: var(--s-1); right: var(--s-1); }
+  .fechar { width: var(--alvo-toque); height: var(--alvo-toque); }
 }
 
 /* ---------- Impressão ---------- */
 @media print {
   body { background: var(--surface); }
-  .lateral, .topo, .ativos, .resumo-acoes, .pag, .acoes, .ocultar, .aviso, .toast, .ocultas { display: none; }
+  .lateral, .topo, .ativos, .resumo-acoes, .pag, .acoes, .fechar, .aviso { display: none; }
   .casca { display: block; }
   .cartao { box-shadow: none; border: var(--borda) solid var(--line); }
-  .dispensavel, tr, .resumo-ata { break-inside: avoid; }
-  th { position: static; white-space: normal; }
+  .ata, tr, .resumo-ata { break-inside: avoid; }
+  th { white-space: normal; }
+  .tabela { overflow: visible; }
   .item-desc { min-width: 0; }
   .tela { display: none; }
   .impressao { display: inline; }

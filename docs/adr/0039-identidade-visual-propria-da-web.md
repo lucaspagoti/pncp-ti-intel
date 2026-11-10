@@ -1,13 +1,13 @@
 # 0039 — Identidade visual própria da web e redesenho da busca
 
-- Status: proposta (10/11/2026). Aceita quando o Lucas aprovar o protótipo (W4).
+- Status: aceita pelo Lucas (10/11/2026, ao aprovar o protótipo da W4).
 - Substitui, para a web, o design system PGE Ajuda. Altera o escopo do MVP da ADR 0033.
 
 ## Contexto
 
 Com a primeira release em produção (W2 e W3), o Lucas avaliou o estilo e a UX e não ficou
 satisfeito. Pediu algo limpo, profissional e minimalista, com a Apple como referência de tom, e
-cartões arredondados que se dispensam com animação interrompível.
+cartões arredondados, com animação onde ela ajuda.
 
 O design system PGE Ajuda descreve um relatório mensal impresso de outra instituição: Calibri,
 raio de no máximo 10 px, separação por borda, sem movimento. Na web isso resultou em:
@@ -48,21 +48,22 @@ Em 10/11/2026 o Lucas decidiu que a web pode ignorar o PGE Ajuda.
 4. **Filtros com uma mecânica.** Todo filtro aplica sozinho (texto com espera de 500 ms);
    "Aplicar filtros" sai; um "Limpar" só.
 5. **Detalhe em coluna única.** Voltar e ações no topo, título, cartão-resumo (órgão, local,
-   vigência, valor total), cartão de itens com cabeçalho fixo e "Sobre este registro" com nº de
+   vigência, valor total), cartão de itens (a tabela rola dentro do cartão) e "Sobre este registro" com nº de
    controle, motivo de ser TI, primeira vez vista e data dos dados, em texto secundário.
-6. **Dispensar no navegador.** O leitor pode ocultar atas do resultado, fechar o aviso de dados
-   públicos e remover filtros com animação. A saída é interrompível: "Desfazer" (ou soltar o
-   arraste antes do limite) faz o bloco voltar do ponto em que está. Atas ocultas e avisos
-   fechados ficam no `localStorage` do navegador (até 500 atas), nunca no servidor: a web
-   continua só leitura. Com o armazenamento bloqueado, tudo funciona sem lembrar.
+6. **Seleção de filtro evidente.** A opção marcada fica com fundo azul sólido, texto branco e
+   marcador de rádio preenchido; as outras mostram o anel vazio. Campo de texto preenchido ganha
+   borda azul. O rádio cobre a linha inteira (invisível), então o toque e o E2E acertam a opção.
+7. **Dispensar só o que o leitor não precisa ver de novo.** O aviso de dados públicos fecha com
+   animação e não volta (lembrado no `localStorage`, nunca no servidor: a web continua só
+   leitura), e a pílula de filtro sai com animação ao ser removida. Ocultar atas da lista foi
+   testado no protótipo e descartado em 10/11/2026: o cartão inteiro já abre a ata e ocultar não
+   ajuda a decidir. Com o armazenamento bloqueado, o aviso só volta a cada visita.
 
 ## Consequências
 
 - A regra do `CLAUDE.md` que mandava seguir o PGE Ajuda deixa de valer para esta web.
 - Fonte do sistema muda por aparelho. Em Linux sem San Francisco nem Segoe cai em fonte genérica
   (como no homelab e no CI). Se incomodar, embarcar uma fonte exige `font-src 'self'` na CSP.
-- "Exportar CSV" exporta o resultado do servidor, inclusive as atas ocultas no navegador. A tela
-  avisa quando há atas ocultas.
-- Atas ocultas valem por navegador e aparelho; trocar de navegador mostra tudo de novo.
-- Mudança feita em três PRs (`docs/ROADMAP-WEB.md`): W4 protótipo e esta ADR; W5 a web com home,
-  cartões, filtros e detalhe; W6 dispensar e movimento. O aceite de cada um é do Lucas.
+- Planejada em três fases (`docs/ROADMAP-WEB.md`), entregue num PR só a pedido do Lucas, que
+  aprovou o protótipo (W4) e quis o front novo em produção: protótipo, esta ADR e a web (W5 e W6).
+  O aceite e o "sim" do merge continuam dele.

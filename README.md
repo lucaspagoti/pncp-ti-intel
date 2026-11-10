@@ -61,9 +61,9 @@ foi abandonado em 13/10/2026.
   principal da ata (a cabeça do item no catálogo), com palavra exata e plural, sinônimos revisados
   (`insumos/sinonimos_busca.txt`), preço do item buscado e "você quis dizer". Avaliação:
   `uv run python -m pncp_ti.busca_avaliacao` (`evals/busca_<data>.md`).
-- **W4 — Identidade visual própria** (ADR 0039, em andamento): protótipo em `prototipos/web/`
-  com home de busca, resultados em cartões dispensáveis e detalhe em coluna única. A web aplica
-  na W5 e na W6 (`docs/ROADMAP-WEB.md`).
+- **W4 a W6 — Identidade visual própria** (ADR 0039): home de busca, resultados em cartões,
+  filtros que aplicam sozinhos e detalhe em coluna única, com o protótipo em `prototipos/web/`
+  como referência. Sem migração.
 
 `make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
 (`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, publicado em `atas.myhomelablp.site` pelo Cloudflare Tunnel com Access, ADR 0024). O banco local está na migração 0011 depois do deploy da W3.

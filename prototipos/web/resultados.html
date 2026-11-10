@@ -66,13 +66,11 @@
 
     <div class="dispensavel" data-dispensar="aviso" data-chave="dados-publicos">
       <div class="cartao aviso"><p>Dados públicos de terceiros. Confira sempre na origem antes de qualquer uso formal.</p>
-        <button type="button" class="ocultar" data-acao="ocultar" aria-label="Fechar aviso"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+        <button type="button" class="fechar" data-acao="fechar" aria-label="Fechar aviso"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     </div>
 
-    <p class="ocultas" data-ocultas hidden><span data-ocultas-texto></span><button type="button" class="botao-texto" data-acao="mostrar-ocultas">Mostrar</button></p>
-
     <ol class="lista-atas">
-      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/1">
+      <li>
         <article class="cartao ata">
           <div class="ata-corpo">
             <div class="ata-texto">
@@ -86,10 +84,9 @@
               <p class="prazo">até 12/05/2027</p>
             </div>
           </div>
-          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </article>
       </li>
-      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/2">
+      <li>
         <article class="cartao ata">
           <div class="ata-corpo">
             <div class="ata-texto">
@@ -103,10 +100,9 @@
               <p class="prazo">até 13/05/2027</p>
             </div>
           </div>
-          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </article>
       </li>
-      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/3">
+      <li>
         <article class="cartao ata">
           <div class="ata-corpo">
             <div class="ata-texto">
@@ -120,10 +116,9 @@
               <p class="prazo crit">vence em 19 dias</p>
             </div>
           </div>
-          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </article>
       </li>
-      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/4">
+      <li>
         <article class="cartao ata">
           <div class="ata-corpo">
             <div class="ata-texto">
@@ -137,10 +132,9 @@
               <p class="prazo warn">vence em 59 dias</p>
             </div>
           </div>
-          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </article>
       </li>
-      <li class="dispensavel" data-dispensar="ata" data-chave="pncp_busca/5">
+      <li>
         <article class="cartao ata">
           <div class="ata-corpo">
             <div class="ata-texto">
@@ -152,10 +146,9 @@
               <p class="prazo">até 12/06/2027</p>
             </div>
           </div>
-          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </article>
       </li>
-      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/6">
+      <li>
         <article class="cartao ata">
           <div class="ata-corpo">
             <div class="ata-texto">
@@ -169,7 +162,6 @@
               <p class="prazo crit">vence em 25 dias</p>
             </div>
           </div>
-          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </article>
       </li>
     </ol>
@@ -186,6 +178,5 @@
   </main>
 </form>
 
-<div class="toast" data-toast role="status" aria-live="polite"><span data-toast-texto>Ata oculta</span><button type="button" data-acao="desfazer">Desfazer</button></div>
 </body>
 </html>
