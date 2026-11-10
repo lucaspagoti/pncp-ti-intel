@@ -14,8 +14,13 @@ button { font: inherit; color: inherit; }
 svg.ic { width: var(--icone); height: var(--icone); flex: none; stroke: currentColor; fill: none;
          stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-/* Texto de terceiros pode vir sem espaço (códigos, URLs): quebra em vez de alargar a página. */
-h1, h2, dd, .ata-meta, .pilula b, .item-desc { overflow-wrap: anywhere; }
+/* Texto de terceiros pode vir sem espaço (códigos, URLs): quebra em vez de alargar a página. A
+   propriedade é herdada, então basta marcar os contêineres onde ele aparece. Em célula de tabela,
+   `anywhere` encolheria as colunas estreitas (nº do item); lá vale `break-word`, e a tabela rola
+   dentro de `.tabela`. A descrição do item pode quebrar em qualquer ponto, na tela e na impressão. */
+.principal, .detalhe-cab, .resumo-ata, .sobre, .sem-itens { overflow-wrap: anywhere; }
+td { overflow-wrap: break-word; }
+.item-desc { overflow-wrap: anywhere; }
 
 /* ---------- Controles ---------- */
 .botao, .botao-sec, .botao-texto {
@@ -302,6 +307,10 @@ html[data-ocupado] .progresso::before { animation: correr var(--dur-carga) var(-
   .sobre dd { margin-bottom: var(--s-2); }
   .nota-adesao { padding: 0 var(--s-4); }
   .botao, .botao-sec, .ordem select { min-height: var(--alvo-toque); }
+  /* Alvos de toque de 44 px também nas opções de filtro, nos links soltos e nos exemplos. */
+  .opcao, .exemplos a, .botao-texto, .ativos .botao-texto, .voltar, .marca, .cab-filtros a, .home-rodape a, details.espec summary {
+    display: inline-flex; align-items: center; min-height: var(--alvo-toque); }
+  .opcao { display: flex; }
   .pag a, .pag span { min-width: var(--alvo-toque); height: var(--alvo-toque); }
   .pilula a { width: var(--alvo-toque); height: var(--alvo-toque); margin: calc(var(--s-3) * -1) calc(var(--s-2) * -1) calc(var(--s-3) * -1) 0; }
   .fechar { width: var(--alvo-toque); height: var(--alvo-toque); }

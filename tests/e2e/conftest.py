@@ -47,6 +47,11 @@ def _semear(dsn: str) -> None:
     # QA-001: objeto e órgão sem espaço, que não podem alargar a página.
     longo = "zzzlongo " + "X" * 250
     comandos.append(web_dados.ata(arp, "LONGO", longo, orgao="O" * 200))
+    # QA-002 (W5): item com 100 letras sem espaço, que aparece na linha "Item" do cartão.
+    comandos += [
+        web_dados.ata(arp, "LONGOITEM", "Aquisição de materiais diversos"),
+        web_dados.item(arp, "LONGOITEM", 1, "K" * 100, 1.5),
+    ]
     # Nº de item com zeros à esquerda e descrição longa, como no ARP real: o número não quebra.
     descricao = "Locação de multifuncional laser monocromática com manutenção e suprimentos " * 3
     comandos += [web_dados.item(arp, "LONGO", f"{n:05}", descricao, 0.17) for n in (1, 2)]

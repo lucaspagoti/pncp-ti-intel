@@ -73,6 +73,19 @@ def test_texto_continua_a_ser_digitado_enquanto_a_lista_troca(page: Page, base_u
     expect(campo).to_be_focused()
 
 
+def test_trocar_de_campo_durante_a_requisicao_nao_apaga_o_texto(page: Page, base_url):
+    """QA-001 (W5): a resposta do órgão chega depois que o leitor passou para o preço."""
+    page.goto(base_url + TODAS)
+    page.route("**/?*", lambda rota: (page.wait_for_timeout(350), rota.continue_()))
+    page.get_by_label("Órgão", exact=True).fill("org")
+    page.wait_for_timeout(600)  # o pedido do órgão já saiu e a resposta ainda não chegou
+    preco = page.get_by_label("Preço unitário mínimo")
+    preco.fill("123")
+    expect(page.locator(".pilula")).to_contain_text(["Órgão org", "Preço mín. R$ 123"])
+    expect(preco).to_have_value("123")
+    expect(page.get_by_label("Órgão", exact=True)).to_have_value("org")
+
+
 def test_opcao_marcada_se_destaca(page: Page, base_url):
     page.goto(base_url + TODAS)
     page.get_by_label("SIGA RJ").check()

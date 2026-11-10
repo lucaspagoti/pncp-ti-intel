@@ -117,6 +117,17 @@ def test_texto_longo_sem_espaco_nao_alarga_a_pagina(page: Page, base_url, tela):
     expect(page.get_by_label("Remover termo")).to_be_visible()
 
 
+def test_item_casado_e_sugestao_sem_espaco_nao_alargam_o_celular(page: Page, base_url):
+    """QA-002 (W5): texto de terceiros sem espaço na linha do item e na sugestão do estado vazio."""
+    page.set_viewport_size(CELULAR)
+    page.goto(f"{base_url}/?q={'k' * 100}")
+    expect(page.locator(".ata-item").first).to_be_visible()
+    _sem_rolagem_horizontal(page)
+    page.goto(f"{base_url}/?q={'y' * 100}")  # sem resultado: sugere a palavra de 250 letras
+    expect(page.get_by_text("Você quis dizer")).to_be_visible()
+    _sem_rolagem_horizontal(page)
+
+
 def test_numero_do_item_fica_numa_linha(page: Page, base_url):
     """No ARP real o item é `00001`; a quebra de texto da tabela não pode partir o número."""
     page.goto(f"{base_url}/ata/compras_arp/LONGO")
@@ -158,6 +169,29 @@ def test_celular_alvos_de_toque_de_44px(page: Page, base_url):
     for alvo in alvos:
         caixa = alvo.bounding_box()
         assert caixa and caixa["height"] >= 44 and caixa["width"] >= 44, caixa
+
+
+def _alvos_de_44px(alvos) -> None:
+    assert alvos
+    for alvo in alvos:
+        caixa = alvo.bounding_box()
+        assert caixa and caixa["height"] >= 44, (alvo.inner_text(), caixa)
+
+
+def test_celular_opcoes_links_e_exemplos_com_alvo_de_44px(page: Page, base_url):
+    """QA-003 (W5): as opções de filtro e os links soltos também têm 44 px de toque."""
+    page.set_viewport_size(CELULAR)
+    page.goto(base_url)
+    _alvos_de_44px(page.locator(".exemplos a").all())
+    _alvos_de_44px([page.get_by_role("link", name="Ver todas as atas")])
+    page.goto(base_url + TODAS)
+    page.locator(".botao-filtros").click()
+    _alvos_de_44px(page.locator(".opcao").all())
+    _alvos_de_44px([page.get_by_role("link", name="Limpar", exact=True), page.locator(".marca")])
+    page.goto(f"{base_url}/?q=notebook&uf=SP")
+    _alvos_de_44px([page.get_by_role("link", name="Limpar tudo")])
+    page.goto(f"{base_url}/ata/compras_arp/LONGO")
+    _alvos_de_44px([page.get_by_role("link", name="Voltar à busca")])
 
 
 def test_estado_vazio_orienta_o_proximo_passo(page: Page, base_url):

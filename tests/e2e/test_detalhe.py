@@ -24,6 +24,15 @@ def test_detalhe_pela_busca(page: Page, base_url):
     expect(page.locator(RESULTADOS)).to_have_text(["Outsourcing de impressão departamental"])
 
 
+def test_voltar_depois_de_acesso_direto_a_outra_ata_leva_a_todas(page: Page, base_url):
+    """QA-004 (W5): vir por um cartão não vale para outra ata aberta pela barra de endereço."""
+    page.goto(f"{base_url}/?q=impressao")
+    page.get_by_role("link", name="Outsourcing de impressão departamental").click()
+    page.goto(f"{base_url}/ata/siga_rj/S1")
+    page.get_by_role("link", name="Voltar à busca").click()
+    expect(page).to_have_url(f"{base_url}{TODAS}")
+
+
 def test_voltar_sem_historico_leva_a_todas_as_atas(page: Page, base_url):
     page.goto(f"{base_url}/ata/compras_arp/A1")
     page.get_by_role("link", name="Voltar à busca").click()

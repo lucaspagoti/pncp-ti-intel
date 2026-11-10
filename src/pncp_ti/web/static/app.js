@@ -6,22 +6,23 @@
   // ---------- Troca de resultados do HTMX ----------
   // A casca fica `aria-busy` e a barra de progresso corre (se a resposta demorar) enquanto o HTMX
   // busca a página.
+  // Texto dos campos que aplicam sozinhos depois de uma pausa na digitação (órgão e preço).
+  const textoDosCampos = () =>
+    [...document.querySelectorAll("input[data-auto]")].map((campo) => campo.value).join("\u0001");
   let enviado = null;
 
   document.addEventListener("htmx:beforeRequest", () => {
     document.getElementById("casca")?.setAttribute("aria-busy", "true");
     document.documentElement.setAttribute("data-ocupado", "");
-    const foco = document.activeElement;
-    enviado = foco?.matches?.("input[data-auto]") ? { id: foco.id, valor: foco.value } : null;
+    enviado = textoDosCampos();
   });
 
-  // Quem continuou digitando depois do envio recebe uma resposta velha, que apagaria o que foi
-  // escrito: ela é descartada e a próxima pausa na digitação envia o texto novo.
+  // Se algum desses campos mudou depois do envio, a resposta é velha e apagaria o que foi
+  // escrito, mesmo que o leitor já tenha passado para outro campo: ela é descartada, e a pausa
+  // na digitação que ainda vai terminar envia o texto novo. Os demais filtros (rádio, UF, data,
+  // ordem) enviam na hora e cancelam o pedido anterior; a busca pelo termo só envia no botão.
   document.addEventListener("htmx:beforeSwap", (e) => {
-    const foco = document.activeElement;
-    if (enviado && foco?.id === enviado.id && foco.value !== enviado.valor) {
-      e.detail.shouldSwap = false;
-    }
+    if (enviado !== null && textoDosCampos() !== enviado) e.detail.shouldSwap = false;
     enviado = null;
   });
 
@@ -68,20 +69,21 @@
 
   // ---------- Voltar à busca ----------
   // Quem chegou à ata por um cartão volta à busca exatamente como estava (filtros, página e
-  // rolagem). Sem esse caminho (link direto, nova aba), o link leva à lista inteira.
+  // rolagem). Sem esse caminho (link direto, nova aba, outra ata digitada na barra), o link leva
+  // à lista inteira. O cartão guarda a ata que abriu, e só ela vale como "veio da busca".
   const CHAVE_VOLTAR = "pncp-ti:veio-da-busca";
-  const guardar = () => {
-    try { sessionStorage.setItem(CHAVE_VOLTAR, "1"); } catch { /* sem sessão */ }
+  const guardar = (ata) => {
+    try { sessionStorage.setItem(CHAVE_VOLTAR, ata); } catch { /* sem sessão */ }
   };
   const veioDaBusca = () => {
-    try { return sessionStorage.getItem(CHAVE_VOLTAR) === "1"; } catch { return false; }
+    try { return sessionStorage.getItem(CHAVE_VOLTAR) === location.pathname; } catch { return false; }
   };
 
   document.addEventListener("click", (e) => {
     const alvo = e.target.closest("a, button");
     if (!alvo) return;
     if (alvo.matches(".lista-atas a")) {
-      guardar();
+      guardar(new URL(alvo.href, location.href).pathname);
     } else if (alvo.matches("[data-voltar]")) {
       const nova = e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0;
       if (!nova && veioDaBusca() && history.length > 1) {
