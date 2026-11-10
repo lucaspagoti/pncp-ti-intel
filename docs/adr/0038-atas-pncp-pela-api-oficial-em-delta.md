@@ -72,7 +72,7 @@ Medições de 09/11/2026 no banco descartável (`pncp-ti-qa-r31`):
    roda a busca do portal (`pncp_busca`, ADR 0037) na hora, que publica na mesma fonte. Sobre
    uma carga da API, a reserva mantém as atas ativas vigentes, não canceladas e que casam termo
    que ela não achou (`atas_preservadas_api`): o delta seguinte só lê o que mudou e não as
-   devolveria. A verificação das 08:30 avisa quando a carga ativa não veio da API (`pncp:reserva`). A
+   devolveria. A reserva grava `preserva_api`, e a seguinte também preserva, até a API voltar. A verificação das 08:30 avisa quando a carga ativa não veio da API (`pncp:reserva`). A
    aposentadoria da busca do portal fica para decisão do Lucas depois de um período de uso.
 5. **Telemetria.** `cargas.contagens` grava `coletor`, `modo`, `motivo_modo`, `janela`,
    `marca_dagua`, registros declarados, lidos e divergentes, atas novas, removidas e com versão

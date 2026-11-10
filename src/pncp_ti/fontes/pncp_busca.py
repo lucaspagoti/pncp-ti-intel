@@ -609,7 +609,8 @@ def preservar_da_api(
 
     A busca trunca termos pesados e perde páginas; sem isso, um dia de reserva tiraria da
     base as atas que só a API trouxe, e o delta seguinte (que só lê o que mudou) não as
-    devolveria. Fica a ata ativa vigente, não cancelada, cujo objeto casa algum termo.
+    devolveria. Fica a ata ativa vigente, não cancelada, cujo objeto casa algum termo. Vale
+    também sobre outra reserva (`preserva_api`), até a API voltar a publicar.
     """
     preservadas = 0
     for id_origem, anterior in anteriores.items():
@@ -621,6 +622,7 @@ def preservar_da_api(
             coleta.atas[id_origem] = anterior
             preservadas += 1
     coleta.contagens["atas_preservadas_api"] = preservadas
+    coleta.contagens["preserva_api"] = True  # a próxima reserva segue preservando
     coleta.contagens["atas_unicas"] = len(coleta.atas)
 
 
@@ -699,10 +701,10 @@ async def publicar(
                     "geracao_antiga",
                     f"data {hoje} anterior à carga ativa ({ativa['data_referencia']})",
                 )
-        sobre_api = (
-            termos is not None
-            and ativa is not None
-            and (ativa["contagens"] or {}).get("coletor") == "api_consulta"
+        # Sobre uma carga da API ou de uma reserva que já preservava (falhas seguidas da API).
+        anterior_c = (ativa["contagens"] or {}) if ativa else {}
+        sobre_api = termos is not None and (
+            anterior_c.get("coletor") == "api_consulta" or bool(anterior_c.get("preserva_api"))
         )
         anteriores_atas = (
             await _atas_ativas(conn, ativa["id"], hoje)

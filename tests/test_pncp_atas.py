@@ -457,6 +457,11 @@ async def test_semente_retoma_e_delta_continua_da_marca(conn_ingest, tmp_path, m
     )
     assert set(await _ids(conn_ingest, r3.carga_id)) == {ID_A, ID_C}
     assert r3.contagens["atas_preservadas_api"] == 1
+    # Segunda reserva seguida (R1-01): C continua.
+    reserva = b.Coleta(dict(so_a), {"atas_unicas": 1, "termos": 3}, sem_resultado=[], falhos=[])
+    geracao = b._geracao(reserva, TERMOS)
+    r4 = await b.publicar(conn_ingest, reserva, geracao, uuid4(), depois, TERMOS)
+    assert set(await _ids(conn_ingest, r4.carga_id)) == {ID_A, ID_C}
     # O delta segue da última marca d'água da API, não da reserva.
     api.delta = []
     async with cliente(api) as c:
