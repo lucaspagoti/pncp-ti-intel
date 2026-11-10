@@ -60,7 +60,7 @@ async def test_filtros_de_fonte_uf_vencimento_e_preco(cliente):
     r = await cliente.get("/", params={"esfera": "Estadual"})  # SIGA é Estadual/RJ pela view
     assert "notebooks" in titulos(r.text) and "licença Microsoft" not in titulos(r.text)
     # "Vigente até pelo menos": a do dia 5 vence antes; as do dia 60 ficam.
-    r = await cliente.get("/", params={"vigente_ate": str(date.today() + timedelta(days=10))})
+    r = await cliente.get("/", params={"vigente_ate": str(web_dados.HOJE + timedelta(days=10))})
     assert "licença Microsoft" not in titulos(r.text) and "notebooks" in titulos(r.text)
     r = await cliente.get("/", params={"preco_min": "1.000,00"})  # só o notebook passa
     assert "notebooks" in titulos(r.text) and "Outsourcing" not in titulos(r.text)
@@ -381,11 +381,12 @@ async def test_pilulas_e_selo_de_vencimento(cliente):
 async def test_ata_sem_itens_e_rodape_com_a_data_da_carga(cliente):
     r = await cliente.get("/", params={"q": "microsoft"})
     assert "sem itens nesta fonte" in r.text
-    assert f"Dados de <strong>{date.today():%d/%m/%Y}</strong>" in r.text
+    assert f"Dados de <strong>{web_dados.HOJE:%d/%m/%Y}</strong>" in r.text
     r = await cliente.get("/ata/compras_arp/A2")
     assert "Esta fonte não traz itens para esta ata." in r.text and "itens.csv" not in r.text
     assert "Municipal · SP" in r.text
-    assert "até " + (date.today() + timedelta(days=5)).strftime("%d/%m/%Y") in r.text  # sem início
+    fim = web_dados.HOJE + timedelta(days=5)
+    assert f"até {fim:%d/%m/%Y}" in r.text  # sem início
 
 
 async def test_paginacao_de_20_em_20(cliente, conn_ingest):

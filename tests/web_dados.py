@@ -6,10 +6,14 @@ conexão async (testes com `TestClient`) quanto síncrona (servidor do E2E).
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from uuid import UUID, uuid4
 
-FIM = date.today() + timedelta(days=60)
+from pncp_ti.web.consultas import hoje
+
+# O dia de Brasília, como a web calcula: `date.today()` é UTC no CI e erra das 21h à meia-noite.
+HOJE = hoje()
+FIM = HOJE + timedelta(days=60)
 # Objeto com fórmula: a exportação CSV precisa neutralizá-lo.
 OBJETO_FORMULA = '=HYPERLINK("http://x") toner'
 Comando = tuple[str, tuple]
@@ -43,7 +47,7 @@ def comandos(siga: UUID | None = None, arp: UUID | None = None) -> list[Comando]
         (
             "INSERT INTO cargas (id, fonte, data_referencia, status, ativa) "
             "VALUES (%s, %s, %s, 'concluida', true)",
-            (carga, fonte, date.today()),
+            (carga, fonte, HOJE),
         )
         for carga, fonte in ((siga, "siga_rj"), (arp, "compras_arp"))
     ]
@@ -58,7 +62,7 @@ def comandos(siga: UUID | None = None, arp: UUID | None = None) -> list[Comando]
             arp,
             "A2",
             "<script>alert(1)</script> licença Microsoft",
-            fim=date.today() + timedelta(days=5),
+            fim=HOJE + timedelta(days=5),
             uf="SP",
             esfera="Municipal",
         ),
