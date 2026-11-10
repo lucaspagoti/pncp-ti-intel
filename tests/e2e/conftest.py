@@ -10,7 +10,7 @@ import socket
 import threading
 import time
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import timedelta
 from uuid import uuid4
 
 import psycopg
@@ -39,7 +39,7 @@ def _semear(dsn: str) -> None:
     arp = uuid4()
     comandos = web_dados.comandos(arp=arp)
     comandos.append(
-        web_dados.ata(arp, "F1", web_dados.OBJETO_FORMULA, fim=date.today() + timedelta(days=200))
+        web_dados.ata(arp, "F1", web_dados.OBJETO_FORMULA, fim=web_dados.HOJE + timedelta(days=200))
     )
     comandos += [
         web_dados.ata(arp, f"P{n:02}", f"Cabo de rede lote {n:02}") for n in range(ATAS_PAGINACAO)

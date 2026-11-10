@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 
+import web_dados
 from comum import RESULTADOS, buscar
 from playwright.sync_api import Page, expect
 
@@ -42,7 +43,7 @@ def test_voltar_do_navegador_restaura_a_busca(page: Page, base_url):
 
 def test_vigente_ate_pelo_menos(page: Page, base_url):
     page.goto(base_url)
-    page.get_by_label("Vigente até pelo menos").fill(str(date.today() + timedelta(days=100)))
+    page.get_by_label("Vigente até pelo menos").fill(str(web_dados.HOJE + timedelta(days=100)))
     page.get_by_role("button", name="Aplicar filtros").click()
     expect(page.locator(RESULTADOS)).to_have_count(1)
     expect(page.locator(RESULTADOS)).to_contain_text(["toner"])
