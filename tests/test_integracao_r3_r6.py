@@ -23,7 +23,8 @@ def carga(fonte: str, contagens: dict | None = None) -> dict:
         ativa=True,
         data_referencia=instante.date(),
         geracao={"atas": {"last_modified": instante.isoformat()}},
-        contagens=contagens or {},
+        # Gancho R3 sobre as contagens da busca; o coletor oficial grava as mesmas chaves.
+        contagens={**(contagens or {}), "coletor": "api_consulta"} if fonte == "pncp_busca" else {},
     )
 
 

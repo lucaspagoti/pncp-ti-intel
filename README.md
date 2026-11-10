@@ -26,8 +26,9 @@ Plano: `docs/PLANO.md`. Fases: `docs/FASES.md`. Decisões: `docs/adr/`.
 ## Status
 
 **Arquitetura (ADR 0016):** três fontes em lote de atas de registro de preços de TI vigentes (SIGA RJ,
-Compras.gov.br ARP e, na R3, busca PNCP) e uma web própria. O snapshot nacional PNCP `/v1/atas`
-foi abandonado em 13/10/2026.
+Compras.gov.br ARP e, na R3, atas PNCP) e uma web própria. O snapshot nacional diário PNCP
+`/v1/atas` foi abandonado em 13/10/2026; desde a R3.1 (ADR 0038) as atas PNCP vêm da API oficial
+em delta diário, com varredura mensal de reconciliação, e a busca do portal ficou como reserva.
 
 - **R1 — SIGA RJ** (ADR 0019): 11.663 atas, 52.014 itens e 138.255 participantes; 24 atas de TI
   vigentes em 14/10/2026 (critério: Anexo Único da IN PRODERJ 05/2024). Precisão e recall de 100%
@@ -62,7 +63,8 @@ foi abandonado em 13/10/2026.
   (`insumos/sinonimos_busca.txt`), preço do item buscado e "você quis dizer". Avaliação:
   `uv run python -m pncp_ti.busca_avaliacao` (`evals/busca_<data>.md`).
 
-`make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
+`make ingest FONTE=siga|arp|pncp_atas` roda uma carga manualmente (`FONTE=pncp_busca` é a
+reserva pela busca do portal; `ARGS=--semente` força a varredura completa da API oficial) e `make web` sobe a web local
 (`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, publicado em `atas.myhomelablp.site` pelo Cloudflare Tunnel com Access, ADR 0024). O banco local está na migração 0011 depois do deploy da W3.
 
 ## Como rodar

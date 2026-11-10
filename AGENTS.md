@@ -3,7 +3,7 @@
 ## Objetivo
 
 Base curada das atas de registro de preços de TI **vigentes**, alimentada diariamente por três fontes
-públicas (SIGA RJ, Dados Abertos Compras.gov.br `modulo-arp` e busca do portal PNCP, ADR 0016) e
+públicas (SIGA RJ, Dados Abertos Compras.gov.br `modulo-arp` e atas do PNCP, ADR 0016 e 0038) e
 consultada por uma **web própria** hospedada no domínio do Lucas (ADR 0018). Não guarda contratos,
 contratações sem ata nem atas vencidas.
 Projeto pessoal do Lucas: pesquisa de preços, adesão a atas e referência de especificações, com escopo
@@ -13,9 +13,11 @@ antes de propor qualquer fase.
 
 ## Estratégia: compor, não construir
 
-- Fontes em lote, e não varredura: CSV do SIGA, API do ARP com 500 por página e busca PNCP por
-  termos de TI. O snapshot PNCP `/v1/atas` (cerca de 484 mil atas) foi abandonado e **não deve ser
-  reintroduzido** sem uma ADR nova.
+- Fontes em lote, e não varredura: CSV do SIGA, API do ARP com 500 por página e atas PNCP por
+  termos de TI. As atas PNCP vêm da API oficial de consultas em delta diário (`pncp_atas`,
+  `/v1/atas/atualizacao`), com a varredura de `/v1/atas` (cerca de 480 mil atas vigentes) só como
+  semente e reconciliação mensal, em unit própria (ADR 0038); a busca do portal (`pncp_busca`) ficou como reserva.
+  Varrer `/v1/atas` todo dia continua fora.
 - O Portal da Transparência da CGU está fora (não tem atas, ADR 0016).
 - Antes de implementar, verifique se o `compras-mcp` (como biblioteca: `DadosAbertosClient` etc.)
   ou outra biblioteca existente já resolve. Se resolver, use.

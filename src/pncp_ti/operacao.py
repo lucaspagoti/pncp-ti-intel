@@ -24,6 +24,9 @@ FALHAS = {
     "pncp-ti-web.service": "o site parou de funcionar",
     "pncp-ti-backup.service": "o backup de hoje falhou",
     "pncp-ti-operacao.service": "a verificação diária falhou",
+    "pncp-ti-semente.service": (
+        "a varredura mensal das atas PNCP falhou; a atualização diária continua"
+    ),
 }
 # Falha da carga com fonte e motivo (ADR 0032): lido de `cargas.erro_tipo`.
 PRAZO_BANCO = 15.0  # segundos para ler `cargas` no OnFailure
@@ -86,6 +89,15 @@ def alertas(cargas: list[dict], agora: datetime, termo: str | None = None) -> li
     defasado = _pncp_defasado(cargas, agora)
     if defasado:
         avisos.append(("pncp:defasada", defasado))
+    ativa_pncp = next((c for c in cargas if c["fonte"] == "pncp_busca" and c["ativa"]), None)
+    if ativa_pncp and (ativa_pncp.get("contagens") or {}).get("coletor") != "api_consulta":
+        # A API oficial falhou e a busca do portal publicou como reserva (ADR 0038).
+        avisos.append(("pncp:reserva", "as atas PNCP vieram da reserva; a API oficial falhou"))
+    elif ativa_pncp and (ativa_pncp.get("contagens") or {}).get("janela_truncada"):
+        # Marca d'água com mais de 30 dias: o delta leu só o último mês (ADR 0038).
+        avisos.append(
+            ("pncp:lacuna", "as atas PNCP ficaram mais de 30 dias sem a API; rode a varredura")
+        )
     if termo:
         pncp = [c for c in cargas if c["fonte"] == "pncp_busca"]
         recente = max(

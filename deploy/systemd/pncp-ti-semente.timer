@@ -1,0 +1,11 @@
+[Unit]
+Description=Varredura das atas PNCP no primeiro domingo do mês às 10:00 (Brasília)
+
+[Timer]
+# Depois da carga (03:00), da verificação (08:30) e do backup (09:00); termina à tarde.
+OnCalendar=Sun *-*-01..07 10:00:00 America/Sao_Paulo
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

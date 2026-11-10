@@ -159,6 +159,11 @@ Histórico (17/10/2026): mergeada (PR #13) e com carga real.
   passa a defasado aos 3 dias (a carga publica e a operação avisa) e só derruba a carga aos 14.
   Retry curto para queda instantânea, telemetria de rede em `cargas.contagens` e nova tentativa
   da busca no `carga_diaria.sh`. Próximo passo: coletor incremental pela API oficial (ADR 0038).
+- R3.1 PR 2 (ADR 0038): coletor `pncp_atas` pela API oficial de consultas, na mesma fonte e nas
+  mesmas views. Delta diário por `/v1/atas/atualizacao` (33 s e 8 requisições em 09/11) e
+  varredura mensal aditiva de `/v1/atas` em unit própria, com checkpoint (6h40 na primeira).
+  Contra a busca ativa: 99,5% em comum e 1.398 atas a mais (`evals/pncp_atas_20261109.md`). A
+  busca do portal virou reserva automática no `carga_diaria.sh`, com aviso `pncp:reserva`.
 
 Em aberto, a critério do Lucas: `informatica` sozinha e `tic`/`ti` (cerca de 1.500 atas perdidas
 contra o ARP), que exigem regra melhor ou curadoria (ADR 0026).

@@ -1,0 +1,14 @@
+[Unit]
+Description=Varredura mensal das atas PNCP pela API oficial (semente, ADR 0038)
+After=network-online.target
+Wants=network-online.target
+OnFailure=pncp-ti-falha@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projetos/pncp-ti-intel
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# ~7 h no ritmo do portal; retoma do checkpoint (~/.local/state/pncp-ti) se cair.
+ExecStart=%h/.local/bin/uv run python -m pncp_ti.fontes.pncp_atas --semente
+TimeoutStartSec=14h
+Nice=10

@@ -141,11 +141,16 @@ def casa_termo(objeto: str, termo: str) -> bool:
     A última palavra aceita só plural (notebook → notebooks, roteador → roteadores): sufixo
     livre fazia `tablet` casar "tablete".
     """
+    padrao = padrao_termo(termo)
+    return padrao is not None and padrao.search(_sem_acento(objeto)) is not None
+
+
+def padrao_termo(termo: str) -> re.Pattern[str] | None:
+    """Regex de `casa_termo`, para aplicar a texto já sem acento (`_sem_acento`)."""
     palavras = [re.escape(p) for p in _sem_acento(termo).split()]
     if not palavras:
-        return False
-    padrao = r"\b" + r"\W+".join(palavras) + r"(?:s|es|ns)?\b"
-    return re.search(padrao, _sem_acento(objeto)) is not None
+        return None
+    return re.compile(r"\b" + r"\W+".join(palavras) + r"(?:s|es|ns)?\b")
 
 
 def _texto(valor: Any) -> str:
