@@ -1,12 +1,12 @@
-# Roadmap da web (W0–W3)
+# Roadmap da web (W0–W6)
 
 Fecha a R4 (`docs/FASES.md`), cujo aceite é a demonstração do Lucas. Fica fora das fases R. Cada
 fase é uma sprint. Decisões em 19/10/2026: o Codex é o QA executor (ADR 0029), o Playwright
 entra no grupo dev e no CI, e o deploy segue o rito abaixo.
 
 A stack não muda (ADR 0018): FastAPI + Jinja2 + HTMX, sem framework JavaScript nem build com
-Node. O protótipo em `prototipos/web/` é o MVP da web (ADR 0033); o design system de referência
-fica fora do Git.
+Node. O protótipo em `prototipos/web/` é a referência da web (ADR 0033), com identidade visual
+própria desde a W4 (ADR 0039).
 
 ## W0 · Esteira de QA (sprint 1)
 
@@ -80,6 +80,40 @@ Decidida pelo Lucas em 02/11/2026, depois de "monitor" trazer uma ata de CFTV em
 - Avaliação `pncp_ti.busca_avaliacao`: precisão@10 de 20 buscas, antes e depois.
 - **Aceite:** "monitor" com o top 10 só de atas cujo item principal é monitor; as três buscas da
   R4 sem piora; busca abaixo de 500 ms.
+
+## W4–W6 · Redesenho do frontend (ADR 0039)
+
+Pedido pelo Lucas em 10/11/2026: estilo limpo e minimalista, cartões arredondados e dispensáveis
+com animação interrompível. A web deixa o design system PGE Ajuda. Sem migração, sem dependência
+nova e com a mesma CSP.
+
+### W4 · Protótipo e decisão
+
+- ADR 0039; `prototipos/web/` refeito: home (`index.html`), resultados em cartões
+  (`resultados.html`), detalhe em coluna única (`ata.html`), `tokens.css` escrito à mão como fonte
+  única dos valores e `prototipo.js` com o dispensar.
+- Sai `scripts/gerar_tokens_css.py` e o teste dele (dependiam do `tokens.json` do PGE).
+- A web em produção não muda.
+- **Aceite:** o Lucas aprova o visual e o movimento no protótipo.
+
+### W5 · Home, cartões e detalhe na web
+
+- `static/tokens.css` igual ao do protótipo (teste) e `app.css` reescrito; `tokens-projeto.css`
+  sai.
+- `/` sem filtro mostra a home; `?explorar=1` lista tudo. Resultados em cartões, total como
+  título, busca fixa, paginação numerada, filtros que aplicam sozinhos (texto com espera de
+  500 ms) e um "Limpar" só. Prazo como texto, com cor só a 90 e 30 dias.
+- Detalhe em coluna única com cartão-resumo, itens e "Sobre este registro".
+- Testes de unidade e E2E (desktop 1366, celular 390, impressão) atualizados.
+- **Aceite:** as três buscas da R4 e "monitor" com os dados reais, abaixo de 500 ms.
+
+### W6 · Dispensar e movimento
+
+- `app.js`: ocultar atas (com "Desfazer" e "Mostrar"), fechar o aviso e remover filtros com
+  animação interrompível; arrastar no toque; especificação do item com transição de altura;
+  barra fina de progresso nas trocas do HTMX. Estado só no `localStorage`.
+- E2E: ocultar, desfazer no meio da animação, persistência, teclado e movimento reduzido.
+- **Aceite:** o Lucas dispensa e recupera atas, filtros e avisos no desktop e no celular.
 
 ## Rito de cada sprint
 

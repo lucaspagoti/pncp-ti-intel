@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>notebook · Atas de TI</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="prototipo.css">
+<script src="prototipo.js" defer></script>
+</head>
+<body>
+<form class="casca" action="resultados.html">
+  <aside class="lateral">
+    <a class="marca" href="index.html">Atas de TI</a>
+    <input type="checkbox" class="alternar" id="alternar-filtros">
+    <label class="botao-sec botao-filtros" for="alternar-filtros">Filtros <span class="qtd-ativos">1</span></label>
+    <div class="painel-filtros">
+      <div class="cab-filtros"><h2>Filtros</h2><a href="resultados.html">Limpar</a></div>
+      <fieldset class="grupo"><legend>Fonte</legend>
+        <label class="opcao"><span><input type="radio" name="fonte" value="" checked> Todas</span><span class="qtd">315</span></label>
+        <label class="opcao"><span><input type="radio" name="fonte" value="compras_arp"> Compras ARP</span><span class="qtd">288</span></label>
+        <label class="opcao"><span><input type="radio" name="fonte" value="pncp_busca"> PNCP</span><span class="qtd">27</span></label>
+      </fieldset>
+      <fieldset class="grupo"><legend>Esfera</legend>
+        <label class="opcao"><span><input type="radio" name="esfera" value=""> Todas</span><span class="qtd">542</span></label>
+        <label class="opcao"><span><input type="radio" name="esfera" value="Federal" checked> Federal</span><span class="qtd">315</span></label>
+        <label class="opcao"><span><input type="radio" name="esfera" value="Estadual"> Estadual</span><span class="qtd">59</span></label>
+        <label class="opcao"><span><input type="radio" name="esfera" value="Municipal"> Municipal</span><span class="qtd">152</span></label>
+        <label class="opcao"><span><input type="radio" name="esfera" value="Distrital"> Distrital</span><span class="qtd">3</span></label>
+      </fieldset>
+      <div class="grupo"><label class="rotulo" for="uf">UF</label>
+        <select id="uf" name="uf"><option value="">Todas</option><option>RJ</option><option>SP</option><option>MG</option></select></div>
+      <div class="grupo"><label class="rotulo" for="orgao">Órgão</label><input type="text" id="orgao" name="orgao" maxlength="200" placeholder="ex.: universidade"></div>
+      <div class="grupo"><label class="rotulo" for="vigente_ate">Vigente até pelo menos</label><input type="date" id="vigente_ate" name="vigente_ate"></div>
+      <div class="grupo"><span class="rotulo" id="r-preco">Preço unitário (R$)</span>
+        <div class="faixa" role="group" aria-labelledby="r-preco">
+          <input type="text" id="preco_min" name="preco_min" inputmode="decimal" maxlength="20" placeholder="mín." aria-label="Preço unitário mínimo">
+          <input type="text" id="preco_max" name="preco_max" inputmode="decimal" maxlength="20" placeholder="máx." aria-label="Preço unitário máximo">
+        </div></div>
+    </div>
+    <p class="rodape-lateral">Dados de 10/11/2026.<br>SIGA RJ, Compras.gov.br e PNCP. Protótipo com dados de exemplo.</p>
+  </aside>
+
+  <main class="principal">
+    <div class="topo">
+      <div class="busca" role="search">
+        <div class="campo-busca"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="q" name="q" value="notebook" maxlength="200" placeholder="Busque pelo item: notebook, monitor, switch…" aria-label="Buscar objeto ou item da ata"></div>
+        <button class="botao" type="submit">Buscar</button>
+      </div>
+    </div>
+
+    <div class="resumo">
+      <h1>315 atas vigentes</h1>
+      <div class="resumo-acoes">
+        <div class="ordem"><label for="ordem">Ordenar por</label>
+          <select id="ordem" name="ordem"><option>Relevância</option><option>Vence primeiro</option><option>Mais novas</option><option>Menor preço</option></select></div>
+        <a class="botao-sec" href="resultados.html"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Exportar CSV</a>
+      </div>
+    </div>
+
+    <div class="ativos" aria-label="Filtros ativos">
+      <span class="pilula">Termo <b>notebook</b> <a href="resultados.html" data-acao="remover-filtro" aria-label="Remover termo"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a></span>
+      <span class="pilula">Esfera <b>Federal</b> <a href="resultados.html" data-acao="remover-filtro" aria-label="Remover esfera"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a></span>
+      <a class="botao-texto" href="index.html">Limpar tudo</a>
+    </div>
+
+    <div class="dispensavel" data-dispensar="aviso" data-chave="dados-publicos">
+      <div class="cartao aviso"><p>Dados públicos de terceiros. Confira sempre na origem antes de qualquer uso formal.</p>
+        <button type="button" class="ocultar" data-acao="ocultar" aria-label="Fechar aviso"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    </div>
+
+    <p class="ocultas" data-ocultas hidden><span data-ocultas-texto></span><button type="button" class="botao-texto" data-acao="mostrar-ocultas">Mostrar</button></p>
+
+    <ol class="lista-atas">
+      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/1">
+        <article class="cartao ata">
+          <div class="ata-corpo">
+            <div class="ata-texto">
+              <h2 class="ata-objeto"><a href="ata.html">Itens de informática: notebook</a></h2>
+              <p class="ata-meta"><span>Ministério do Trabalho e Emprego</span><span>Federal · SC</span><span>Compras ARP</span></p>
+              <p class="ata-item"><span class="rotulo-item">Item</span><span class="nome-item"><mark>Notebook</mark>, tela superior a 14 pol, memória RAM 4 a 8 GB</span><span>2 de 2 itens</span></p>
+            </div>
+            <div class="ata-numeros">
+              <p class="preco"><span class="moeda">R$</span>5.389,77</p>
+              <p class="preco-nota">até R$ 9.130,45 no item buscado</p>
+              <p class="prazo">até 12/05/2027</p>
+            </div>
+          </div>
+          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </article>
+      </li>
+      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/2">
+        <article class="cartao ata">
+          <div class="ata-corpo">
+            <div class="ata-texto">
+              <h2 class="ata-objeto"><a href="ata.html">Aquisição de equipamentos de TIC do tipo desktop, estação de trabalho (workstation), monitor e notebook</a></h2>
+              <p class="ata-meta"><span>Fundação Universidade do Maranhão</span><span>Federal · MA</span><span>Compras ARP</span></p>
+              <p class="ata-item"><span class="rotulo-item">Item</span><span class="nome-item"><mark>Notebook</mark> corporativo, processador 12 núcleos, 16 GB</span><span>2 de 9 itens</span></p>
+            </div>
+            <div class="ata-numeros">
+              <p class="preco"><span class="moeda">R$</span>6.850,00</p>
+              <p class="preco-nota">até R$ 8.290,00 no item buscado</p>
+              <p class="prazo">até 13/05/2027</p>
+            </div>
+          </div>
+          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </article>
+      </li>
+      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/3">
+        <article class="cartao ata">
+          <div class="ata-corpo">
+            <div class="ata-texto">
+              <h2 class="ata-objeto"><a href="ata.html">Registro de preços para microcomputador, tipo notebook</a></h2>
+              <p class="ata-meta"><span>Justiça Eleitoral</span><span>Federal · TO</span><span>Compras ARP</span></p>
+              <p class="ata-item"><span class="rotulo-item">Item</span><span class="nome-item"><mark>Notebook</mark> de alto desempenho, tela 16 pol</span><span>1 de 1 item</span></p>
+            </div>
+            <div class="ata-numeros">
+              <p class="preco"><span class="moeda">R$</span>16.750,00</p>
+              <p class="preco-nota">no item buscado</p>
+              <p class="prazo crit">vence em 19 dias</p>
+            </div>
+          </div>
+          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </article>
+      </li>
+      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/4">
+        <article class="cartao ata">
+          <div class="ata-corpo">
+            <div class="ata-texto">
+              <h2 class="ata-objeto"><a href="ata.html">Aquisição de equipamentos de informática, item 01 (notebook)</a></h2>
+              <p class="ata-meta"><span>Conselho Regional de Medicina Veterinária do Paraná</span><span>Federal · PR</span><span>Compras ARP</span></p>
+              <p class="ata-item"><span class="rotulo-item">Item</span><span class="nome-item"><mark>Notebook</mark> 14 pol, SSD 512 GB</span><span>1 de 1 item</span></p>
+            </div>
+            <div class="ata-numeros">
+              <p class="preco"><span class="moeda">R$</span>4.640,39</p>
+              <p class="preco-nota">no item buscado</p>
+              <p class="prazo warn">vence em 59 dias</p>
+            </div>
+          </div>
+          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </article>
+      </li>
+      <li class="dispensavel" data-dispensar="ata" data-chave="pncp_busca/5">
+        <article class="cartao ata">
+          <div class="ata-corpo">
+            <div class="ata-texto">
+              <h2 class="ata-objeto"><a href="ata.html">Registro de preços para aquisições futuras de computadores tipo notebook e desktop para atender as unidades da instituição</a></h2>
+              <p class="ata-meta"><span>Instituto Federal Fluminense</span><span>Federal · RJ</span><span>PNCP</span></p>
+            </div>
+            <div class="ata-numeros">
+              <p class="sem-preco">sem itens nesta fonte</p>
+              <p class="prazo">até 12/06/2027</p>
+            </div>
+          </div>
+          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </article>
+      </li>
+      <li class="dispensavel" data-dispensar="ata" data-chave="compras_arp/6">
+        <article class="cartao ata">
+          <div class="ata-corpo">
+            <div class="ata-texto">
+              <h2 class="ata-objeto"><a href="ata.html">Aquisição de computadores do tipo notebook</a></h2>
+              <p class="ata-meta"><span>Tribunal Regional Eleitoral de São Paulo</span><span>Federal · SP</span><span>Compras ARP</span></p>
+              <p class="ata-item"><span class="rotulo-item">Item</span><span class="nome-item"><mark>Notebook</mark> padrão corporativo</span><span>1 de 1 item</span></p>
+            </div>
+            <div class="ata-numeros">
+              <p class="preco"><span class="moeda">R$</span>7.548,22</p>
+              <p class="preco-nota">no item buscado</p>
+              <p class="prazo crit">vence em 25 dias</p>
+            </div>
+          </div>
+          <button type="button" class="ocultar" data-acao="ocultar" aria-label="Ocultar esta ata"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </article>
+      </li>
+    </ol>
+
+    <nav class="pag" aria-label="Paginação">
+      <span class="seta" aria-disabled="true">Anterior</span>
+      <a href="resultados.html" aria-current="page">1</a>
+      <a href="resultados.html">2</a>
+      <a href="resultados.html">3</a>
+      <span class="reticencias">…</span>
+      <a href="resultados.html">16</a>
+      <a class="seta" href="resultados.html">Próxima</a>
+    </nav>
+  </main>
+</form>
+
+<div class="toast" data-toast role="status" aria-live="polite"><span data-toast-texto>Ata oculta</span><button type="button" data-acao="desfazer">Desfazer</button></div>
+</body>
+</html>
