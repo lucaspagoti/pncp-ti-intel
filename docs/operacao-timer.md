@@ -1,8 +1,10 @@
 # Operação: carga diária (systemd timer)
 
-A carga diária roda `scripts/carga_diaria.sh` às 03:00 (Brasília): SIGA RJ, Compras ARP e busca
-PNCP, cada uma independente. A janela é a madrugada, das 03:00 às 06:00. O SIGA leva ~1 min, a
-busca PNCP ~45 min e a ARP o que sobra. A varredura por PDM da ARP tem orçamento de
+A carga diária roda `scripts/carga_diaria.sh` às 03:00 (Brasília): SIGA RJ, Compras ARP e atas
+PNCP, cada uma independente. A janela é a madrugada, das 03:00 às 06:00. O SIGA leva ~1 min, as
+atas PNCP menos de 1 min no delta diário (ADR 0038) e a ARP o que sobra. A varredura completa
+das atas PNCP (semente, ~7 h) não entra nessa janela: tem unit própria no primeiro domingo do mês. Se a API oficial do PNCP falhar, a busca do portal (~25 min) roda
+na hora como reserva. A varredura por PDM da ARP tem orçamento de
 `ARP_VARREDURA_MINUTOS` (90 na produção), e o resto da ARP leva até ~35 min. Assim a carga
 termina por volta das 05:50 (ADR 0025, item 7). Uma falha em uma fonte não impede a outra, e a carga anterior continua
 visível (troca atômica, ADR 0019 e 0020). Logs no journald; estado de cada execução na tabela
@@ -16,6 +18,7 @@ cp deploy/systemd/pncp-ti-* ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now pncp-ti-carga.timer
 systemctl --user enable --now pncp-ti-operacao.timer pncp-ti-backup.timer
+systemctl --user enable --now pncp-ti-semente.timer   # R3.1: varredura mensal das atas PNCP
 sudo loginctl enable-linger "$USER"   # o timer roda sem sessão aberta
 ```
 
@@ -30,6 +33,15 @@ A operação roda às **08:30** e o backup às **09:00**, em `America/Sao_Paulo`
 texto pela bridge WhatsApp sem depender do banco. A unit de falha não tem `OnFailure`
 recursivo. A operação tem timer independente da carga e não deixa de rodar se ARP falhar.
 Ela repete a fila pendente na próxima execução; reenvio manual está no runbook.
+
+A varredura das atas PNCP (`pncp-ti-semente`, ADR 0038) roda no **primeiro domingo do mês às
+10:00**, depois do backup, e leva ~7 h no ritmo do portal (`TimeoutStartSec=14h`). Ela só
+pega a trava da fonte no fim, para conferir o que mudou e publicar (se a carga diária estiver
+rodando, espera até ~1h30), então não atrapalha a madrugada. Guarda cada página em
+`~/.local/state/pncp-ti/semente_pncp_atas.jsonl`: se cair, a próxima execução (manual ou do
+timer) retoma da página seguinte, desde que o checkpoint tenha até 3 dias. É aditiva: só tira da
+base a ata que a API mostra cancelada, vencida ou sem termo. Falha dela avisa numa frase própria
+e não interrompe o delta diário.
 
 ## Operar
 

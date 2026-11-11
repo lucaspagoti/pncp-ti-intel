@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Carga diária (ADR 0017 e 0020): SIGA RJ, Compras ARP e busca PNCP, cada uma independente da outra.
+# Carga diária (ADR 0017 e 0020): SIGA RJ, Compras ARP e atas PNCP, cada uma independente da outra.
+# As atas PNCP vêm da API oficial de consultas (`pncp_atas`, ADR 0038); se ela falhar, a busca do
+# portal (`pncp_busca`) roda na hora como reserva e publica na mesma fonte. A verificação das 08:30
+# avisa quando a carga ativa veio da reserva.
 # SIGA e busca PNCP que falham por instabilidade (saída 1) ganham uma nova tentativa depois de
 # uma espera, se houver folga até o TimeoutStartSec=5h da unit (ADR 0037). O ARP não: leva mais
 # de 2 h e repeti-lo estouraria a unit. Saída 2 é erro determinístico (dado ou contrato da
@@ -19,9 +22,15 @@ rodar() {
 
 status=0
 instaveis=()
-for fonte in siga arp pncp_busca; do
+for fonte in siga arp pncp_atas; do
     rodar "$fonte"
     saida=$?
+    if [ "$fonte" = pncp_atas ] && [ "$saida" -ne 0 ]; then
+        echo "aviso: API oficial do PNCP falhou (saída $saida); usando a busca do portal" >&2
+        fonte=pncp_busca
+        rodar "$fonte"
+        saida=$?
+    fi
     if [ "$saida" -eq 1 ] && [ "$fonte" != arp ]; then
         echo "aviso: carga $fonte falhou (saída 1); nova tentativa no fim" >&2
         instaveis+=("$fonte")

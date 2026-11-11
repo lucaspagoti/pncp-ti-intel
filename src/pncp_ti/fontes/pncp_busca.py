@@ -141,11 +141,16 @@ def casa_termo(objeto: str, termo: str) -> bool:
     A última palavra aceita só plural (notebook → notebooks, roteador → roteadores): sufixo
     livre fazia `tablet` casar "tablete".
     """
+    padrao = padrao_termo(termo)
+    return padrao is not None and padrao.search(_sem_acento(objeto)) is not None
+
+
+def padrao_termo(termo: str) -> re.Pattern[str] | None:
+    """Regex de `casa_termo`, para aplicar a texto já sem acento (`_sem_acento`)."""
     palavras = [re.escape(p) for p in _sem_acento(termo).split()]
     if not palavras:
-        return False
-    padrao = r"\b" + r"\W+".join(palavras) + r"(?:s|es|ns)?\b"
-    return re.search(padrao, _sem_acento(objeto)) is not None
+        return None
+    return re.compile(r"\b" + r"\W+".join(palavras) + r"(?:s|es|ns)?\b")
 
 
 def _texto(valor: Any) -> str:
@@ -597,6 +602,30 @@ def reaproveitar(
     c["atas_unicas"] = len(coleta.atas)
 
 
+def preservar_da_api(
+    coleta: Coleta, anteriores: Mapping[str, AtaBusca], termos: Sequence[str], hoje: date
+) -> None:
+    """Na reserva, mantém as atas da carga da API oficial que a busca não achou (ADR 0038).
+
+    A busca trunca termos pesados e perde páginas; sem isso, um dia de reserva tiraria da
+    base as atas que só a API trouxe, e o delta seguinte (que só lê o que mudou) não as
+    devolveria. Fica a ata ativa vigente, não cancelada, cujo objeto casa algum termo. Vale
+    também sobre outra reserva (`preserva_api`), até a API voltar a publicar.
+    """
+    preservadas = 0
+    for id_origem, anterior in anteriores.items():
+        if id_origem in coleta.atas or anterior.fim < hoje or anterior.cancelada:
+            continue
+        casam = {t for t in termos if casa_termo(anterior.objeto, t)}
+        if casam:
+            anterior.termos = casam
+            coleta.atas[id_origem] = anterior
+            preservadas += 1
+    coleta.contagens["atas_preservadas_api"] = preservadas
+    coleta.contagens["preserva_api"] = True  # a próxima reserva segue preservando
+    coleta.contagens["atas_unicas"] = len(coleta.atas)
+
+
 async def _atas_ativas(
     conn: psycopg.AsyncConnection, carga_id: UUID, hoje: date
 ) -> dict[str, AtaBusca]:
@@ -647,7 +676,10 @@ async def publicar(
     geracao: dict[str, dict[str, object]],
     carga_id: UUID,
     hoje: date,
+    termos: Sequence[str] | None = None,
 ) -> ResultadoCarga:
+    """Troca atômica da carga. Com `termos`, é a busca do portal: sobre uma carga da API
+    oficial, publica como reserva e preserva as atas que só a API tinha (ADR 0038)."""
     contagens = coleta.contagens
     async with conn.transaction():
         bloqueio = await (
@@ -669,11 +701,20 @@ async def publicar(
                     "geracao_antiga",
                     f"data {hoje} anterior à carga ativa ({ativa['data_referencia']})",
                 )
+        # Sobre uma carga da API ou de uma reserva que já preservava (falhas seguidas da API).
+        anterior_c = (ativa["contagens"] or {}) if ativa else {}
+        sobre_api = termos is not None and (
+            anterior_c.get("coletor") == "api_consulta" or bool(anterior_c.get("preserva_api"))
+        )
         anteriores_atas = (
-            await _atas_ativas(conn, ativa["id"], hoje) if ativa and coleta.falhos else {}
+            await _atas_ativas(conn, ativa["id"], hoje)
+            if ativa and (coleta.falhos or sobre_api)
+            else {}
         )
         pendentes_ativos = ativa["contagens"].get("termos_pendentes", {}) if ativa else {}
         reaproveitar(coleta, anteriores_atas, pendentes_ativos, hoje)
+        if sobre_api:
+            preservar_da_api(coleta, anteriores_atas, termos, hoje)
         if ativa:
             anteriores = int(ativa["contagens"].get("atas_unicas", 0))
             if anteriores and contagens["atas_unicas"] < PISO_ATAS * anteriores:
@@ -778,7 +819,7 @@ async def principal(validar_apenas: bool, termos_arquivo: Path = ARQUIVO_TERMOS)
                     **coleta.contagens,
                 )
                 return 0
-            resultado = await publicar(conn, coleta, geracao, carga_id, hoje)
+            resultado = await publicar(conn, coleta, geracao, carga_id, hoje, termos)
         except Exception as exc:
             if not validar_apenas:
                 await _registrar_falha(conn, carga_id, exc, geracao, FONTE, contagens)

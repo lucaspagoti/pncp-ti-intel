@@ -96,6 +96,31 @@ SELECT concluido_em, contagens->'reparos_codificacao', contagens->'arquivos_utf8
 FROM cargas WHERE fonte = 'siga_rj' ORDER BY iniciado_em DESC LIMIT 5;
 ```
 
+### Atas PNCP pela API oficial (ADR 0038)
+
+A carga diária lê as atas PNCP pela API oficial de consultas (`pncp_atas`): só o delta desde a
+marca d'água, em menos de 1 min. Se ela falhar, o `carga_diaria.sh` roda a busca do portal na
+hora (seção anterior) e a verificação das 08:30 avisa "as atas PNCP vieram da reserva". Um dia
+de reserva não perde nada: o próximo delta continua da última marca d'água da API.
+
+```sql
+SELECT iniciado_em::date, contagens->>'coletor', contagens->>'modo', contagens->>'motivo_modo',
+       contagens->'janela', contagens->'atas_novas', contagens->'atas_removidas',
+       contagens->'atas_unicas', contagens->'falhas_por_tipo'
+FROM cargas WHERE fonte = 'pncp_busca' ORDER BY iniciado_em DESC LIMIT 7;
+```
+
+A varredura completa (`pncp-ti-semente`, primeiro domingo do mês às 10:00, ~7 h) reconcilia o
+que o delta não viu. Para rodar fora do timer, de preferência fora da madrugada:
+
+```bash
+make ingest FONTE=pncp_atas ARGS=--semente
+```
+
+Se cair, rode de novo: retoma da página seguinte pelo checkpoint
+(`~/.local/state/pncp-ti/semente_pncp_atas.jsonl`, válido por 3 dias). O aviso "ficaram mais
+de 30 dias sem a API; rode a varredura" (`pncp:lacuna`) pede exatamente esse comando.
+
 ## Rotina diária
 
 Às 03:00, SIGA e ARP executam de forma independente. Às 08:30, a operação consulta o

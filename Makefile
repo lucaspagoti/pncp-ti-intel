@@ -27,8 +27,8 @@ migrate: ## Aplica as migrações do Alembic (schema, papéis, views).
 
 FONTE ?= siga
 
-ingest: ## Carga de uma fonte: make ingest FONTE=siga|arp|pncp_busca [ARGS=--validar].
-	@case "$(FONTE)" in siga|arp|pncp_busca) ;; *) echo "FONTE=$(FONTE) desconhecida (siga|arp|pncp_busca)." >&2; exit 1;; esac
+ingest: ## Carga de uma fonte: make ingest FONTE=siga|arp|pncp_atas|pncp_busca [ARGS=--validar].
+	@case "$(FONTE)" in siga|arp|pncp_atas|pncp_busca) ;; *) echo "FONTE=$(FONTE) desconhecida (siga|arp|pncp_atas|pncp_busca)." >&2; exit 1;; esac
 	uv run python -m pncp_ti.fontes.$(FONTE) $(ARGS)
 
 web: ## Web local em 127.0.0.1:8000 (papel web_reader; precisa de PNCP_TI_WEB_PASSWORD).

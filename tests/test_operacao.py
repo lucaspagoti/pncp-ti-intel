@@ -13,7 +13,9 @@ from pncp_ti.operacao import SP, alertas
 AGORA = datetime(2026, 10, 16, 8, 30, tzinfo=SP)
 
 
-def carga(fonte, *, idade=0, status="concluida", ativa=True, contagens=None):
+def carga(
+    fonte, *, idade=0, status="concluida", ativa=True, contagens=None, coletor="api_consulta"
+):
     instante = AGORA - timedelta(hours=idade)
     return dict(
         fonte=fonte,
@@ -23,7 +25,8 @@ def carga(fonte, *, idade=0, status="concluida", ativa=True, contagens=None):
         ativa=ativa,
         data_referencia=instante.date(),
         geracao={"atas": {"last_modified": instante.isoformat()}},
-        contagens=contagens or {},
+        contagens=(contagens or {})
+        | ({"coletor": coletor} if fonte == "pncp_busca" and coletor else {}),
     )
 
 
@@ -250,3 +253,25 @@ def test_defasado_so_conta_na_carga_ativa():
         carga("pncp_busca", ativa=False, status="substituida", contagens=contagens),
     ]
     assert "pncp:defasada" not in codigos(cargas)
+
+
+def test_carga_pncp_da_reserva_avisa():
+    """ADR 0038: a carga ativa da fonte veio da busca do portal, não da API oficial."""
+    base = [carga("siga_rj"), carga("compras_arp")]
+    oficial = carga("pncp_busca", contagens={"coletor": "api_consulta"})
+    reserva = carga("pncp_busca", coletor=None)
+    assert "pncp:reserva" not in codigos([*base, oficial])
+    assert "pncp:reserva" in codigos([*base, reserva])
+    assert "pncp:reserva" not in codigos(base)  # sem carga ativa, nada a dizer aqui
+
+
+def test_delta_pncp_com_janela_truncada_avisa():
+    """ADR 0038: marca d'água com mais de 30 dias; o delta leu só o último mês."""
+    base = [carga("siga_rj"), carga("compras_arp")]
+    truncada = carga("pncp_busca", contagens={"janela_truncada": True})
+    assert "pncp:lacuna" in codigos([*base, truncada])
+    assert "pncp:lacuna" not in codigos([*base, carga("pncp_busca")])
+
+
+def test_falha_da_semente_mensal_tem_frase_propria():
+    assert "varredura mensal" in operacao.FALHAS["pncp-ti-semente.service"]
