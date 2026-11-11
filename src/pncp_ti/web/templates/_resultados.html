@@ -1,102 +1,124 @@
 {# Conteúdo da casca da busca: a página inteira o inclui, e o HTMX o troca a cada filtro. #}
-{% from "_comum.html" import icone, marca, rodape, vigencia %}
-{% set auto = 'hx-get="/" hx-include="closest form" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true" hx-trigger="change"' %}
+{% from "_comum.html" import icone, marca, rodape, prazo, aviso_dados %}
+{% set troca = 'hx-target="#casca" hx-swap="innerHTML" hx-push-url="true"' %}
+{# Filtros que aplicam sozinhos; texto e data esperam o leitor parar de digitar. #}
+{% set auto = 'hx-get="/" hx-include="closest form" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true" hx-sync="closest form:replace" hx-trigger="change"' %}
+{% set auto_texto = 'hx-get="/" hx-include="closest form" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true" hx-sync="closest form:replace" hx-trigger="input changed delay:500ms" data-auto' %}
 {% set total_fonte = facetas.fonte.values() | sum %}
 {% set total_esfera = facetas.esfera.values() | sum %}
+{% set n_filtros = ativos | length - (1 if f.q else 0) %}
 <aside class="lateral">
   {{ marca() }}
-  <div>
-    <input type="checkbox" class="alternar" id="alternar-filtros" hx-preserve>
-    <label class="titulo-filtros" for="alternar-filtros">Filtros <a class="limpar" href="/">Limpar</a></label>
-    <div class="painel-filtros">
-      <fieldset class="grupo" {{ auto | safe }}><legend>Fonte</legend>
-      <label class="opcao"><span><input type="radio" id="fonte-todas" name="fonte" value="" {{ 'checked' if not f.fonte }}> Todas</span><span class="qtd">{{ total_fonte | numero }}</span></label>
-      {% for chave, nome in FONTES.items() if chave in facetas.fonte or chave == f.fonte %}
-      <label class="opcao"><span><input type="radio" id="fonte-{{ chave }}" name="fonte" value="{{ chave }}" {{ 'checked' if f.fonte == chave }}> {{ nome }}</span><span class="qtd">{{ facetas.fonte.get(chave, 0) | numero }}</span></label>
-      {% endfor %}
-      </fieldset>
-      <fieldset class="grupo" {{ auto | safe }}><legend>Esfera</legend>
-      <label class="opcao"><span><input type="radio" id="esfera-todas" name="esfera" value="" {{ 'checked' if not f.esfera }}> Todas</span><span class="qtd">{{ total_esfera | numero }}</span></label>
-      {% for esfera in ESFERAS if esfera in facetas.esfera or esfera == f.esfera %}
-      <label class="opcao"><span><input type="radio" id="esfera-{{ loop.index }}" name="esfera" value="{{ esfera }}" {{ 'checked' if f.esfera == esfera }}> {{ esfera }}</span><span class="qtd">{{ facetas.esfera.get(esfera, 0) | numero }}</span></label>
-      {% endfor %}
-      </fieldset>
-      <div class="grupo"><label class="rotulo" for="uf">UF</label>
-        <select id="uf" name="uf" {{ auto | safe }}><option value="">Todas</option>
-        {% for u in opcoes.ufs %}<option value="{{ u }}" {{ 'selected' if f.uf == u }}>{{ u }}</option>{% endfor %}</select></div>
-      <div class="grupo"><label class="rotulo" for="orgao">Órgão contém</label><input type="text" id="orgao" name="orgao" value="{{ f.orgao }}" maxlength="200" placeholder="ex.: universidade"></div>
-      <div class="grupo"><label class="rotulo" for="vigente_ate">Vigente até pelo menos</label><input type="date" id="vigente_ate" name="vigente_ate" value="{{ f.vigente_ate or '' }}"></div>
-      <div class="grupo"><span class="rotulo" id="r-preco">Preço unitário (R$)</span>
-        <div class="faixa" role="group" aria-labelledby="r-preco">
-          <input type="text" id="preco_min" name="preco_min" inputmode="decimal" value="{{ f.preco_min | preco_br }}" maxlength="20" placeholder="mín." aria-label="Preço unitário mínimo">
-          <input type="text" id="preco_max" name="preco_max" inputmode="decimal" value="{{ f.preco_max | preco_br }}" maxlength="20" placeholder="máx." aria-label="Preço unitário máximo">
-        </div></div>
-      <div class="grupo"><button class="botao" type="submit">Aplicar filtros</button></div>
-    </div>
+  <input type="checkbox" class="alternar" id="alternar-filtros" hx-preserve>
+  <label class="botao-sec botao-filtros" for="alternar-filtros">Filtros{% if n_filtros %} <span class="qtd-ativos">{{ n_filtros }}</span>{% endif %}</label>
+  <div class="painel-filtros">
+    <div class="cab-filtros"><h2>Filtros</h2><a href="/">Limpar</a></div>
+    <fieldset class="grupo" {{ auto | safe }}><legend>Fonte</legend>
+    <label class="opcao"><span><input type="radio" id="fonte-todas" name="fonte" value="" {{ 'checked' if not f.fonte }}> Todas</span><span class="qtd">{{ total_fonte | numero }}</span></label>
+    {% for chave, nome in FONTES.items() if chave in facetas.fonte or chave == f.fonte %}
+    <label class="opcao"><span><input type="radio" id="fonte-{{ chave }}" name="fonte" value="{{ chave }}" {{ 'checked' if f.fonte == chave }}> {{ nome }}</span><span class="qtd">{{ facetas.fonte.get(chave, 0) | numero }}</span></label>
+    {% endfor %}
+    </fieldset>
+    <fieldset class="grupo" {{ auto | safe }}><legend>Esfera</legend>
+    <label class="opcao"><span><input type="radio" id="esfera-todas" name="esfera" value="" {{ 'checked' if not f.esfera }}> Todas</span><span class="qtd">{{ total_esfera | numero }}</span></label>
+    {% for esfera in ESFERAS if esfera in facetas.esfera or esfera == f.esfera %}
+    <label class="opcao"><span><input type="radio" id="esfera-{{ loop.index }}" name="esfera" value="{{ esfera }}" {{ 'checked' if f.esfera == esfera }}> {{ esfera }}</span><span class="qtd">{{ facetas.esfera.get(esfera, 0) | numero }}</span></label>
+    {% endfor %}
+    </fieldset>
+    <div class="grupo"><label class="rotulo" for="uf">UF</label>
+      <select id="uf" name="uf" {{ auto | safe }}><option value="">Todas</option>
+      {% for u in opcoes.ufs %}<option value="{{ u }}" {{ 'selected' if f.uf == u }}>{{ u }}</option>{% endfor %}</select></div>
+    <div class="grupo"><label class="rotulo" for="orgao">Órgão</label><input type="text" id="orgao" name="orgao" value="{{ f.orgao }}" maxlength="200" placeholder="ex.: universidade" {{ auto_texto | safe }}></div>
+    <div class="grupo"><label class="rotulo" for="vigente_ate">Vigente até pelo menos</label><input type="date" id="vigente_ate" name="vigente_ate" value="{{ f.vigente_ate or '' }}" {{ auto | safe }}></div>
+    <div class="grupo"><span class="rotulo" id="r-preco">Preço unitário (R$)</span>
+      <div class="faixa" role="group" aria-labelledby="r-preco">
+        <input type="text" id="preco_min" name="preco_min" inputmode="decimal" value="{{ f.preco_min | preco_br }}" maxlength="20" placeholder="mín." aria-label="Preço unitário mínimo" {{ auto_texto | safe }}>
+        <input type="text" id="preco_max" name="preco_max" inputmode="decimal" value="{{ f.preco_max | preco_br }}" maxlength="20" placeholder="máx." aria-label="Preço unitário máximo" {{ auto_texto | safe }}>
+      </div></div>
   </div>
   {{ rodape(cargas) }}
 </aside>
 
-<main class="folha">
-  <header class="cab-folha">
-    <div class="linha-titulo"><h1>Busca de atas <span class="contador">{{ p.total | numero }}</span></h1>
-      <a class="botao-sec" href="/exportar.csv?{{ qs(f) }}">{{ icone('baixar') }} Exportar CSV</a></div>
+<main class="principal">
+  <div class="topo">
     <div class="busca" role="search">
-      <div class="campo-busca">{{ icone('buscar') }}<input type="search" id="q" name="q" value="{{ f.q }}" maxlength="200" placeholder="notebook, outsourcing de impressão, licença Microsoft…" aria-label="Buscar objeto ou item da ata"></div>
+      <div class="campo-busca">{{ icone('buscar') }}<input type="search" id="q" name="q" value="{{ f.q }}" maxlength="200" placeholder="Busque pelo item: notebook, monitor, switch…" aria-label="Buscar objeto ou item da ata"></div>
       <button class="botao" type="submit">Buscar</button>
     </div>
-    {% if ativos %}
-    <div class="ativos" aria-label="Filtros ativos">
-      {% for rotulo, valor, sem in ativos %}
-      <span class="pilula">{{ rotulo }}: <b>{{ valor }}</b> <a href="/?{{ qs(sem) }}" hx-get="/?{{ qs(sem) }}" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true" aria-label="Remover {{ rotulo | lower }}">{{ icone('fechar') }}</a></span>
-      {% endfor %}
-      <a class="botao-fantasma" href="/" hx-get="/" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">Limpar tudo</a>
+  </div>
+
+  <div class="resumo">
+    <h1>{{ p.total | numero }} ata{{ '' if p.total == 1 else 's' }} vigente{{ '' if p.total == 1 else 's' }}</h1>
+    <div class="resumo-acoes">
+      <div class="ordem"><label for="ordem">Ordenar por</label>
+        <select id="ordem" name="ordem" {{ auto | safe }}>
+        {% for chave, nome in ORDENS.items() %}<option value="{{ chave }}" {{ 'selected' if f.ordem == chave }}>{{ nome }}</option>{% endfor %}
+        </select></div>
+      <a class="botao-sec" href="/exportar.csv?{{ qs(f) }}">{{ icone('baixar') }} Exportar CSV</a>
     </div>
-    {% endif %}
-  </header>
-  <div class="barra">
-    {% if p.total %}
-    {% set primeiro = (p.pagina - 1) * TAMANHO_PAGINA + 1 %}
-    <span>Mostrando {{ primeiro | numero }} a {{ (primeiro + p.linhas | length - 1) | numero }} de {{ p.total | numero }} ata{{ '' if p.total == 1 else 's' }} vigente{{ '' if p.total == 1 else 's' }}</span>
-    {% else %}<span>Nenhuma ata vigente nesta página</span>{% endif %}
-    <div class="ordem"><label for="ordem">Ordenar por</label>
-      <select id="ordem" name="ordem" {{ auto | safe }}>
-      {% for chave, nome in ORDENS.items() %}<option value="{{ chave }}" {{ 'selected' if f.ordem == chave }}>{{ nome }}</option>{% endfor %}
-      </select></div>
   </div>
-  {% if p.linhas %}
-  <div class="tabela resultados">
-    <table>
-      <thead><tr><th>Objeto e órgão</th><th>Fonte</th><th>Vigência até</th><th class="n">Itens</th><th class="n">Preço unitário</th></tr></thead>
-      <tbody>
-      {% for a in p.linhas %}
-        {% set local = [a.orgao or a.unidade_gerenciadora, a.esfera, a.uf] | select | join(' · ') %}
-        <tr>
-          <td class="objeto"><a href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}">{{ a.objeto | truncate(160) }}</a>{% if local %}<span class="sub">{{ local }}</span>{% endif %}
-            {%- if a.item_casado %}<span class="casado"><span class="rotulo-casado">Item</span> {{ a.item_casado | marcar(alternativas) }} <span class="qtd-casado">{{ a.n_casam }} de {{ a.n_itens }} ite{{ 'm' if a.n_itens == 1 else 'ns' }}</span></span>{% endif %}</td>
-          <td class="fonte" data-rotulo="Fonte"><span class="chip">{{ FONTES.get(a.fonte, a.fonte) }}</span></td>
-          <td data-rotulo="Vigência"><div class="vence">{{ vigencia(a.fim) }}</div></td>
-          <td class="n oculto-cel">{{ a.n_itens or '—' }}</td>
-          <td class="n preco" data-rotulo="Preço unitário">
-            {%- if not a.n_itens %}<span class="sub">sem itens nesta fonte</span>
-            {%- elif a.preco_min_exibido is none %}—{% if a.item_casado %}<span class="sub">sem preço do item buscado</span>{% endif %}
-            {%- else %}{{ a.preco_min_exibido | brl }}{% if a.preco_max_exibido is not none and a.preco_max_exibido != a.preco_min_exibido %} <span class="sub">até {{ a.preco_max_exibido | brl }}</span>{% endif %}{% if a.item_casado %}<span class="sub">do item buscado</span>{% endif %}{% endif -%}
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+
+  {% if ativos %}
+  <div class="ativos" aria-label="Filtros ativos">
+    {% for rotulo, valor, sem in ativos %}
+    {% set resto = qs(sem) or 'explorar=1' %}
+    <span class="pilula">{{ rotulo }} <b>{{ valor }}</b> <a href="/?{{ resto }}" hx-get="/?{{ resto }}" {{ troca | safe }} data-acao="remover-filtro" aria-label="Remover {{ rotulo | lower }}">{{ icone('fechar') }}</a></span>
+    {% endfor %}
+    <a class="botao-texto" href="/">Limpar tudo</a>
   </div>
-  {% else %}
-  <p class="vazio">Nenhuma ata encontrada para esses filtros.
-    {%- if sugestoes %}<span class="dica">Você quis dizer {% for s in sugestoes %}<a href="/?{{ qs(f, q=s) }}" hx-get="/?{{ qs(f, q=s) }}" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">{{ s }}</a>{{ ', ' if not loop.last else '?' }}{% endfor %}</span>{% endif %}
-    {%- if ativos %}<span class="dica">Tire um filtro acima ou <a href="/" hx-get="/" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">comece uma busca nova</a>.</span>
-    {%- else %}<span class="dica">Busque pelo item, por exemplo: notebook, monitor, licença Microsoft.</span>{% endif %}</p>
   {% endif %}
-  <nav class="pag" aria-label="Paginação"><span>Página {{ p.pagina }} de {{ p.paginas }}</span>
-    <div class="acoes">
-      {% if p.pagina > 1 %}{% set url = '/?' ~ qs(f, pagina=p.pagina - 1) %}<a class="botao-sec" href="{{ url }}" hx-get="{{ url }}" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">Anterior</a>{% else %}<span class="botao-sec" aria-disabled="true">Anterior</span>{% endif %}
-      {% if p.pagina < p.paginas %}{% set url = '/?' ~ qs(f, pagina=p.pagina + 1) %}<a class="botao-sec" href="{{ url }}" hx-get="{{ url }}" hx-target="#casca" hx-swap="innerHTML" hx-push-url="true">Próxima</a>{% else %}<span class="botao-sec" aria-disabled="true">Próxima</span>{% endif %}
-    </div></nav>
-  <p class="nota">Dados públicos. Confira sempre na origem antes de qualquer uso formal; nada aqui substitui a análise humana.</p>
+
+  {{ aviso_dados() }}
+
+  {% if p.linhas %}
+  <ol class="lista-atas resultados">
+    {% for a in p.linhas %}
+    {% set orgao = a.orgao or a.unidade_gerenciadora %}
+    {% set local = [a.esfera, a.uf] | select | join(' · ') %}
+    <li>
+      <article class="cartao ata">
+        <div class="ata-corpo">
+          <div class="ata-texto">
+            <h2 class="ata-objeto"><a href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}">{{ a.objeto | truncate(160) }}</a></h2>
+            <p class="ata-meta">{% if orgao %}<span>{{ orgao }}</span>{% endif %}{% if local %}<span>{{ local }}</span>{% endif %}<span>{{ FONTES.get(a.fonte, a.fonte) }}</span></p>
+            {%- if a.item_casado %}
+            <p class="ata-item"><span class="rotulo-item">Item</span><span class="nome-item">{{ a.item_casado | marcar(alternativas) }}</span><span>{{ a.n_casam }} de {{ a.n_itens }} ite{{ 'm' if a.n_itens == 1 else 'ns' }}</span></p>
+            {%- endif %}
+          </div>
+          <div class="ata-numeros">
+            {%- if not a.n_itens %}<p class="sem-preco">sem itens nesta fonte</p>
+            {%- elif a.preco_min_exibido is none %}<p class="sem-preco">{{ 'sem preço do item buscado' if a.item_casado else 'sem preço registrado' }}</p>
+            {%- else %}
+            <p class="preco"><span class="moeda">R$</span>{{ a.preco_min_exibido | brl_valor }}</p>
+            {%- set faixa = ('até ' ~ (a.preco_max_exibido | brl)) if a.preco_max_exibido is not none and a.preco_max_exibido != a.preco_min_exibido else '' %}
+            {%- set nota = [faixa, 'do item buscado' if a.item_casado else ''] | select | join(' · ') %}
+            {%- if nota %}<p class="preco-nota">{{ nota }}</p>{% endif %}
+            {%- endif %}
+            {{ prazo(a.fim) }}
+          </div>
+        </div>
+      </article>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <div class="cartao vazio">
+    <h2>Nenhuma ata encontrada para esses filtros.</h2>
+    {%- if sugestoes %}<p>Você quis dizer {% for s in sugestoes %}<a href="/?{{ qs(f, q=s) }}" hx-get="/?{{ qs(f, q=s) }}" {{ troca | safe }}>{{ s }}</a>{{ ', ' if not loop.last else '?' }}{% endfor %}</p>{% endif %}
+    {%- if ativos %}<p>Tire um filtro acima ou <a href="/">comece uma busca nova</a>.</p>
+    {%- else %}<p>Busque pelo item, por exemplo: notebook, monitor, licença Microsoft.</p>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if p.paginas > 1 %}
+  <nav class="pag" aria-label="Paginação, página {{ p.pagina }} de {{ p.paginas }}">
+    {% if p.pagina > 1 %}{% set url = '/?' ~ qs(f, pagina=p.pagina - 1) %}<a class="seta" href="{{ url }}" hx-get="{{ url }}" {{ troca | safe }}>Anterior</a>{% else %}<span class="seta" aria-disabled="true">Anterior</span>{% endif %}
+    {% for n in janela %}
+    {%- if n is none %}<span class="reticencias" aria-hidden="true">…</span>
+    {%- elif n == p.pagina %}<span aria-current="page">{{ n }}</span>
+    {%- else %}{% set url = '/?' ~ qs(f, pagina=n) %}<a href="{{ url }}" hx-get="{{ url }}" {{ troca | safe }} aria-label="Página {{ n }}">{{ n }}</a>{% endif %}
+    {% endfor %}
+    {% if p.pagina < p.paginas %}{% set url = '/?' ~ qs(f, pagina=p.pagina + 1) %}<a class="seta" href="{{ url }}" hx-get="{{ url }}" {{ troca | safe }}>Próxima</a>{% else %}<span class="seta" aria-disabled="true">Próxima</span>{% endif %}
+  </nav>
+  {% endif %}
 </main>

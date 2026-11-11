@@ -2,6 +2,8 @@
 
 - Status: aceita pelo Lucas (02/11/2026).
 - Complementa a ADR 0018 e o `docs/ROADMAP-WEB.md` (W2).
+- Telas e identidade visual alteradas pela ADR 0039 (W4–W6); a regra "mudar o MVP começa pelo
+  protótipo" continua.
 
 ## Contexto
 

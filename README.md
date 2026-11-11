@@ -55,12 +55,15 @@ foi abandonado em 13/10/2026.
 - **W2 — Frontend do MVP da web** (ADR 0033): as duas telas de `prototipos/web/` (busca e
   detalhe) com os dados reais. Filtros na lateral com contagem, trocados pelo HTMX sem recarregar
   a página; no celular, os filtros ficam recolhidos. Sem `style=` nem cor fora dos tokens
-  (`src/pncp_ti/web/static/tokens.css` sai de `scripts/gerar_tokens_css.py`). O detalhe não
-  mostra mais demandado × consumido, que não está no protótipo.
+  (`src/pncp_ti/web/static/tokens.css`). O detalhe não mostra mais demandado × consumido, que
+  não está no protótipo.
 - **W3 — Busca focada no item principal** (ADR 0036, migração **0011**): a ordem segue o item
   principal da ata (a cabeça do item no catálogo), com palavra exata e plural, sinônimos revisados
   (`insumos/sinonimos_busca.txt`), preço do item buscado e "você quis dizer". Avaliação:
   `uv run python -m pncp_ti.busca_avaliacao` (`evals/busca_<data>.md`).
+- **W4 a W6 — Identidade visual própria** (ADR 0039): home de busca, resultados em cartões,
+  filtros que aplicam sozinhos e detalhe em coluna única, com o protótipo em `prototipos/web/`
+  como referência. Sem migração.
 
 `make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
 (`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, publicado em `atas.myhomelablp.site` pelo Cloudflare Tunnel com Access, ADR 0024). O banco local está na migração 0011 depois do deploy da W3.

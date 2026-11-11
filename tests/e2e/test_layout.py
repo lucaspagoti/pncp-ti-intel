@@ -1,15 +1,20 @@
-"""W2: desktop 1366 e celular 390, impressão, contraste e captura de referência visual."""
+"""W2 e W5: desktop 1366 e celular 390, impressão, contraste e captura de referência visual."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-from comum import CONTRASTE_JS, RESULTADOS
+from comum import CONTRASTE_JS, RESULTADOS, TODAS
 from conftest import CELULAR, DESKTOP
 from playwright.sync_api import Page, expect
 
-TELAS = {"busca": "/?q=impressao", "busca-vazia": "/", "detalhe": "/ata/siga_rj/S1"}
+TELAS = {
+    "home": "/",
+    "busca": "/?q=impressao",
+    "todas": TODAS,
+    "detalhe": "/ata/siga_rj/S1",
+}
 
 
 def _sem_rolagem_horizontal(page: Page) -> None:
@@ -29,7 +34,7 @@ def test_capturas_de_referencia_sem_rolagem_horizontal(page: Page, base_url, pyt
 
 
 def test_desktop_mostra_lateral_com_filtros(page: Page, base_url):
-    page.goto(base_url)
+    page.goto(base_url + TODAS)
     expect(page.locator(".lateral")).to_be_visible()
     expect(page.get_by_label("UF")).to_be_visible()
     expect(page.locator(".rodape-lateral")).to_contain_text("Dados de")
@@ -37,46 +42,55 @@ def test_desktop_mostra_lateral_com_filtros(page: Page, base_url):
 
 def test_celular_recolhe_filtros_e_mantem_aberto_apos_filtrar(page: Page, base_url):
     page.set_viewport_size(CELULAR)
-    page.goto(base_url)
+    page.goto(base_url + TODAS)
     expect(page.get_by_label("UF")).to_be_hidden()
-    page.locator(".titulo-filtros").click()
+    page.locator(".botao-filtros").click()
     expect(page.get_by_label("UF")).to_be_visible()
     page.get_by_label("SIGA RJ").check()
     expect(page.locator(RESULTADOS)).to_have_count(1)
     expect(page.get_by_label("UF")).to_be_visible()  # hx-preserve no alternador
-    # Abaixo de 600px a tabela empilha e o preço unitário continua visível.
-    expect(page.locator(".resultados td.preco").first).to_be_visible()
+    # No celular o cartão empilha e o preço continua visível.
+    expect(page.locator(".resultados .preco").first).to_be_visible()
 
 
 def test_impressao_esconde_lateral_busca_e_paginacao(page: Page, base_url):
-    page.goto(f"{base_url}/?q=impressao")
+    page.goto(f"{base_url}/?q=cabo")
     page.emulate_media(media="print")
-    for seletor in (".lateral", ".busca", ".pag"):
+    for seletor in (".lateral", ".busca", ".pag", ".aviso"):
         expect(page.locator(seletor)).to_be_hidden()
-    expect(page.locator(RESULTADOS)).to_be_visible()
+    expect(page.locator(RESULTADOS).first).to_be_visible()
     page.goto(f"{base_url}/ata/siga_rj/S1")
-    expect(page.locator(".acoes-registro")).to_be_hidden()
-    expect(page.locator(".campos")).to_be_visible()
+    page.emulate_media(media="print")
+    expect(page.locator(".acoes")).to_be_hidden()
+    expect(page.locator(".resumo-ata")).to_be_visible()
 
 
 @pytest.mark.parametrize(
     ("url", "seletor"),
     [
-        ("/?q=microsoft", ".resultados td.objeto > a"),
-        ("/?q=microsoft", ".resultados .sub"),
-        ("/?q=microsoft", ".chip.crit"),
-        ("/?q=notebook", ".chip.warn"),
-        ("/?q=notebook", ".resultados th"),
-        ("/?q=notebook", ".opcao .qtd"),
+        ("/", ".home-lede"),
+        ("/", ".exemplos a"),
+        ("/", ".rotulo-exemplos"),
+        ("/", ".home-rodape"),
+        ("/?q=microsoft", ".ata-objeto > a"),
+        ("/?q=microsoft", ".ata-meta"),
+        ("/?q=microsoft", ".prazo.crit"),
+        ("/?q=notebook", ".prazo.warn"),
+        ("/?q=notebook", ".preco-nota"),
+        ("/?q=notebook", ".opcao .qtd"),  # a opção marcada: branco sobre o azul
+        ("/?q=notebook", ".opcao:not(:has(input:checked)) .qtd"),
         ("/?q=notebook", ".rodape-lateral"),
         ("/?q=notebook", ".botao"),
         ("/?q=notebook", ".pilula"),
-        ("/?q=notebook", ".nota"),
-        ("/?q=impressao", ".resultados .casado mark"),
-        ("/?q=impressao", ".resultados .qtd-casado"),
-        ("/ata/siga_rj/S1", ".campos dt"),
-        ("/ata/siga_rj/S1", ".ident"),
-        ("/ata/siga_rj/S1", ".chip"),
+        ("/?q=notebook", ".aviso p"),
+        ("/?q=impressao", ".resultados .ata-item mark"),
+        ("/?q=impressao", ".resultados .rotulo-item"),
+        ("/ata/siga_rj/S1", ".resumo-ata dt"),
+        ("/ata/siga_rj/S1", ".sobretitulo"),
+        ("/ata/siga_rj/S1", ".sobre dt"),
+        ("/ata/siga_rj/S1", ".sobre .legal"),
+        ("/ata/siga_rj/S1", ".contagem"),
+        ("/ata/compras_arp/A2", ".resumo-ata .prazo.crit"),
     ],
 )
 def test_contraste_minimo_de_texto(page: Page, base_url, url, seletor):
@@ -103,6 +117,17 @@ def test_texto_longo_sem_espaco_nao_alarga_a_pagina(page: Page, base_url, tela):
     expect(page.get_by_label("Remover termo")).to_be_visible()
 
 
+def test_item_casado_e_sugestao_sem_espaco_nao_alargam_o_celular(page: Page, base_url):
+    """QA-002 (W5): texto de terceiros sem espaço na linha do item e na sugestão do estado vazio."""
+    page.set_viewport_size(CELULAR)
+    page.goto(f"{base_url}/?q={'k' * 100}")
+    expect(page.locator(".ata-item").first).to_be_visible()
+    _sem_rolagem_horizontal(page)
+    page.goto(f"{base_url}/?q={'y' * 100}")  # sem resultado: sugere a palavra de 250 letras
+    expect(page.get_by_text("Você quis dizer")).to_be_visible()
+    _sem_rolagem_horizontal(page)
+
+
 def test_numero_do_item_fica_numa_linha(page: Page, base_url):
     """No ARP real o item é `00001`; a quebra de texto da tabela não pode partir o número."""
     page.goto(f"{base_url}/ata/compras_arp/LONGO")
@@ -119,7 +144,7 @@ def test_impressao_com_descricao_sem_espaco_cabe_na_folha(page: Page, base_url):
     page.set_viewport_size({"width": 718, "height": 1123})
     page.goto(f"{base_url}/ata/compras_arp/LONGO")
     page.emulate_media(media="print")
-    largura = page.evaluate("document.querySelector('.tabela.itens table').scrollWidth")
+    largura = page.evaluate("document.querySelector('.itens table').scrollWidth")
     assert largura <= 718, largura
     expect(page.get_by_role("cell", name="R$ 9,99")).to_be_visible()
     linhas = page.evaluate(
@@ -136,6 +161,9 @@ def test_celular_alvos_de_toque_de_44px(page: Page, base_url):
     alvos = [
         page.get_by_label("Remover termo"),
         page.get_by_role("link", name="Próxima"),
+        page.get_by_role("link", name="Página 2"),
+        page.locator(".botao-filtros"),
+        page.locator(".fechar"),
         page.get_by_role("button", name="Buscar", exact=True),
     ]
     for alvo in alvos:
@@ -143,20 +171,46 @@ def test_celular_alvos_de_toque_de_44px(page: Page, base_url):
         assert caixa and caixa["height"] >= 44 and caixa["width"] >= 44, caixa
 
 
+def _alvos_de_44px(alvos) -> None:
+    assert alvos
+    for alvo in alvos:
+        caixa = alvo.bounding_box()
+        assert caixa and caixa["height"] >= 44, (alvo.inner_text(), caixa)
+
+
+def test_celular_opcoes_links_e_exemplos_com_alvo_de_44px(page: Page, base_url):
+    """QA-003 (W5): as opções de filtro e os links soltos também têm 44 px de toque."""
+    page.set_viewport_size(CELULAR)
+    page.goto(base_url)
+    _alvos_de_44px(page.locator(".exemplos a").all())
+    _alvos_de_44px([page.get_by_role("link", name="Ver todas as atas")])
+    page.goto(base_url + TODAS)
+    page.locator(".botao-filtros").click()
+    _alvos_de_44px(page.locator(".opcao").all())
+    _alvos_de_44px([page.get_by_role("link", name="Limpar", exact=True), page.locator(".marca")])
+    page.goto(f"{base_url}/?q=notebook&uf=SP")
+    _alvos_de_44px([page.get_by_role("link", name="Limpar tudo")])
+    page.goto(f"{base_url}/ata/compras_arp/LONGO")
+    _alvos_de_44px([page.get_by_role("link", name="Voltar à busca")])
+
+
 def test_estado_vazio_orienta_o_proximo_passo(page: Page, base_url):
     page.goto(f"{base_url}/?q=termoinexistentexyz")
     expect(page.get_by_text("Tire um filtro acima")).to_be_visible()
     page.get_by_role("link", name="comece uma busca nova").click()
     expect(page).to_have_url(f"{base_url}/")
-    expect(page.locator(RESULTADOS).first).to_be_visible()
+    expect(page.get_by_role("heading", level=1)).to_have_text("Atas de TI")
 
 
 def test_casca_fica_ocupada_durante_a_busca(page: Page, base_url):
-    page.goto(base_url)
-    page.route("**/?*", lambda rota: (page.wait_for_timeout(400), rota.continue_()))
+    page.goto(base_url + TODAS)
+    page.route("**/?*", lambda rota: (page.wait_for_timeout(600), rota.continue_()))
     page.get_by_label("SIGA RJ").check()
     expect(page.locator("#casca")).to_have_attribute("aria-busy", "true")
+    # A barra de progresso corre enquanto a resposta não chega.
+    expect(page.locator("html")).to_have_attribute("data-ocupado", "")
     expect(page.locator("#casca")).not_to_have_attribute("aria-busy", "true")
+    expect(page.locator("html")).not_to_have_attribute("data-ocupado", "")
 
 
 def test_especificacao_longa_abre_no_detalhe_e_sai_inteira_na_impressao(page: Page, base_url):
@@ -168,3 +222,31 @@ def test_especificacao_longa_abre_no_detalhe_e_sai_inteira_na_impressao(page: Pa
     page.emulate_media(media="print")
     expect(page.locator(".itens .impressao").first).to_be_visible()
     expect(espec).to_be_hidden()
+
+
+def test_aviso_fechado_nao_volta(page: Page, base_url):
+    page.goto(base_url + TODAS)
+    aviso = page.locator("[data-dispensar]")
+    expect(aviso).to_be_visible()
+    page.get_by_label("Fechar aviso").click()
+    expect(aviso).to_be_hidden()
+    page.reload()
+    expect(page.locator(RESULTADOS).first).to_be_visible()
+    expect(aviso).to_be_hidden()
+    page.get_by_label("SIGA RJ").check()  # e a troca do HTMX também o mantém fechado
+    expect(page.locator(RESULTADOS)).to_have_count(1)
+    expect(aviso).to_be_hidden()
+
+
+def test_movimento_reduzido_desliga_as_transicoes(page: Page, base_url):
+    page.emulate_media(reduced_motion="reduce")
+    page.goto(base_url + TODAS)
+    duracao = page.evaluate("getComputedStyle(document.querySelector('.botao')).transitionDuration")
+    assert duracao.split(",")[0].strip() in ("0.001s", "0s"), duracao
+
+
+def test_barra_de_progresso_aparece_quando_a_casca_esta_ocupada(page: Page, base_url):
+    page.goto(base_url + TODAS)
+    expect(page.locator(".progresso")).to_have_css("opacity", "0")
+    page.evaluate("document.documentElement.setAttribute('data-ocupado', '')")
+    expect(page.locator(".progresso")).to_have_css("opacity", "1")

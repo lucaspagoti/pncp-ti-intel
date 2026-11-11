@@ -1,10 +1,12 @@
-"""Seletores e utilitários compartilhados pelos E2E da web (W2)."""
+"""Seletores e utilitários compartilhados pelos E2E da web (W2 e W5)."""
 
 from __future__ import annotations
 
 from playwright.sync_api import Page
 
-RESULTADOS = ".resultados td.objeto > a"
+# Lista de todas as atas, sem filtro: a home só mostra a busca (ADR 0039).
+TODAS = "/?explorar=1"
+RESULTADOS = ".resultados .ata-objeto > a"
 
 
 def buscar(page: Page) -> None:

@@ -34,3 +34,10 @@ Use cada skill quando a tarefa pedir, sem esperar invocação, e carregue só o 
   Jinja2 + HTMX; framework ou dependência nova exige autorização do Lucas.
 - `grilling` (Grill Me): só sob demanda, para questionar requisitos, arquitetura ou
   decisões. Não roda sozinha em tarefa simples nem refaz o planejamento.
+
+## Identidade visual da web
+
+A web tem identidade própria (ADR 0039) e não segue o design system PGE Ajuda. Referência:
+`prototipos/web/` (comece pelo `README.md`). Valores só em `prototipos/web/tokens.css`, copiado
+para `src/pncp_ti/web/static/tokens.css`; não invente cor, tamanho, raio ou duração fora dele.
+Tema único, claro. Mudança de UI começa pelo protótipo (ADR 0033).

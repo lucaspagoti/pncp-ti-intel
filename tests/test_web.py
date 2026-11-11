@@ -19,8 +19,8 @@ from pncp_ti.web.exportar import gerar_csv, neutralizar
 
 
 def titulos(html: str) -> str:
-    """Só o texto dos resultados (o formulário traz exemplos de busca)."""
-    return " | ".join(re.findall(r'<td class="objeto"><a [^>]*>(.*?)</a>', html))
+    """Só o texto dos cartões de resultado."""
+    return " | ".join(re.findall(r'<h2 class="ata-objeto"><a [^>]*>(.*?)</a>', html))
 
 
 @pytest.fixture
@@ -97,7 +97,7 @@ async def test_htmx_devolve_so_a_casca(cliente):
     # A restauração do histórico (voltar do navegador) precisa da página inteira.
     cab = {"HX-Request": "true", "HX-History-Restore-Request": "true"}
     assert "<html" in (await cliente.get("/", headers=cab)).text
-    assert '<div class="casca" id="casca">' in (await cliente.get("/")).text
+    assert '<div class="casca" id="casca">' in (await cliente.get("/", params={"q": "a"})).text
 
 
 async def test_detalhe_mostra_itens_e_origem(cliente):
@@ -345,15 +345,26 @@ def test_templates_e_css_sem_estilo_inline_nem_cor_fora_dos_tokens():
     for modelo in (web / "templates").glob("*.html"):
         texto = modelo.read_text(encoding="utf-8")
         assert not re.search(r"\bstyle\s*=|<style", texto, re.I), modelo.name
-    for css in ("app.css", "tokens-projeto.css"):
-        texto = (web / "static" / css).read_text(encoding="utf-8")
-        assert not re.search(r"#[0-9a-fA-F]{3,8}\b", texto), css
-        assert not re.search(r"\brgba?\(", texto), css
+    css = (web / "static" / "app.css").read_text(encoding="utf-8")
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", css)
+    assert not re.search(r"\brgba?\(", css)
+    # Tamanho de fonte só pela escala do tokens.css, nunca um valor avulso.
+    assert not re.findall(r"font-size:\s*[^v\s]", css)
     assert not (web / "static" / "estilo.css").exists()
+    assert not (web / "static" / "tokens-projeto.css").exists()
+
+
+def test_tokens_da_web_sao_os_do_prototipo():
+    """O protótipo é a referência visual (ADR 0033): os dois carregam o mesmo tokens.css."""
+    from pathlib import Path
+
+    web = Path(RAIZ_WEB) / "static" / "tokens.css"
+    prototipo = Path(RAIZ_WEB).parents[2] / "prototipos" / "web" / "tokens.css"
+    assert web.read_bytes() == prototipo.read_bytes()
 
 
 async def test_paginas_sem_estilo_inline(cliente):
-    for url in ("/", "/?q=notebook", "/ata/siga_rj/S1", "/ata/compras_arp/A2"):
+    for url in ("/", "/?explorar=1", "/?q=notebook", "/ata/siga_rj/S1", "/ata/compras_arp/A2"):
         assert not re.search(r"\bstyle\s*=", (await cliente.get(url)).text), url
 
 
@@ -372,10 +383,10 @@ async def test_pilulas_e_selo_de_vencimento(cliente):
     r = await cliente.get("/", params={"q": "microsoft", "uf": "SP"})
     assert 'aria-label="Remover termo"' in r.text and 'aria-label="Remover uf"' in r.text
     assert 'href="/?uf=SP"' in r.text  # remover o termo mantém a UF
-    assert '<span class="chip crit">vence em 5 dias</span>' in r.text
+    assert '<p class="prazo crit">vence em 5 dias</p>' in r.text
     r = await cliente.get("/", params={"q": "notebook"})
-    assert '<span class="chip warn">vence em 60 dias</span>' in r.text
-    assert "Mostrando 1 a 1 de 1 ata vigente" in r.text
+    assert '<p class="prazo warn">vence em 60 dias</p>' in r.text
+    assert "<h1>1 ata vigente</h1>" in r.text
 
 
 async def test_ata_sem_itens_e_rodape_com_a_data_da_carga(cliente):
@@ -399,11 +410,12 @@ async def test_paginacao_de_20_em_20(cliente, conn_ingest):
         await conn_ingest.execute(*web_dados.ata(carga, f"L{n}", f"Cabo lote {n}"))
     await atualizar(conn_ingest)
     r = await cliente.get("/", params={"q": "cabo"})
-    assert "Mostrando 1 a 20 de 25 atas vigentes" in r.text and "Página 1 de 2" in r.text
-    assert '<span class="botao-sec" aria-disabled="true">Anterior</span>' in r.text
+    assert "<h1>25 atas vigentes</h1>" in r.text and "página 1 de 2" in r.text
+    assert '<span class="seta" aria-disabled="true">Anterior</span>' in r.text
+    assert '<span aria-current="page">1</span>' in r.text and 'aria-label="Página 2"' in r.text
     r = await cliente.get("/", params={"q": "cabo", "pagina": "2"})
-    assert "Mostrando 21 a 25 de 25" in r.text
-    assert '<span class="botao-sec" aria-disabled="true">Próxima</span>' in r.text
+    assert "página 2 de 2" in r.text and len(titulos(r.text).split(" | ")) == 5
+    assert '<span class="seta" aria-disabled="true">Próxima</span>' in r.text
 
 
 async def test_descricao_longa_vira_resumo_com_especificacao(cliente, conn_ingest):
@@ -411,7 +423,7 @@ async def test_descricao_longa_vira_resumo_com_especificacao(cliente, conn_inges
     await conn_ingest.execute("UPDATE ata_itens SET descricao = %s WHERE chave = 'S1-1'", (longa,))
     await atualizar(conn_ingest)
     r = await cliente.get("/ata/siga_rj/S1")
-    assert "<summary>Ver especificação completa</summary>" in r.text
+    assert '<span class="ver">Ver especificação completa</span>' in r.text
     assert r.text.count(longa.strip()) == 2  # no <details> (tela) e no bloco de impressão
     assert "Mouse óptico</td>" in r.text or "Mouse óptico<span" in r.text  # curta fica inteira
 
@@ -492,7 +504,7 @@ async def test_monitor_traz_primeiro_a_ata_cujo_item_principal_e_monitor(cliente
     assert ordem == ["MON", "CFTV", "PC", "CFTV2"], ordem
     # A linha mostra o item que casou e o preço dele, não o menor preço da ata.
     assert "<mark>Monitor</mark> computador" in r.text and "2 de 2 itens" in r.text
-    assert "R$ 618,00" in r.text and "do item buscado" in r.text
+    assert '<span class="moeda">R$</span>618,00' in r.text and "do item buscado" in r.text
     # "monitores" (plural) dá a mesma ordem; o radical de "monitoramento" não puxa o CFTV para cima.
     plural = re.findall(
         r'href="/ata/compras_arp/(\w+)"', (await cliente.get("/", params={"q": "monitores"})).text
@@ -546,8 +558,8 @@ async def test_item_buscado_sem_preco_nao_herda_preco_de_outro_item(cliente, con
     await conn_ingest.execute("UPDATE ata_itens SET valor_valido = false WHERE chave = 'SP-1'")
     await atualizar(conn_ingest)
     r = await cliente.get("/", params={"q": "monitor"})
-    linha = r.text[r.text.index('href="/ata/compras_arp/SP"') :].split("</tr>", 1)[0]
-    assert "R$ 25,00" not in linha and "sem preço do item buscado" in linha
+    linha = r.text[r.text.index('href="/ata/compras_arp/SP"') :].split("</li>", 1)[0]
+    assert "25,00" not in linha and "sem preço do item buscado" in linha
     r = await cliente.get("/", params={"q": "monitor", "preco_max": "100"})
     assert "/ata/compras_arp/SP" not in r.text
 
@@ -565,3 +577,45 @@ async def test_frase_negada_nao_perde_ata_na_fronteira_entre_campos(cliente, con
     await atualizar(conn_ingest)
     r = await cliente.get("/", params={"q": 'notebook -"notebook monitor"'})
     assert "/ata/compras_arp/NEG" in r.text
+
+
+async def test_sem_parametro_a_primeira_visita_e_a_home(cliente):
+    r = await cliente.get("/")
+    assert "<h1>Atas de TI</h1>" in r.text and 'name="q"' in r.text
+    # Só o que o leitor precisa para começar: sem lista, sem filtros.
+    assert 'class="lista-atas' not in r.text and 'id="casca"' not in r.text
+    assert 'href="/?q=notebook"' in r.text and 'href="/?explorar=1"' in r.text
+    assert f"Dados de <strong>{web_dados.HOJE:%d/%m/%Y}</strong>" in r.text
+    assert re.search(r"em [\d.]+ atas vigentes", r.text)
+    # Campo vazio enviado pelo formulário da home também volta para a home.
+    assert "<h1>Atas de TI</h1>" in (await cliente.get("/", params={"q": ""})).text
+
+
+async def test_explorar_lista_todas_as_atas(cliente):
+    r = await cliente.get("/", params={"explorar": "1"})
+    assert 'class="lista-atas' in r.text and 'id="casca"' in r.text
+    assert "<h1>Atas de TI</h1>" not in r.text and 'aria-label="Filtros ativos"' not in r.text
+    # Ordem escolhida sem filtro é lista, não home.
+    assert 'class="lista-atas' in (await cliente.get("/", params={"ordem": "preco"})).text
+
+
+async def test_ultimo_filtro_removido_pelo_htmx_guarda_explorar_na_url(cliente):
+    cab = {"HX-Request": "true"}
+    r = await cliente.get("/", headers=cab)
+    assert r.headers["HX-Push-Url"] == "/?explorar=1" and 'class="lista-atas' in r.text
+    # Com filtro (inclusive o `ordem` que o formulário sempre manda) a URL é a do pedido.
+    r = await cliente.get("/", params={"ordem": "relevancia"}, headers=cab)
+    assert "HX-Push-Url" not in r.headers
+    # O link da última pílula já aponta para a lista inteira, e não para a home.
+    r = await cliente.get("/", params={"q": "notebook"})
+    assert 'href="/?explorar=1"' in r.text and 'hx-get="/?explorar=1"' in r.text
+
+
+def test_janela_de_paginas():
+    janela = consultas.janela_paginas
+    assert janela(1, 1) == [1] and janela(1, 3) == [1, 2, 3]
+    assert janela(1, 10) == [1, 2, None, 10]
+    assert janela(5, 10) == [1, None, 4, 5, 6, None, 10]
+    assert janela(3, 10) == [1, 2, 3, 4, None, 10]  # a lacuna de uma página vira o número
+    assert janela(10, 10) == [1, None, 9, 10]
+    assert janela(500, 500) == [1, None, 499, 500]

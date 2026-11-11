@@ -25,5 +25,9 @@ def test_navegacao_sem_erros_de_console_nem_csp(page: Page, base_url, erros_cons
     page.goto(f"{base_url}/ata/siga_rj/S1")
     page.emulate_media(media="print")
     page.set_viewport_size({"width": 390, "height": 844})
+    page.emulate_media(media="screen")
     page.goto(base_url)
+    page.get_by_label("Buscar objeto ou item").fill("notebook")
+    page.get_by_role("button", name="Buscar", exact=True).click()
+    page.get_by_label("Fechar aviso").click()
     assert erros_console == []

@@ -1,74 +1,82 @@
-/* Gerado por scripts/gerar_tokens_css.py a partir de insumos/design-system/tokens.json. Não edite. */
+/* Identidade visual da web de atas (ADR 0039). Única fonte dos valores: protótipo e web
+   carregam este arquivo, e nenhum outro CSS tem hex, rgba ou tamanho de fonte avulso.
+   Contrastes medidos sobre --surface (branco) e, quando diferente, sobre --bg. */
 :root {
-  --navy: #005a92;
-  --navy-dark: #003a5f;
-  --bg: #f3f7fa;
-  --panel: #ffffff;
-  --text: #1f2937;
-  --muted: #5b6b7c;
-  --border: #cfd8e3;
-  --chip-bg: #eaf0f5;
-  --footnote-bg: #eef3f7;
-  --footnote-border: #d7e1ea;
-  --good: #427942;
-  --warn: #9a6700;
-  --crit: #b3261e;
-  --type-todos: #005a92;
-  --type-requisicao: #427942;
-  --type-incidente: #bb9b32;
-  --type-incidente-line: #8c7426;
-  --flow-concluidos: #2c7a7b;
-  --age1: #427942;
-  --age2: #bb9b32;
-  --age3: #c9702e;
-  --age4: #b3261e;
-  --age1-ink: #ffffff;
-  --age2-ink: #1f2937;
-  --age3-ink: #171e29;
-  --age4-ink: #ffffff;
-  --st1: #1f4e79;
-  --st2: #c98a17;
-  --st3: #7ba7cc;
-  --st4: #2e7d48;
-  --font-sans: Calibri, "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --fs-3xs: 0.68rem;
-  --fs-2xs: 0.72rem;
-  --fs-xs: 0.78rem;
-  --fs-sm: 0.82rem;
-  --fs-md: 0.86rem;
-  --fs-lg: 0.92rem;
-  --fs-rel: 0.72em;
-  --fs-3xs-lh: 1.35;
-  --fs-2xs-lh: 1.35;
-  --fs-xs-lh: 1.45;
-  --fs-sm-lh: 1.45;
-  --fs-md-lh: 1.45;
-  --fs-lg-lh: 1.5;
-  --fs-rel-lh: 1;
-  --fs-xl: 1.3rem;
-  --fs-2xl: 1.5rem;
-  --fs-3xl: 1.7rem;
-  --fs-4xl: 1.9rem;
-  --fs-5xl: 2.6rem;
-  --fs-xl-lh: 1.2;
-  --fs-2xl-lh: 1.2;
-  --fs-3xl-lh: 1.15;
-  --fs-4xl-lh: 1.1;
-  --fs-5xl-lh: 1.15;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-pill: 999px;
-  --shadow-marker-left: inset 3px 0 0 #005a92;
-  --shadow-marker-bottom: inset 0 -3px 0 #005a92;
-  --shadow-xs: 0 1px 2px rgba(0,0,0,.25);
-  --shadow-pop: 0 6px 20px rgba(0,0,0,.16);
+  /* Cor. Um acento só (ação e foco); cor de alerta só para prazo. */
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-veu: rgba(245, 245, 247, .84);  /* barra fixa translúcida sobre o fundo */
+  --ink: #1d1d1f;             /* 16,8:1 */
+  --ink-2: #636366;           /* 5,99:1 na superfície, 5,5:1 no fundo */
+  --line: #e3e4e8;            /* fio de separação, nunca texto */
+  --control-line: #86868b;    /* borda de controle: 3,62:1 e 3,33:1 */
+  --accent: #1456d6;          /* 6,3:1; branco sobre ele também 6,3:1 */
+  --accent-strong: #0f45ad;   /* hover; texto sobre --accent-soft a 7,47:1 */
+  --accent-soft: #eaf1fd;     /* realce do termo, opção marcada */
+  --on-accent: #ffffff;
+  --warn: #9a6700;            /* 4,87:1, só sobre a superfície (4,47:1 no fundo) */
+  --crit: #b3261e;            /* 6,54:1 */
+  --toast: #1d1d1f;           /* aviso de Desfazer: tinta clara sobre ele */
+  --on-toast: #ffffff;
+  --on-toast-accent: #8ab4ff; /* "Desfazer" sobre --toast: 8,06:1 */
+
+  /* Tipo: fonte do sistema (San Francisco no Mac e no iPhone, Segoe no Windows), dois pesos. */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI",
+          Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fs-0: 11px; --lh-0: 16px;   /* rótulo em caixa alta, contador */
+  --fs-1: 13px; --lh-1: 18px;   /* metadados, rótulos */
+  --fs-2: 15px; --lh-2: 22px;   /* corpo */
+  --fs-3: 17px; --lh-3: 24px;   /* título de cartão, campo de busca */
+  --fs-4: 22px; --lh-4: 28px;   /* preço, seção */
+  --fs-5: 28px; --lh-5: 34px;   /* título do detalhe */
+  --fs-6: 40px; --lh-6: 46px;   /* título da home */
+  --w-regular: 400;
+  --w-strong: 600;
+  --tracking-display: -.022em;
+  --tracking-rotulo: .04em;
+
+  /* Espaço: base 4. */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 72px;
+
+  /* Forma e medidas. */
+  --r-xs: 6px;
+  --r-control: 10px;
+  --r-card: 16px;
+  --r-pill: 999px;
+  --borda: 1px;
+  --progresso: 3px;       /* altura da barra de progresso */
+  --icone: 16px;
+  --alvo: 32px;           /* controle compacto */
+  --alvo-toque: 44px;     /* mínimo no toque */
+  --campo-grande: 56px;   /* busca da home */
+  --lateral: 248px;
+  --coluna: 1000px;       /* largura máxima de leitura */
+  --coluna-home: 640px;
+
+  /* Profundidade: repouso e elevação. */
+  --shadow-rest: 0 1px 2px rgba(29, 29, 31, .06), 0 0 0 1px rgba(29, 29, 31, .05);
+  --shadow-lift: 0 12px 32px rgba(29, 29, 31, .14), 0 1px 3px rgba(29, 29, 31, .08);
+  --ring: 0 0 0 4px rgba(20, 86, 214, .24);
+
+  /* Movimento: uma curva, duas durações e a distância do gesto. */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --dur-1: 180ms;
+  --dur-2: 320ms;
+  --desloca: 24px;
+  --dur-carga: 1100ms;    /* volta completa da barra de progresso */
 }
-body { font-family: var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text); background: var(--bg); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 1ms; --dur-2: 1ms; --desloca: 0px; }
+}
+
+body {
+  font-family: var(--font);
+  font-size: var(--fs-2);
+  line-height: var(--lh-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}

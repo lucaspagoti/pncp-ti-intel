@@ -39,6 +39,8 @@ CABECALHOS_SEGURANCA = {
 }
 # Descrição de item maior que isso vira resumo com a especificação completa num <details>.
 LIMITE_DESCRICAO = 160
+# Buscas de exemplo da home: as do aceite da R4 e a da W3.
+EXEMPLOS_DE_BUSCA = ("notebook", "monitor", "outsourcing de impressão", "licença Microsoft")
 OPCOES_CONEXAO = "-c default_transaction_read_only=on -c statement_timeout=8000"
 
 
@@ -47,6 +49,11 @@ def _brl(valor: Decimal | None) -> str:
         return "—"
     texto = f"{valor:,.2f}"
     return "R$ " + texto.replace(",", "#").replace(".", ",").replace("#", ".")
+
+
+def _brl_valor(valor: Decimal | None) -> str:
+    """O número sem o "R$", para o cartão destacar a moeda à parte."""
+    return _brl(valor).removeprefix("R$ ")
 
 
 def _data(valor: date | None) -> str:
@@ -100,6 +107,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
     templates.env.autoescape = True
     templates.env.filters.update(
         brl=_brl,
+        brl_valor=_brl_valor,
         data=_data,
         numero=_numero,
         url_segura=_url_segura,
@@ -112,6 +120,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
         ESFERAS=consultas.ESFERAS,
         ORDENS=consultas.ROTULOS_ORDEM,
         TAMANHO_PAGINA=consultas.TAMANHO_PAGINA,
+        EXEMPLOS=EXEMPLOS_DE_BUSCA,
         LIMITE_DESCRICAO=LIMITE_DESCRICAO,
     )
 
@@ -138,11 +147,24 @@ def criar_app(dsn: str | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def inicio(request: Request, conn: Conn) -> Response:
+        # HTMX pede só o conteúdo da casca; a restauração do histórico pede a página inteira.
+        parcial = bool(request.headers.get("HX-Request")) and not request.headers.get(
+            "HX-History-Restore-Request"
+        )
+        # Sem nenhum parâmetro preenchido, a primeira visita é a home (ADR 0039). Dentro da
+        # casca (HTMX) a lista nunca volta para a home: sem filtro, mostra todas as atas.
+        if not parcial and not any(request.query_params.values()):
+            contexto = {
+                "total": await consultas.total_atas(conn),
+                "cargas": await consultas.cargas(conn),
+            }
+            return templates.TemplateResponse(request, "home.html", contexto)
         filtros = consultas.ler_filtros(request.query_params)
         pagina = await consultas.buscar(conn, filtros)
         contexto = {
             "f": filtros,
             "p": pagina,
+            "janela": consultas.janela_paginas(pagina.pagina, pagina.paginas),
             "opcoes": await consultas.opcoes_filtro(conn),
             "facetas": await consultas.facetas(conn, filtros),
             "ativos": consultas.filtros_ativos(filtros),
@@ -152,12 +174,13 @@ def criar_app(dsn: str | None = None) -> FastAPI:
                 await consultas.sugestoes(conn, filtros.q) if filtros.q and not pagina.total else []
             ),
         }
-        # HTMX pede só o conteúdo da casca; a restauração do histórico pede a página inteira.
-        parcial = request.headers.get("HX-Request") and not request.headers.get(
-            "HX-History-Restore-Request"
+        resposta = templates.TemplateResponse(
+            request, "_resultados.html" if parcial else "index.html", contexto
         )
-        modelo = "_resultados.html" if parcial else "index.html"
-        return templates.TemplateResponse(request, modelo, contexto)
+        if parcial and not any(request.query_params.values()):
+            # O último filtro saiu: a URL guarda "todas as atas" e não a home.
+            resposta.headers["HX-Push-Url"] = "/?explorar=1"
+        return resposta
 
     @app.get("/ata/{fonte}/{id_ata:path}/itens.csv")
     async def exportar_itens(fonte: str, id_ata: str, conn: Conn) -> Response:

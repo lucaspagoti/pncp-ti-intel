@@ -1,59 +1,61 @@
 {% extends "base.html" %}
-{% from "_comum.html" import icone, marca, rodape, vigencia %}
+{% from "_comum.html" import icone, data_corte, situacao %}
 {% block titulo %}Ata {{ a.numero or '' }} · Atas de TI{% endblock %}
 {% block corpo %}
 {% set link = a.link_origem | url_segura %}
-<div class="casca">
-  <aside class="lateral">
-    {{ marca() }}
-    <a class="voltar" href="/">{{ icone('voltar') }} Voltar à busca</a>
-    <nav class="nesta-ata" aria-label="Nesta ata">
-      <span class="titulo-filtros">Nesta ata</span>
-      <a href="#dados" aria-current="true">Dados da ata</a>
-      <a href="#itens">Itens e preços</a>
-    </nav>
-    {{ rodape(cargas) }}
-  </aside>
+<main class="detalhe">
+  <nav class="detalhe-topo" aria-label="Ata">
+    <a class="voltar" href="/?explorar=1" data-voltar>{{ icone('voltar') }}Voltar à busca</a>
+    <div class="acoes">
+      {%- if itens %}<a class="botao-sec" href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}/itens.csv">{{ icone('baixar') }} Exportar itens</a>{% endif -%}
+      {%- if link %}<a class="botao" href="{{ link }}" rel="noopener noreferrer" target="_blank">Conferir no portal {{ icone('externo') }}</a>{% endif -%}
+    </div>
+  </nav>
 
-  <main class="folha">
-    <header class="cab-folha" id="dados">
-      <div class="linha-titulo">
-        <div><span class="chip">{{ FONTES.get(a.fonte, a.fonte) }}</span></div>
-        <div class="acoes-registro linha-titulo">
-          {%- if itens %}<a class="botao-sec" href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}/itens.csv">{{ icone('baixar') }} Exportar itens</a>{% endif -%}
-          {%- if link %}<a class="botao" href="{{ link }}" rel="noopener noreferrer" target="_blank">Conferir no portal {{ icone('externo') }}</a>{% endif -%}
-        </div>
-      </div>
-      <h1>{{ a.objeto }}</h1>
-      {% set ident = [('Ata ' ~ a.numero) if a.numero, ('nº de controle ' ~ a.numero_controle_pncp) if a.numero_controle_pncp] | select | join(' · ') %}
-      {% if ident %}<p class="ident">{{ ident }}</p>{% endif %}
-    </header>
-    {% set local = [a.esfera, a.uf, a.municipio] | select | join(' · ') %}
-    <dl class="campos">
+  <header class="detalhe-cab">
+    <p class="sobretitulo"><span>{{ FONTES.get(a.fonte, a.fonte) }}</span>{% if a.numero %}<span>Ata {{ a.numero }}</span>{% endif %}</p>
+    <h1>{{ a.objeto }}</h1>
+  </header>
+
+  {% set local = [a.esfera, a.uf, a.municipio] | select | join(' · ') %}
+  <section class="cartao" aria-label="Resumo da ata">
+    <dl class="resumo-ata">
       <div><dt>Órgão gerenciador</dt><dd>{{ a.orgao or a.unidade_gerenciadora or '—' }}</dd></div>
       <div><dt>Local</dt><dd>{{ local or '—' }}</dd></div>
-      <div><dt>Vigência</dt><dd>{% if a.inicio %}{{ a.inicio | data }} a {% else %}até {% endif %}{{ a.fim | data }} {{ vigencia(a.fim, com_data=false) }}</dd></div>
-      {% if a.valor_total is not none %}<div><dt>Valor total registrado</dt><dd>{{ a.valor_total | brl }}</dd></div>{% endif %}
-      <div><dt>Critério de TI</dt><dd>{{ a.motivo_ti or '—' }}</dd></div>
-      <div><dt>Primeira vez vista</dt><dd>{{ a.primeira_vez_vista | data }}</dd></div>
+      <div><dt>Vigência</dt><dd>{% if a.inicio %}{{ a.inicio | data }} a {% else %}até {% endif %}{{ a.fim | data }}{{ situacao(a.fim) }}</dd></div>
+      {% if a.valor_total is not none %}<div><dt>Valor total registrado</dt><dd class="grande">{{ a.valor_total | brl }}</dd></div>{% endif %}
     </dl>
-    <div class="secao" id="itens"><h2>Itens e preços <span class="contador">{{ itens | length | numero }}</span></h2></div>
+  </section>
+
+  <section class="cartao itens" id="itens" aria-labelledby="t-itens">
+    <div class="secao-cab"><h2 id="t-itens">Itens e preços</h2><span class="contagem">{{ itens | length | numero }} ite{{ 'm' if itens | length == 1 else 'ns' }}</span></div>
     {% if itens %}
-    <div class="tabela itens">
+    <div class="tabela">
       <table>
         <thead><tr><th>Item</th><th>Descrição e fornecedor</th><th class="n">Qtd. registrada</th><th class="n">Limite p/ adesão</th><th class="n">Preço unitário</th></tr></thead>
         <tbody>
         {% for i in itens %}
           {% set sub = [[i.codigo_catalogo, i.nome_catalogo] | select | join(' '), i.fornecedor] | select | join(' · ') %}
-          <tr><td class="oculto-cel num-item">{{ i.id_item }}</td><td class="desc">{% if (i.descricao or "") | length > LIMITE_DESCRICAO %}<span class="tela">{{ i.descricao | truncate(LIMITE_DESCRICAO) }}</span><details class="espec tela"><summary>Ver especificação completa</summary><p>{{ i.descricao }}</p></details><span class="impressao">{{ i.descricao }}</span>{% else %}{{ i.descricao }}{% endif %}{% if sub %}<span class="sub">{{ sub }}</span>{% endif %}</td><td class="n" data-rotulo="Qtd. registrada">{{ i.quantidade | numero }}</td><td class="n" data-rotulo="Limite p/ adesão">{{ i.maximo_adesao | numero }}</td><td class="n unit" data-rotulo="Preço unitário">{{ i.valor_unitario | brl }}</td></tr>
+          <tr><td class="num-item">{{ i.id_item }}</td><td class="item-desc">{% if (i.descricao or "") | length > LIMITE_DESCRICAO %}<span class="tela">{{ i.descricao | truncate(LIMITE_DESCRICAO) }}</span><details class="espec tela"><summary><span class="ver">Ver especificação completa</span><span class="ocultar-espec">Ocultar especificação</span></summary><p>{{ i.descricao }}</p></details><span class="impressao">{{ i.descricao }}</span>{% else %}{{ i.descricao }}{% endif %}{% if sub %}<span class="item-sub">{{ sub }}</span>{% endif %}</td><td class="n" data-rotulo="Qtd. registrada">{{ i.quantidade | numero }}</td><td class="n" data-rotulo="Limite p/ adesão">{{ i.maximo_adesao | numero }}</td><td class="n unit" data-rotulo="Preço unitário">{{ i.valor_unitario | brl }}</td></tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
-    <p class="nota">Limite para adesão como registrado na fonte. Confira o edital e a ata antes de pedir adesão.</p>
     {% else %}
-    <p class="nota">Esta fonte não traz itens para esta ata. Confira na origem.</p>
+    <p class="sem-itens">Esta fonte não traz itens para esta ata. Confira na origem.</p>
     {% endif %}
-  </main>
-</div>
+  </section>
+  {% if itens %}<p class="nota-adesao">Limite para adesão como registrado na fonte. Confira o edital e a ata antes de pedir adesão.</p>{% endif %}
+
+  <section class="sobre" aria-labelledby="t-sobre">
+    <h2 id="t-sobre">Sobre este registro</h2>
+    <dl>
+      {% if a.numero_controle_pncp %}<dt>Nº de controle PNCP</dt><dd>{{ a.numero_controle_pncp }}</dd>{% endif %}
+      <dt>Por que é de TI</dt><dd>{{ a.motivo_ti or '—' }}</dd>
+      <dt>Primeira vez vista</dt><dd>{{ a.primeira_vez_vista | data }}</dd>
+      <dt>Dados de</dt><dd>{{ data_corte(cargas) }} · SIGA RJ, Compras.gov.br e portal PNCP</dd>
+    </dl>
+    <p class="legal">Dados públicos de terceiros. Confira sempre na origem antes de qualquer uso formal.</p>
+  </section>
+</main>
 {% endblock %}
