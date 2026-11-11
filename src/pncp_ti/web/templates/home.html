@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% from "_comum.html" import icone, fontes_dos_dados %}
+{% from "_comum.html" import icone, selo, fontes_dos_dados %}
 {% block corpo %}
 <main class="home">
   <div class="home-coluna">
-    <h1>Atas de TI</h1>
+    {{ selo(grande=true) }}
+    <h1>Portal de Atas de TI</h1>
     <p class="home-lede">Preços registrados em {{ total | numero }} atas vigentes de todo o país.</p>
     <form class="busca" role="search" action="/" method="get">
       <div class="campo-busca">{{ icone('buscar') }}<input type="search" id="q" name="q" maxlength="200" placeholder="Busque pelo item: notebook, monitor, switch…" aria-label="Buscar objeto ou item da ata" autofocus><button class="busca-botao" type="submit" aria-label="Buscar">{{ icone('seta') }}</button></div>

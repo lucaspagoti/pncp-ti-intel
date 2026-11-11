@@ -96,8 +96,12 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--a
 
 .lateral { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: var(--s-5);
            padding: var(--s-5) var(--s-4) var(--s-5) var(--s-5); }
-.marca { font-size: var(--fs-3); line-height: var(--lh-3); font-weight: var(--w-strong); letter-spacing: var(--tracking-display); color: var(--ink); }
+.marca { display: flex; align-items: center; gap: var(--s-3); font-size: var(--fs-2); line-height: var(--lh-2); font-weight: var(--w-strong); letter-spacing: var(--tracking-titulo); color: var(--ink); }
 .marca:hover { color: var(--ink); }
+/* Selo da marca: o ícone da aba, em grafite, com o mesmo traço dos demais ícones. */
+.selo { flex: none; display: grid; place-items: center; width: var(--selo); height: var(--selo); border-radius: 28%; background: var(--ink); color: var(--surface); }
+.selo svg { width: 62%; height: 62%; stroke-width: 1.9; }
+.selo-grande { width: var(--selo-grande); height: var(--selo-grande); margin: 0 auto calc(var(--s-2) * -1); }
 .alternar { position: absolute; opacity: 0; pointer-events: none; }
 .botao-filtros { display: none; }
 .painel-filtros { display: flex; flex-direction: column; gap: var(--s-5); }
@@ -210,6 +214,7 @@ mark { background: var(--accent-soft); color: var(--accent-strong); border-radiu
 
 /* ---------- Detalhe ---------- */
 .detalhe { max-width: var(--coluna); margin: 0 auto; padding: var(--s-5) var(--s-5) var(--s-7); display: flex; flex-direction: column; gap: var(--s-4); }
+.detalhe-marca { padding-bottom: var(--s-2); }
 .detalhe-topo { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
 .voltar { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-2); }
 .acoes { display: flex; gap: var(--s-2); flex-wrap: wrap; }
@@ -332,7 +337,7 @@ html[data-ocupado] .progresso::before { animation: correr var(--dur-carga) var(-
 /* ---------- Impressão ---------- */
 @media print {
   body { background: var(--surface); }
-  .lateral, .topo, .ativos, .resumo-acoes, .pag, .acoes, .fechar, .aviso, .progresso, .voltar { display: none; }
+  .lateral, .topo, .ativos, .resumo-acoes, .pag, .acoes, .fechar, .aviso, .progresso, .voltar, .detalhe-marca { display: none; }
   .casca { display: block; }
   .cartao { box-shadow: none; border: var(--borda) solid var(--line); }
   .ata, tr, .resumo-ata { break-inside: avoid; }

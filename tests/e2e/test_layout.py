@@ -69,6 +69,7 @@ def test_impressao_esconde_lateral_busca_e_paginacao(page: Page, base_url):
     ("url", "seletor"),
     [
         ("/", ".home-lede"),
+        ("/?q=notebook", ".marca"),
         ("/", ".exemplos a"),
         ("/", ".home-rodape"),
         ("/?q=microsoft", ".ata-objeto > a"),
@@ -198,7 +199,7 @@ def test_estado_vazio_orienta_o_proximo_passo(page: Page, base_url):
     expect(page.get_by_text("Tire um filtro acima")).to_be_visible()
     page.get_by_role("link", name="comece uma busca nova").click()
     expect(page).to_have_url(f"{base_url}/")
-    expect(page.get_by_role("heading", level=1)).to_have_text("Atas de TI")
+    expect(page.get_by_role("heading", level=1)).to_have_text("Portal de Atas de TI")
 
 
 def test_casca_fica_ocupada_durante_a_busca(page: Page, base_url):

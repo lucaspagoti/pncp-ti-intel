@@ -379,6 +379,77 @@ async def test_botao_de_busca_dentro_do_campo_na_home_e_na_lista(cliente):
     assert "Experimente" not in (await cliente.get("/")).text
 
 
+async def test_nome_e_icone_do_portal_em_todas_as_telas(cliente):
+    """ADR 0041: o nome no título da aba, na marca e na home, e o ícone da aba ligado."""
+    paginas = {
+        "/": "<title>Portal de Atas de TI</title>",
+        "/?q=notebook": "<title>notebook · Portal de Atas de TI</title>",
+        "/?explorar=1": "<title>Portal de Atas de TI</title>",
+        "/ata/siga_rj/S1": "· Portal de Atas de TI</title>",
+    }
+    for url, titulo in paginas.items():
+        r = await cliente.get(url)
+        assert titulo in r.text, url
+        assert '<link rel="icon" href="/static/icone.svg" type="image/svg+xml">' in r.text
+        assert (
+            '<link rel="icon" href="/static/icone-32.png" type="image/png" sizes="32x32">' in r.text
+        )
+        assert '<link rel="apple-touch-icon" href="/static/icone-apple-180.png">' in r.text
+        assert "Atas de TI vigentes</title>" not in r.text
+    lista = (await cliente.get("/", params={"q": "notebook"})).text
+    assert re.search(
+        r'<a class="marca" href="/"><span class="selo" aria-hidden="true">.*?</span>'
+        r"Portal de Atas de TI</a>",
+        lista,
+        re.S,
+    )
+    home = (await cliente.get("/")).text
+    assert 'class="selo selo-grande"' in home and "<h1>Portal de Atas de TI</h1>" in home
+
+
+async def test_arquivos_do_icone_sao_servidos_com_o_tipo_certo(cliente):
+    esperado = {
+        "icone.svg": "image/svg+xml",
+        "icone-32.png": "image/png",
+        "icone-192.png": "image/png",
+        "icone-apple-180.png": "image/png",
+    }
+    for nome, tipo in esperado.items():
+        r = await cliente.get(f"/static/{nome}")
+        assert r.status_code == 200 and r.headers["content-type"].startswith(tipo), nome
+    assert (await cliente.get("/static/icone-32.png")).content[:8] == b"\x89PNG\r\n\x1a\n"
+    svg = (await cliente.get("/static/icone.svg")).text
+    assert "<script" not in svg and "http" not in svg.replace("http://www.w3.org/2000/svg", "")
+
+
+async def test_resposta_parcial_do_htmx_leva_o_titulo_da_aba(cliente):
+    """QA-W8-001: o HTMX troca só a casca; o título novo vem na resposta e vale uma vez só."""
+    cab = {"HX-Request": "true"}
+    r = await cliente.get("/", params={"q": "notebook"}, headers=cab)
+    assert r.text.count("<title>") == 1
+    assert "<title>notebook · Portal de Atas de TI</title>" in r.text
+    r = await cliente.get("/", headers=cab)  # sem termo: todas as atas
+    assert "<title>Portal de Atas de TI</title>" in r.text
+    r = await cliente.get("/", params={"q": "<script>x</script>"}, headers=cab)
+    assert "<title>&lt;script&gt;x&lt;/script&gt; · Portal de Atas de TI</title>" in r.text
+    # A página inteira tem um título só (o do base.html), inclusive na restauração do histórico.
+    cheia = {**cab, "HX-History-Restore-Request": "true"}
+    for cabecalhos in ({}, cheia):
+        r = await cliente.get("/", params={"q": "notebook"}, headers=cabecalhos)
+        assert r.text.count("<title>") == 1, cabecalhos
+
+
+async def test_detalhe_tem_a_marca_do_portal(cliente):
+    """QA-W8-002: o detalhe não tem lateral, então a marca vem no topo."""
+    r = await cliente.get("/ata/siga_rj/S1")
+    assert re.search(
+        r'<div class="detalhe-marca"><a class="marca" href="/">'
+        r'<span class="selo" aria-hidden="true">.*?</span>Portal de Atas de TI</a></div>',
+        r.text,
+        re.S,
+    )
+
+
 def test_tokens_da_web_sao_os_do_prototipo():
     """O protótipo é a referência visual (ADR 0033): os dois carregam o mesmo tokens.css."""
     from pathlib import Path
@@ -606,20 +677,23 @@ async def test_frase_negada_nao_perde_ata_na_fronteira_entre_campos(cliente, con
 
 async def test_sem_parametro_a_primeira_visita_e_a_home(cliente):
     r = await cliente.get("/")
-    assert "<h1>Atas de TI</h1>" in r.text and 'name="q"' in r.text
+    assert "<h1>Portal de Atas de TI</h1>" in r.text and 'name="q"' in r.text
     # Só o que o leitor precisa para começar: sem lista, sem filtros.
     assert 'class="lista-atas' not in r.text and 'id="casca"' not in r.text
     assert 'href="/?q=notebook"' in r.text and 'href="/?explorar=1"' in r.text
     assert f"Dados de <strong>{web_dados.HOJE:%d/%m/%Y}</strong>" in r.text
     assert re.search(r"em [\d.]+ atas vigentes", r.text)
     # Campo vazio enviado pelo formulário da home também volta para a home.
-    assert "<h1>Atas de TI</h1>" in (await cliente.get("/", params={"q": ""})).text
+    assert "<h1>Portal de Atas de TI</h1>" in (await cliente.get("/", params={"q": ""})).text
 
 
 async def test_explorar_lista_todas_as_atas(cliente):
     r = await cliente.get("/", params={"explorar": "1"})
     assert 'class="lista-atas' in r.text and 'id="casca"' in r.text
-    assert "<h1>Atas de TI</h1>" not in r.text and 'aria-label="Filtros ativos"' not in r.text
+    assert (
+        "<h1>Portal de Atas de TI</h1>" not in r.text
+        and 'aria-label="Filtros ativos"' not in r.text
+    )
     # Ordem escolhida sem filtro é lista, não home.
     assert 'class="lista-atas' in (await cliente.get("/", params={"ordem": "preco"})).text
 

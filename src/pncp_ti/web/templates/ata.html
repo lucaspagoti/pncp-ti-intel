@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% from "_comum.html" import icone, data_corte, situacao %}
-{% block titulo %}Ata {{ a.numero or '' }} · Atas de TI{% endblock %}
+{% from "_comum.html" import icone, marca, data_corte, situacao %}
+{% block titulo %}Ata {{ a.numero or '' }} · Portal de Atas de TI{% endblock %}
 {% block corpo %}
 {% set link = a.link_origem | url_segura %}
 <main class="detalhe">
+  <div class="detalhe-marca">{{ marca() }}</div>
   <nav class="detalhe-topo" aria-label="Ata">
     <a class="voltar" href="/?explorar=1" data-voltar>{{ icone('voltar') }}Voltar à busca</a>
     <div class="acoes">
