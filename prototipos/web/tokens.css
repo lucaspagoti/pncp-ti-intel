@@ -9,6 +9,8 @@
   --ink: #1d1d1f;             /* 16,8:1 */
   --ink-2: #636366;           /* 5,99:1 na superfície, 5,5:1 no fundo */
   --line: #e3e4e8;            /* fio de separação, nunca texto */
+  --sutil: rgba(29, 29, 31, .06);   /* botão de busca com o campo vazio */
+  --hover: rgba(29, 29, 31, .045);  /* linha sob o cursor */
   --control-line: #86868b;    /* borda de controle: 3,62:1 e 3,33:1 */
   --accent: #1456d6;          /* 6,3:1; branco sobre ele também 6,3:1 */
   --accent-strong: #0f45ad;   /* hover; texto sobre --accent-soft a 7,47:1 */
@@ -20,19 +22,22 @@
   --on-toast: #ffffff;
   --on-toast-accent: #8ab4ff; /* "Desfazer" sobre --toast: 8,06:1 */
 
-  /* Tipo: fonte do sistema (San Francisco no Mac e no iPhone, Segoe no Windows), dois pesos. */
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI",
+  /* Tipo: Inter, servida pela própria web (ADR 0040), e a fonte do sistema como reserva. Três
+     pesos: 400 no corpo, 500 no que está marcado e 600 só nos títulos e no preço. */
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
           Roboto, "Helvetica Neue", Arial, sans-serif;
   --fs-0: 11px; --lh-0: 16px;   /* rótulo em caixa alta, contador */
-  --fs-1: 13px; --lh-1: 18px;   /* metadados, rótulos */
-  --fs-2: 15px; --lh-2: 22px;   /* corpo */
-  --fs-3: 17px; --lh-3: 24px;   /* título de cartão, campo de busca */
-  --fs-4: 22px; --lh-4: 28px;   /* preço, seção */
-  --fs-5: 28px; --lh-5: 34px;   /* título do detalhe */
-  --fs-6: 40px; --lh-6: 46px;   /* título da home */
+  --fs-1: 13px; --lh-1: 18px;   /* metadados, rótulos, contagens */
+  --fs-2: 14px; --lh-2: 21px;   /* corpo e opções de filtro */
+  --fs-3: 16px; --lh-3: 24px;   /* título de cartão, campo de busca */
+  --fs-4: 20px; --lh-4: 26px;   /* preço, seção */
+  --fs-5: 26px; --lh-5: 32px;   /* título da lista e do detalhe */
+  --fs-6: 36px; --lh-6: 42px;   /* título da home */
   --w-regular: 400;
+  --w-medium: 500;
   --w-strong: 600;
-  --tracking-display: -.022em;
+  --tracking-display: -.02em;
+  --tracking-titulo: -.006em;
   --tracking-rotulo: .04em;
 
   /* Espaço: base 4. */
@@ -50,6 +55,8 @@
   --alvo: 32px;           /* controle compacto */
   --alvo-toque: 44px;     /* mínimo no toque */
   --campo-grande: 56px;   /* busca da home */
+  --botao-busca: 36px;    /* botão dentro do campo de busca (campo de 44 px) */
+  --botao-busca-grande: 44px;  /* o mesmo, no campo da home */
   --lateral: 248px;
   --coluna: 1000px;       /* largura máxima de leitura */
   --coluna-home: 640px;
@@ -57,7 +64,7 @@
   /* Profundidade: repouso e elevação. */
   --shadow-rest: 0 1px 2px rgba(29, 29, 31, .06), 0 0 0 1px rgba(29, 29, 31, .05);
   --shadow-lift: 0 12px 32px rgba(29, 29, 31, .14), 0 1px 3px rgba(29, 29, 31, .08);
-  --ring: 0 0 0 4px rgba(20, 86, 214, .24);
+  --ring: 0 0 0 3px rgba(20, 86, 214, .16);
 
   /* Movimento: uma curva, duas durações e a distância do gesto. */
   --ease: cubic-bezier(.2, .8, .2, 1);
@@ -78,5 +85,6 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   background: var(--bg);
+  font-feature-settings: "cv11", "ss03";  /* "a" de uma camada e alternativas da Inter */
   -webkit-font-smoothing: antialiased;
 }

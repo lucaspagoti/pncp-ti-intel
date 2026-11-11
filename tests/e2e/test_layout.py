@@ -70,7 +70,6 @@ def test_impressao_esconde_lateral_busca_e_paginacao(page: Page, base_url):
     [
         ("/", ".home-lede"),
         ("/", ".exemplos a"),
-        ("/", ".rotulo-exemplos"),
         ("/", ".home-rodape"),
         ("/?q=microsoft", ".ata-objeto > a"),
         ("/?q=microsoft", ".ata-meta"),
@@ -80,7 +79,7 @@ def test_impressao_esconde_lateral_busca_e_paginacao(page: Page, base_url):
         ("/?q=notebook", ".opcao .qtd"),  # a opção marcada: branco sobre o azul
         ("/?q=notebook", ".opcao:not(:has(input:checked)) .qtd"),
         ("/?q=notebook", ".rodape-lateral"),
-        ("/?q=notebook", ".botao"),
+        ("/?q=notebook", ".busca-botao"),
         ("/?q=notebook", ".pilula"),
         ("/?q=notebook", ".aviso p"),
         ("/?q=impressao", ".resultados .ata-item mark"),
@@ -241,7 +240,9 @@ def test_aviso_fechado_nao_volta(page: Page, base_url):
 def test_movimento_reduzido_desliga_as_transicoes(page: Page, base_url):
     page.emulate_media(reduced_motion="reduce")
     page.goto(base_url + TODAS)
-    duracao = page.evaluate("getComputedStyle(document.querySelector('.botao')).transitionDuration")
+    duracao = page.evaluate(
+        "getComputedStyle(document.querySelector('.busca-botao')).transitionDuration"
+    )
     assert duracao.split(",")[0].strip() in ("0.001s", "0s"), duracao
 
 

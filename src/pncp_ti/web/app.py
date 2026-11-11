@@ -26,8 +26,9 @@ from pncp_ti.web.exportar import CABECALHO_ITENS, gerar_csv
 BASE = Path(__file__).parent
 HOSTS_PADRAO = "127.0.0.1,localhost,testserver"
 CSP = (
-    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-    "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+    "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; "
+    "img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; "
+    "frame-ancestors 'none'"
 )
 CABECALHOS_SEGURANCA = {
     "Content-Security-Policy": CSP,
