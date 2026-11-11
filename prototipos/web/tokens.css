@@ -57,6 +57,8 @@
   --campo-grande: 56px;   /* busca da home */
   --botao-busca: 36px;    /* botão dentro do campo de busca (campo de 44 px) */
   --botao-busca-grande: 44px;  /* o mesmo, no campo da home */
+  --selo: 32px;           /* ícone da marca na lateral */
+  --selo-grande: 56px;    /* o mesmo, na home */
   --lateral: 248px;
   --coluna: 1000px;       /* largura máxima de leitura */
   --coluna-home: 640px;

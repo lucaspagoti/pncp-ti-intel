@@ -119,6 +119,12 @@ saiu do escopo (ADR 0039, item 7); por isso as duas fases, e a W4, foram entregu
 - Testes de unidade e E2E (desktop 1366, celular 390, impressão e contraste) atualizados.
 - **Aceite:** as três buscas da R4 e "monitor" com os dados reais, abaixo de 500 ms.
 
+## W8 · Nome e ícone (ADR 0041)
+
+Pedido pelo Lucas em 11/11/2026: a web passa a se chamar "Portal de Atas de TI" (marca, home e título das
+abas) e ganha o ícone "Pilha de atas" na aba, na lateral e na home. Sem migração; alertas do WhatsApp
+ficam como estão.
+
 ## W7 · Ajuste fino (ADR 0040)
 
 Pedido pelo Lucas em 11/11/2026, depois de comparar opções num HTML: seleção de filtro em pílula

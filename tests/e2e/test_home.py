@@ -10,7 +10,7 @@ from playwright.sync_api import Page, expect
 
 def test_home_mostra_so_a_busca(page: Page, base_url):
     page.goto(base_url)
-    expect(page.get_by_role("heading", level=1)).to_have_text("Atas de TI")
+    expect(page.get_by_role("heading", level=1)).to_have_text("Portal de Atas de TI")
     expect(page.get_by_label("Buscar objeto ou item")).to_be_focused()
     expect(page.locator(RESULTADOS)).to_have_count(0)
     expect(page.locator(".lateral")).to_have_count(0)
@@ -35,10 +35,10 @@ def test_ver_todas_as_atas_lista_sem_filtro(page: Page, base_url):
 def test_marca_e_limpar_tudo_levam_de_volta_a_home(page: Page, base_url):
     page.goto(f"{base_url}/?q=notebook&uf=SP")
     page.get_by_role("link", name="Limpar tudo").click()
-    expect(page.get_by_role("heading", level=1)).to_have_text("Atas de TI")
+    expect(page.get_by_role("heading", level=1)).to_have_text("Portal de Atas de TI")
     page.goto(f"{base_url}/?q=notebook")
     page.locator(".marca").click()
-    expect(page.get_by_role("heading", level=1)).to_have_text("Atas de TI")
+    expect(page.get_by_role("heading", level=1)).to_have_text("Portal de Atas de TI")
 
 
 def _centro(page: Page, seletor: str) -> float:
@@ -85,3 +85,34 @@ def test_inter_carrega_da_propria_web_sem_violar_a_csp(page: Page, base_url, err
     familia = page.evaluate("getComputedStyle(document.body).fontFamily")
     assert familia.startswith("Inter")
     assert erros_console == []
+
+
+def test_marca_com_o_nome_e_o_icone_do_portal(page: Page, base_url):
+    page.goto(base_url)
+    expect(page).to_have_title("Portal de Atas de TI")
+    expect(page.locator(".home .selo-grande")).to_be_visible()
+    page.goto(f"{base_url}/?q=notebook")
+    expect(page).to_have_title("notebook · Portal de Atas de TI")
+    marca = page.locator(".marca")
+    expect(marca).to_have_text("Portal de Atas de TI")
+    assert marca.locator(".selo svg").count() == 1
+    # O selo é do grafite do produto, sem o azul.
+    expect(marca.locator(".selo")).to_have_css("background-color", "rgb(29, 29, 31)")
+
+
+def test_marca_cabe_na_lateral_sem_quebrar_linha(page: Page, base_url):
+    page.goto(f"{base_url}/?explorar=1")
+    caixa = page.locator(".marca").bounding_box()
+    assert caixa["height"] < 40, caixa  # uma linha só ("Portal de Atas de TI" ao lado do ícone)
+
+
+def test_icone_da_aba_carrega(page: Page, base_url):
+    for caminho, tipo in (("icone.svg", "image/svg+xml"), ("icone-32.png", "image/png")):
+        resposta = page.request.get(f"{base_url}/static/{caminho}")
+        assert resposta.ok and resposta.headers["content-type"].startswith(tipo)
+    page.goto(base_url)
+    ligacoes = page.evaluate(
+        "[...document.querySelectorAll('link[rel~=icon], link[rel=apple-touch-icon]')]"
+        ".map((l) => l.getAttribute('href'))"
+    )
+    assert "/static/icone.svg" in ligacoes and "/static/icone-apple-180.png" in ligacoes

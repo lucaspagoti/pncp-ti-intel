@@ -90,8 +90,12 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--a
 
 .lateral { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: var(--s-5);
            padding: var(--s-5) var(--s-4) var(--s-5) var(--s-5); }
-.marca { font-size: var(--fs-3); line-height: var(--lh-3); font-weight: var(--w-strong); letter-spacing: var(--tracking-display); color: var(--ink); }
+.marca { display: flex; align-items: center; gap: var(--s-3); font-size: var(--fs-2); line-height: var(--lh-2); font-weight: var(--w-strong); letter-spacing: var(--tracking-titulo); color: var(--ink); }
 .marca:hover { color: var(--ink); }
+/* Selo da marca: o ícone da aba, em grafite, com o mesmo traço dos demais ícones. */
+.selo { flex: none; display: grid; place-items: center; width: var(--selo); height: var(--selo); border-radius: 28%; background: var(--ink); color: var(--surface); }
+.selo svg { width: 62%; height: 62%; stroke-width: 1.9; }
+.selo-grande { width: var(--selo-grande); height: var(--selo-grande); margin: 0 auto calc(var(--s-2) * -1); }
 .alternar { position: absolute; opacity: 0; pointer-events: none; }
 .botao-filtros { display: none; }
 .painel-filtros { display: flex; flex-direction: column; gap: var(--s-5); }
