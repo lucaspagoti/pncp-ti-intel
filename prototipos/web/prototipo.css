@@ -208,6 +208,7 @@ mark { background: var(--accent-soft); color: var(--accent-strong); border-radiu
 
 /* ---------- Detalhe ---------- */
 .detalhe { max-width: var(--coluna); margin: 0 auto; padding: var(--s-5) var(--s-5) var(--s-7); display: flex; flex-direction: column; gap: var(--s-4); }
+.detalhe-marca { padding-bottom: var(--s-2); }
 .detalhe-topo { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
 .voltar { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-2); }
 .acoes { display: flex; gap: var(--s-2); flex-wrap: wrap; }
@@ -312,7 +313,7 @@ details.espec p { padding-top: var(--s-2); }
 /* ---------- Impressão ---------- */
 @media print {
   body { background: var(--surface); }
-  .lateral, .topo, .ativos, .resumo-acoes, .pag, .acoes, .fechar, .aviso { display: none; }
+  .lateral, .topo, .ativos, .resumo-acoes, .pag, .acoes, .fechar, .aviso, .detalhe-marca { display: none; }
   .casca { display: block; }
   .cartao { box-shadow: none; border: var(--borda) solid var(--line); }
   .ata, tr, .resumo-ata { break-inside: avoid; }

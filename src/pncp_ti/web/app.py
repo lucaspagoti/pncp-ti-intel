@@ -164,6 +164,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
         pagina = await consultas.buscar(conn, filtros)
         contexto = {
             "f": filtros,
+            "parcial": parcial,
             "p": pagina,
             "janela": consultas.janela_paginas(pagina.pagina, pagina.paginas),
             "opcoes": await consultas.opcoes_filtro(conn),

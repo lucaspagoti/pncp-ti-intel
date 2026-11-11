@@ -116,3 +116,32 @@ def test_icone_da_aba_carrega(page: Page, base_url):
         ".map((l) => l.getAttribute('href'))"
     )
     assert "/static/icone.svg" in ligacoes and "/static/icone-apple-180.png" in ligacoes
+
+
+def test_titulo_da_aba_acompanha_a_busca_e_a_remocao_do_termo(page: Page, base_url):
+    """QA-W8-001: a troca pelo HTMX também muda o título da aba."""
+    page.goto(f"{base_url}/?q=notebook")
+    page.evaluate("window.__sem_recarga = true")
+    page.get_by_label("Buscar objeto ou item").fill("impressao")
+    page.get_by_role("button", name="Buscar", exact=True).click()
+    expect(page).to_have_title("impressao · Portal de Atas de TI")
+    page.get_by_label("Remover termo").click()
+    expect(page).to_have_title("Portal de Atas de TI")
+    assert page.evaluate("window.__sem_recarga") is True
+
+
+@pytest.mark.parametrize("tela", [DESKTOP, CELULAR], ids=["desktop", "celular"])
+def test_detalhe_tem_a_marca_em_uma_linha_e_leva_a_home(page: Page, base_url, tela):
+    """QA-W8-002."""
+    page.set_viewport_size(tela)
+    page.goto(f"{base_url}/ata/siga_rj/S1")
+    marca = page.locator(".detalhe-marca .marca")
+    expect(marca).to_have_text("Portal de Atas de TI")
+    caixa = marca.bounding_box()
+    assert caixa["height"] < 50, caixa
+    if tela is CELULAR:
+        assert caixa["height"] >= 44, caixa
+    marca.focus()
+    page.keyboard.press("Enter")
+    expect(page.get_by_role("heading", level=1)).to_have_text("Portal de Atas de TI")
+    expect(page).to_have_url(f"{base_url}/")

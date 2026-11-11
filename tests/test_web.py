@@ -422,6 +422,34 @@ async def test_arquivos_do_icone_sao_servidos_com_o_tipo_certo(cliente):
     assert "<script" not in svg and "http" not in svg.replace("http://www.w3.org/2000/svg", "")
 
 
+async def test_resposta_parcial_do_htmx_leva_o_titulo_da_aba(cliente):
+    """QA-W8-001: o HTMX troca só a casca; o título novo vem na resposta e vale uma vez só."""
+    cab = {"HX-Request": "true"}
+    r = await cliente.get("/", params={"q": "notebook"}, headers=cab)
+    assert r.text.count("<title>") == 1
+    assert "<title>notebook · Portal de Atas de TI</title>" in r.text
+    r = await cliente.get("/", headers=cab)  # sem termo: todas as atas
+    assert "<title>Portal de Atas de TI</title>" in r.text
+    r = await cliente.get("/", params={"q": "<script>x</script>"}, headers=cab)
+    assert "<title>&lt;script&gt;x&lt;/script&gt; · Portal de Atas de TI</title>" in r.text
+    # A página inteira tem um título só (o do base.html), inclusive na restauração do histórico.
+    cheia = {**cab, "HX-History-Restore-Request": "true"}
+    for cabecalhos in ({}, cheia):
+        r = await cliente.get("/", params={"q": "notebook"}, headers=cabecalhos)
+        assert r.text.count("<title>") == 1, cabecalhos
+
+
+async def test_detalhe_tem_a_marca_do_portal(cliente):
+    """QA-W8-002: o detalhe não tem lateral, então a marca vem no topo."""
+    r = await cliente.get("/ata/siga_rj/S1")
+    assert re.search(
+        r'<div class="detalhe-marca"><a class="marca" href="/">'
+        r'<span class="selo" aria-hidden="true">.*?</span>Portal de Atas de TI</a></div>',
+        r.text,
+        re.S,
+    )
+
+
 def test_tokens_da_web_sao_os_do_prototipo():
     """O protótipo é a referência visual (ADR 0033): os dois carregam o mesmo tokens.css."""
     from pathlib import Path
