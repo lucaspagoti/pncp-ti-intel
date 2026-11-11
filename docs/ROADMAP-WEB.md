@@ -119,6 +119,13 @@ saiu do escopo (ADR 0039, item 7); por isso as duas fases, e a W4, foram entregu
 - Testes de unidade e E2E (desktop 1366, celular 390, impressão e contraste) atualizados.
 - **Aceite:** as três buscas da R4 e "monitor" com os dados reais, abaixo de 500 ms.
 
+## W7 · Ajuste fino (ADR 0040)
+
+Pedido pelo Lucas em 11/11/2026, depois de comparar opções num HTML: seleção de filtro em pílula
+neutra, botão de busca com ícone dentro do campo (grafite, apagado com o campo vazio), tipografia Inter
+servida pela própria web (`font-src 'self'`) e correções da home (campo no eixo, sem "Experimente",
+rodapé legível). Sem migração.
+
 ## Rito de cada sprint
 
 1. Plano da sprint em modo plan, aprovado pelo Lucas.

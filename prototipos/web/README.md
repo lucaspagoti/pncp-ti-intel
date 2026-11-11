@@ -16,19 +16,19 @@ Abra `index.html` no navegador. Sem estilo inline nem script inline, como exige 
 - `tokens.css` — única fonte dos valores (cor, tipo, espaço, raio, sombra, movimento), com o
   contraste medido de cada cor. A web usa uma cópia idêntica em `src/pncp_ti/web/static/`.
   Valor novo entra aqui, com o contraste quando for cor; nenhum outro CSS tem hex ou `rgba`.
-- `prototipo.css` — só `var(--token)`.
+- `prototipo.css` — só `var(--token)`; carrega a Inter de `src/pncp_ti/web/static/fonts/` (ADR 0040).
 - `prototipo.js` — fechar o aviso e remover pílulas com animação; vira parte do `app.js` da web na W6.
 
 ## Princípios
 
-- **Um acento só.** Azul para ação e foco. `warn` e `crit` só para prazo, e só a 90 e 30 dias.
+- **Um acento só.** Azul para links e foco; o botão de busca é grafite, dentro do campo. `warn` e `crit` só para prazo, e só a 90 e 30 dias.
 - **Um número em destaque por cartão.** O preço é o único texto em 22 px; o resto é 13 a 17 px.
   Dois pesos: 400 e 600.
 - **Separação por espaço e fundo.** Cartão branco sobre `--bg`, sombra de repouso; a elevação
   (`--shadow-lift`) marca o cartão sob o cursor e o cursor sobre a ata. Borda só em controle
   (3:1) e fio de tabela.
-- **Seleção que se vê.** A opção de filtro marcada é azul sólida, com marcador de rádio; campo
-  preenchido ganha borda azul.
+- **Seleção que se vê, sem cor.** A opção de filtro marcada é uma pílula branca com sombra leve e peso 500
+  (ADR 0040); campo de texto preenchido ganha borda azul.
 - **Movimento curto.** Só transições CSS, uma curva, duas durações; nada se move com
   `prefers-reduced-motion`.
 

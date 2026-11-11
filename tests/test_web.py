@@ -354,6 +354,31 @@ def test_templates_e_css_sem_estilo_inline_nem_cor_fora_dos_tokens():
     assert not (web / "static" / "tokens-projeto.css").exists()
 
 
+async def test_inter_e_servida_pela_propria_web_e_a_csp_deixa(cliente):
+    """ADR 0040: a fonte vem de /static (`font-src 'self'`), com a licença ao lado."""
+    r = await cliente.get("/static/fonts/inter-latin-wght-normal.woff2")
+    assert r.status_code == 200 and r.headers["content-type"] == "font/woff2"
+    assert r.content[:4] == b"wOF2" and 20_000 < len(r.content) < 200_000
+    assert "font-src 'self'" in r.headers["content-security-policy"]
+    assert "style-src 'self'" in r.headers["content-security-policy"]  # e segue sem unsafe-inline
+    assert "SIL Open Font License" in (await cliente.get("/static/fonts/OFL-Inter.txt")).text
+    r = await cliente.get("/")
+    assert 'rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2"' in r.text
+
+
+async def test_botao_de_busca_dentro_do_campo_na_home_e_na_lista(cliente):
+    for params in ({}, {"q": "notebook"}):
+        r = await cliente.get("/", params=params)
+        assert re.search(
+            r'<div class="campo-busca">.*?<input type="search".*?'
+            r'<button class="busca-botao" type="submit" aria-label="Buscar">',
+            r.text,
+            re.S,
+        ), params
+        assert '<button class="botao" type="submit">Buscar' not in r.text
+    assert "Experimente" not in (await cliente.get("/")).text
+
+
 def test_tokens_da_web_sao_os_do_prototipo():
     """O protótipo é a referência visual (ADR 0033): os dois carregam o mesmo tokens.css."""
     from pathlib import Path

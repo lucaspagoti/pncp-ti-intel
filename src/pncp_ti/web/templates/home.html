@@ -6,10 +6,9 @@
     <h1>Atas de TI</h1>
     <p class="home-lede">Preços registrados em {{ total | numero }} atas vigentes de todo o país.</p>
     <form class="busca" role="search" action="/" method="get">
-      <div class="campo-busca">{{ icone('buscar') }}<input type="search" id="q" name="q" maxlength="200" placeholder="Busque pelo item: notebook, monitor, switch…" aria-label="Buscar objeto ou item da ata" autofocus></div>
-      <button class="botao" type="submit">Buscar</button>
+      <div class="campo-busca">{{ icone('buscar') }}<input type="search" id="q" name="q" maxlength="200" placeholder="Busque pelo item: notebook, monitor, switch…" aria-label="Buscar objeto ou item da ata" autofocus><button class="busca-botao" type="submit" aria-label="Buscar">{{ icone('seta') }}</button></div>
     </form>
-    <p class="exemplos"><span class="rotulo-exemplos">Experimente</span>
+    <p class="exemplos">
       {%- for exemplo in EXEMPLOS %}
       <a href="/?q={{ exemplo | urlencode }}">{{ exemplo }}</a>
       {%- endfor %}</p>
