@@ -28,6 +28,17 @@ def ata(carga, fonte_id, objeto, *, fim=FIM, orgao="ORGAO X", uf=None, esfera=No
     )
 
 
+def ata_proderj(carga, id_origem, objeto, processo, *, fim=FIM) -> Comando:
+    """Ata do SIGA gerenciada pelo PRODERJ, com o processo SEI que casa com o site (ADR 0042)."""
+    return (
+        "INSERT INTO atas (carga_id, id_origem, numero, objeto, unidade_gerenciadora, "
+        "status_origem, is_ti, vigente_na_origem, fim, processos) "
+        "VALUES (%s, %s, '1/2026/403200-01', %s, "
+        "'PRODERJ - CENTRO DE TECN DE INFORMAÇÃO E COMUN DO ERJ', 'Válida', true, true, %s, %s)",
+        (carga, id_origem, objeto, fim, [processo] if processo else []),
+    )
+
+
 def item(carga, ata_id, n, descricao, valor, fornecedor="ACME", catalogo="") -> Comando:
     return (
         "INSERT INTO ata_itens (carga_id, chave, ata_id_origem, id_item, descricao, nome_catalogo, "

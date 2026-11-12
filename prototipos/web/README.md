@@ -6,7 +6,11 @@ estáticas, dados de exemplo, sem backend:
 - `index.html` — home: a busca em destaque, exemplos e a data dos dados;
 - `resultados.html` — busca por "notebook" com filtro: cartões de ata, filtros na lateral
   (recolhidos no celular), pílulas, aviso e paginação;
-- `ata.html` — detalhe em coluna única.
+- `ata.html` — detalhe em coluna única;
+- `ata-proderj.html` e `ata-proderj-sem-pagina.html` — detalhe de uma ata do PRODERJ com o botão
+  "Ver no site do PRODERJ" e, quando a contratação não consta no site, o mesmo botão desativado
+  com a nota embaixo (ADR 0042). O controle "Todas as atas | PRODERJ" fica sobre a lista, em
+  `resultados.html`.
 
 Abra `index.html` no navegador. Sem estilo inline nem script inline, como exige a CSP da web
 (`style-src 'self'`, `script-src 'self'`).

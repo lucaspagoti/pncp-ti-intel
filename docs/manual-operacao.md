@@ -126,7 +126,14 @@ SELECT fonte, count(*) FROM v_atas_ti_vigentes GROUP BY fonte;
 O alerta do WhatsApp diz qual fonte falhou e o motivo, traduzido de `erro_tipo` (ADR 0032);
 com o banco fora, sai a frase genérica. Confira `erro_tipo` em `cargas` e o journald. Código 2 na ARP é erro determinístico de
 contrato/dado; repetir a mesma carga não o resolve. A carga anterior permanece ativa.
-Após corrigir a causa, use `make ingest FONTE=siga` ou `make ingest FONTE=arp`. Não apague
+Após corrigir a causa, use `make ingest FONTE=siga` ou `make ingest FONTE=arp`.
+
+**Links do PRODERJ (ADR 0042).** A carga `proderj` lê as listas de licitações do site do órgão e só
+grava o endereço de cada contratação; vigência e dados vêm do SIGA. Se falhar, os links anteriores
+ficam no ar e o alerta diz "a lista do PRODERJ não atualizou hoje". `contrato` quer dizer que o HTML
+do site mudou (ajuste `_LINK` em `fontes/proderj.py` e a fixture). Rodar à mão:
+`make ingest FONTE=proderj ARGS=--validar` conta os processos sem gravar. Conferir os casamentos:
+`SELECT id_ata, url FROM v_ata_proderj;` (url nula = não consta no site). Não apague
 `atas_vistas`: uma recarga forçada preserva a primeira observação e não cria novidades.
 
 No SIGA, sucesso/`sem_mudanca` pode conviver com arquivo antigo: o alerta de 48h usa a

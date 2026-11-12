@@ -119,6 +119,15 @@ saiu do escopo (ADR 0039, item 7); por isso as duas fases, e a W4, foram entregu
 - Testes de unidade e E2E (desktop 1366, celular 390, impressão e contraste) atualizados.
 - **Aceite:** as três buscas da R4 e "monitor" com os dados reais, abaixo de 500 ms.
 
+## W10 · PRODERJ: abas e link da contratação (ADR 0042)
+
+Pedido pelo Lucas em 11/11/2026: o PRODERJ é o órgão de maior vínculo dele. A lista ganha as abas
+"Todas as atas | PRODERJ" e a ata do PRODERJ ganha o botão para a página da contratação em
+`rj.gov.br/proderj/licitacoes` (desativado, com nota, se não consta). Migração **0012**; fonte nova
+`proderj` na carga diária. Sem status de licitação nem outras fases: a base segue só de atas vigentes.
+- **Aceite:** com os dados reais, a aba PRODERJ mostra as atas vigentes do órgão e cada ata com
+  contratação no site abre a página certa; ata sem página mostra o botão desativado.
+
 ## W8 · Nome e ícone (ADR 0041)
 
 Pedido pelo Lucas em 11/11/2026: a web passa a se chamar "Portal de Atas de TI" (marca, home e título das

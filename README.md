@@ -65,8 +65,13 @@ foi abandonado em 13/10/2026.
   filtros que aplicam sozinhos e detalhe em coluna única, com o protótipo em `prototipos/web/`
   como referência. Sem migração.
 
-`make ingest FONTE=siga|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
-(`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, publicado em `atas.myhomelablp.site` pelo Cloudflare Tunnel com Access, ADR 0024). O banco local está na migração 0011 depois do deploy da W3.
+- **W10 — PRODERJ** (ADR 0042, migração **0012**): abas "Todas as atas | PRODERJ" sobre a lista e, no
+  detalhe da ata do PRODERJ, o botão "Ver no site do PRODERJ" (ou o mesmo botão desativado quando a
+  contratação não consta). Os links vêm de `fontes/proderj.py`, que lê as listas de licitações do site
+  do órgão; vigência e dados continuam do SIGA.
+
+`make ingest FONTE=siga|proderj|arp|pncp_busca` roda uma carga manualmente e `make web` sobe a web local
+(`127.0.0.1:8000`; proxy autenticado em `deploy/caddy/`, publicado em `atas.myhomelablp.site` pelo Cloudflare Tunnel com Access, ADR 0024). O banco local está na migração 0012 depois do deploy da W10.
 
 ## Como rodar
 

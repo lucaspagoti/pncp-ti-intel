@@ -37,6 +37,10 @@ h1, h2, dd, .ata-meta, .pilula b, .item-desc { overflow-wrap: anywhere; }
 .botao-texto { background: transparent; color: var(--accent); border: 0; padding: 0 var(--s-2); }
 .botao-texto:hover { background: var(--accent-soft); color: var(--accent-strong); }
 .botao:active, .botao-sec:active { transform: scale(.97); }
+/* Botão que não leva a lugar nenhum (ex.: contratação que não consta no site do PRODERJ): mesma forma, sem ação. */
+.botao[aria-disabled="true"] { background: var(--sutil); color: var(--ink-2); cursor: not-allowed; }
+.botao[aria-disabled="true"]:hover { background: var(--sutil); color: var(--ink-2); }
+.botao[aria-disabled="true"]:active { transform: none; }
 
 input[type="text"], input[type="search"], input[type="date"], select {
   font: inherit; font-size: var(--fs-2); color: var(--ink);
@@ -146,6 +150,18 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--a
 .pilula.saindo { opacity: 0; transform: scale(.85); }
 .ativos .botao-texto { min-height: 30px; }
 
+/* ---------- Escopo: Todas as atas | PRODERJ (ADR 0042) ---------- */
+/* Controle segmentado sobre a lista; é um grupo de rádio, então vale como filtro e volta pelo link. */
+.abas { display: inline-flex; gap: 2px; padding: var(--s-1); margin-top: var(--s-3); background: var(--sutil); border-radius: var(--r-pill); }
+.aba { position: relative; display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--alvo); padding: 0 var(--s-4);
+       border-radius: var(--r-pill); font-size: var(--fs-1); line-height: var(--lh-1); font-weight: var(--w-medium); color: var(--ink-2); cursor: pointer;
+       transition: background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease); }
+.aba input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.aba .qtd { font-weight: var(--w-regular); }
+.aba:hover { color: var(--ink); }
+.aba:has(input:checked) { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-rest); }
+.aba:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ---------- Aviso dispensável ---------- */
 /* A linha da grade vai de 1fr a 0fr: a altura fecha sem medir nada em JS. */
 .dispensavel { display: grid; grid-template-rows: 1fr; margin-bottom: var(--s-3);
@@ -211,7 +227,9 @@ mark { background: var(--accent-soft); color: var(--accent-strong); border-radiu
 .detalhe-marca { padding-bottom: var(--s-2); }
 .detalhe-topo { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
 .voltar { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-2); }
-.acoes { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.acoes { display: flex; align-items: flex-start; gap: var(--s-2); flex-wrap: wrap; }
+.acao-orgao { display: flex; flex-direction: column; align-items: flex-end; gap: var(--s-2); }
+.nota-acao { max-width: 44ch; font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink-2); text-align: right; }
 .detalhe-cab { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-5) 0 var(--s-2); }
 .sobretitulo { font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink-2); }
 .sobretitulo span + span::before { content: "·"; margin: 0 var(--s-2); }
@@ -292,6 +310,8 @@ details.espec p { padding-top: var(--s-2); }
   .resumo-ata { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); padding: var(--s-4); }
   .acoes { width: 100%; }
   .acoes > * { flex: 1; }
+  .acao-orgao { align-items: flex-start; }
+  .nota-acao { text-align: left; }
   /* Itens: cada linha vira um bloco com os números embaixo. */
   .itens table, .itens tbody, .itens tr, .itens td { display: block; }
   .itens thead { display: none; }
@@ -313,7 +333,7 @@ details.espec p { padding-top: var(--s-2); }
 /* ---------- Impressão ---------- */
 @media print {
   body { background: var(--surface); }
-  .lateral, .topo, .ativos, .resumo-acoes, .pag, .acoes, .fechar, .aviso, .detalhe-marca { display: none; }
+  .lateral, .topo, .abas, .ativos, .resumo-acoes, .pag, .acoes, .fechar, .aviso, .detalhe-marca { display: none; }
   .casca { display: block; }
   .cartao { box-shadow: none; border: var(--borda) solid var(--line); }
   .ata, tr, .resumo-ata { break-inside: avoid; }

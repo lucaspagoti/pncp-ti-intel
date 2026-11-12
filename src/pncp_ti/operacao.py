@@ -29,6 +29,7 @@ FALHAS = {
 PRAZO_BANCO = 15.0  # segundos para ler `cargas` no OnFailure
 FONTES_CARGA = {
     "siga_rj": "o SIGA RJ",
+    "proderj": "a lista do PRODERJ",
     "compras_arp": "o Compras.gov.br",
     "pncp_busca": "a busca PNCP",
 }

@@ -46,6 +46,13 @@
     </div>
   </div>
 
+  {% if facetas.escopo.proderj or f.escopo %}
+  <div class="abas" role="radiogroup" aria-label="Escopo da lista" {{ auto | safe }}>
+    <label class="aba"><input type="radio" id="escopo-todas" name="escopo" value="" {{ 'checked' if not f.escopo }}> Todas as atas <span class="qtd">{{ facetas.escopo[''] | numero }}</span></label>
+    <label class="aba"><input type="radio" id="escopo-proderj" name="escopo" value="proderj" {{ 'checked' if f.escopo == 'proderj' }}> {{ ESCOPOS['proderj'] }} <span class="qtd">{{ facetas.escopo.proderj | numero }}</span></label>
+  </div>
+  {% endif %}
+
   <div class="resumo">
     <h1>{{ p.total | numero }} ata{{ '' if p.total == 1 else 's' }} vigente{{ '' if p.total == 1 else 's' }}</h1>
     <div class="resumo-acoes">

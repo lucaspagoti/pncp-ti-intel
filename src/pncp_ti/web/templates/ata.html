@@ -10,6 +10,17 @@
     <div class="acoes">
       {%- if itens %}<a class="botao-sec" href="/ata/{{ a.fonte }}/{{ a.id_ata | urlencode }}/itens.csv">{{ icone('baixar') }} Exportar itens</a>{% endif -%}
       {%- if link %}<a class="botao" href="{{ link }}" rel="noopener noreferrer" target="_blank">Conferir no portal {{ icone('externo') }}</a>{% endif -%}
+      {%- if proderj is not none %}
+      {%- set pagina = proderj.url | url_proderj %}
+      <div class="acao-orgao">
+        {%- if pagina %}
+        <a class="botao" href="{{ pagina }}" rel="noopener noreferrer" target="_blank">Ver no site do PRODERJ {{ icone('externo') }}</a>
+        {%- else %}
+        <span class="botao" role="link" aria-disabled="true">Não consta no site do PRODERJ</span>
+        <p class="nota-acao">Não achamos esta contratação em rj.gov.br/proderj/licitacoes. Confira no SIGA.</p>
+        {%- endif %}
+      </div>
+      {%- endif %}
     </div>
   </nav>
 

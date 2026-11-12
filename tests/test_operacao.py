@@ -250,3 +250,10 @@ def test_defasado_so_conta_na_carga_ativa():
         carga("pncp_busca", ativa=False, status="substituida", contagens=contagens),
     ]
     assert "pncp:defasada" not in codigos(cargas)
+
+
+def test_falha_da_lista_do_proderj_tem_frase_propria():
+    assert operacao.frase_carga([_falha("proderj", "contrato")]) == (
+        "a lista do PRODERJ não atualizou hoje (resposta fora do padrão); "
+        "o site segue com os dados anteriores"
+    )
