@@ -25,6 +25,11 @@ branch_labels = None
 depends_on = None
 
 ORGAO_SEI = "430002"  # código do PRODERJ no SEI-RJ
+# Classes explícitas, iguais às de `fontes/proderj.py`: `\\s` e `\\d` do Postgres dependem da
+# collation e divergiriam do Python (QA-W10-01).
+ESPACO = "[ \\t\\r\\n\\u00a0\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]"
+E = ESPACO
+PROCESSO_RE = f"({ORGAO_SEI}){E}*/{E}*0*([0-9]+){E}*/+{E}*([0-9]{{4}})"
 
 
 def upgrade() -> None:
@@ -32,8 +37,7 @@ def upgrade() -> None:
         CREATE FUNCTION proderj_processo(texto text) RETURNS text
         LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
             SELECT m[1] || '/' || ltrim(m[2], '0') || '/' || m[3]
-            FROM (SELECT regexp_match(
-                texto, '({ORGAO_SEI})\\s*/\\s*0*(\\d+)\\s*/+\\s*(\\d{{4}})') AS m) x
+            FROM (SELECT regexp_match(texto, '{PROCESSO_RE}') AS m) x
             WHERE m IS NOT NULL AND ltrim(m[2], '0') <> ''
         $$
     """)

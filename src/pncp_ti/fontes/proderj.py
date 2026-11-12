@@ -50,7 +50,12 @@ CLIENTE = "pncp-ti-intel/1.0"  # nome genérico, sem dados do dono
 
 log = structlog.get_logger()
 
-_PROCESSO = re.compile(r"(430002)\s*/\s*0*(\d+)\s*/+\s*(\d{4})", re.ASCII)
+# Classes explícitas, iguais às de `proderj_processo()` na migração 0012: `\s` e `\d` mudam com a
+# collation (Postgres) e com Unicode (Python), e as duas regras precisam concordar (QA-W10-01).
+_ESPACO = "[ \\t\\r\\n\\u00a0\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]"
+_PROCESSO = re.compile(
+    rf"(430002){_ESPACO}*/{_ESPACO}*0*([0-9]+){_ESPACO}*/+{_ESPACO}*([0-9]{{4}})"
+)
 # O título de cada processo, no campo `views-field-title` da lista; o resto da página (menu,
 # rodapé, corpo do resumo) não entra, e uma mudança de marcação vira erro de contrato.
 _LINK = re.compile(
