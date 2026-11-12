@@ -33,6 +33,8 @@ Abra `index.html` no navegador. Sem estilo inline nem script inline, como exige 
   (3:1) e fio de tabela.
 - **Seleção que se vê, sem cor.** A opção de filtro marcada é uma pílula branca com sombra leve e peso 500
   (ADR 0040); campo de texto preenchido ganha borda azul.
+- **Centro em tela larga.** Lateral e lista ficam juntas no meio da tela (`--casca`, ADR 0044); a
+  lista não passa de `--coluna`.
 - **Movimento curto.** Só transições CSS, uma curva, duas durações; nada se move com
   `prefers-reduced-motion`.
 
