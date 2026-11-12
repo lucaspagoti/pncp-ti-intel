@@ -450,6 +450,13 @@ async def test_detalhe_tem_a_marca_do_portal(cliente):
     )
 
 
+async def test_exemplo_do_campo_orgao_e_um_orgao_de_ti(cliente):
+    """O exemplo do filtro é o nome de um órgão que o leitor reconhece, e não "universidade"."""
+    r = await cliente.get("/", params={"explorar": "1"})
+    assert 'name="orgao"' in r.text and 'placeholder="ex.: SERPRO"' in r.text
+    assert "ex.: universidade" not in r.text
+
+
 def test_tokens_da_web_sao_os_do_prototipo():
     """O protótipo é a referência visual (ADR 0033): os dois carregam o mesmo tokens.css."""
     from pathlib import Path
