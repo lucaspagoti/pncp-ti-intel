@@ -28,7 +28,7 @@
     <div class="grupo"><label class="rotulo" for="uf">UF</label>
       <select id="uf" name="uf" {{ auto | safe }}><option value="">Todas</option>
       {% for u in opcoes.ufs %}<option value="{{ u }}" {{ 'selected' if f.uf == u }}>{{ u }}</option>{% endfor %}</select></div>
-    <div class="grupo"><label class="rotulo" for="orgao">Órgão</label><input type="text" id="orgao" name="orgao" value="{{ f.orgao }}" maxlength="200" placeholder="ex.: universidade" {{ auto_texto | safe }}></div>
+    <div class="grupo"><label class="rotulo" for="orgao">Órgão</label><input type="text" id="orgao" name="orgao" value="{{ f.orgao }}" maxlength="200" placeholder="ex.: SERPRO" {{ auto_texto | safe }}></div>
     <div class="grupo"><label class="rotulo" for="vigente_ate">Vigente até pelo menos</label><input type="date" id="vigente_ate" name="vigente_ate" value="{{ f.vigente_ate or '' }}" {{ auto | safe }}></div>
     <div class="grupo"><span class="rotulo" id="r-preco">Preço unitário (R$)</span>
       <div class="faixa" role="group" aria-labelledby="r-preco">
