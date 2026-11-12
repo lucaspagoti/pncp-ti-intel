@@ -87,10 +87,21 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--a
 .home .campo-busca:focus-within { box-shadow: var(--shadow-lift), inset 0 0 0 var(--borda) var(--accent), var(--ring); }
 .home .campo-busca input[type="search"] { min-height: var(--campo-grande); font-size: var(--fs-3); }
 .home .busca-botao { width: var(--botao-busca-grande); height: var(--botao-busca-grande); margin-right: var(--s-2); }
-.exemplos { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--s-2); }
-.exemplos a { font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink); background: var(--surface); box-shadow: var(--shadow-rest);
-              padding: var(--s-2) var(--s-3); border-radius: var(--r-pill); transition: box-shadow var(--dur-1) var(--ease); }
-.exemplos a:hover { color: var(--ink); box-shadow: var(--shadow-lift); }
+/* Explorar sem buscar (ADR 0043): grade de categorias e faixa de recortes. */
+.rotulo-secao { font-size: var(--fs-0); line-height: var(--lh-0); letter-spacing: var(--tracking-rotulo); text-transform: uppercase; color: var(--ink-2); font-weight: var(--w-medium); margin-bottom: calc(var(--s-2) * -1); }
+.categorias { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-2); text-align: left; }
+.categoria { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--s-3); background: var(--surface); border-radius: var(--r-control);
+             box-shadow: var(--shadow-rest); color: var(--ink); transition: box-shadow var(--dur-1) var(--ease), transform var(--dur-1) var(--ease); }
+.categoria:hover { color: var(--ink); box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+.categoria-icone { display: grid; place-items: center; width: var(--alvo); height: var(--alvo); margin-bottom: var(--s-2); border-radius: var(--r-xs); background: var(--bg); }
+.categoria-nome { font-size: var(--fs-1); line-height: var(--lh-1); font-weight: var(--w-medium); }
+.categoria-qtd { font-size: var(--fs-0); line-height: var(--lh-0); color: var(--ink-2); }
+.recortes { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); }
+.recortes a { display: inline-flex; gap: var(--s-2); align-items: baseline; font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink); background: var(--surface);
+              box-shadow: var(--shadow-rest); padding: var(--s-2) var(--s-3); border-radius: var(--r-pill); transition: box-shadow var(--dur-1) var(--ease); }
+.recortes a:hover { color: var(--ink); box-shadow: var(--shadow-lift); }
+.recortes .qtd { color: var(--ink-2); }
+.recortes .qtd.warn { color: var(--warn); font-weight: var(--w-medium); }
 .home-rodape { font-size: var(--fs-1); line-height: var(--lh-1); color: var(--ink-2); margin-top: var(--s-6); }
 .home-rodape br { display: none; }
 .home-rodape strong, .rodape-lateral strong { color: var(--ink); font-weight: var(--w-medium); }
@@ -316,6 +327,7 @@ html[data-ocupado] .progresso::before { animation: correr var(--dur-carga) var(-
   .topo { padding-top: var(--s-3); }
 }
 @media (max-width: 600px) {
+  .categorias { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home h1 { font-size: var(--fs-5); line-height: var(--lh-5); }
   .campo-busca input[type="search"] { min-height: calc(var(--alvo-toque) + var(--s-2)); }
   .busca-botao, .home .busca-botao { width: var(--alvo-toque); height: var(--alvo-toque); }
@@ -345,8 +357,8 @@ html[data-ocupado] .progresso::before { animation: correr var(--dur-carga) var(-
   .sobre dd { margin-bottom: var(--s-2); }
   .nota-adesao { padding: 0 var(--s-4); }
   .botao, .botao-sec, .ordem select { min-height: var(--alvo-toque); }
-  /* Alvos de toque de 44 px também nas opções de filtro, nos links soltos e nos exemplos. */
-  .opcao, .aba, .exemplos a, .botao-texto, .ativos .botao-texto, .voltar, .marca, .cab-filtros a, .home-rodape a, details.espec summary {
+  /* Alvos de toque de 44 px também nas opções de filtro, nos links soltos e nos recortes. */
+  .opcao, .aba, .recortes a, .botao-texto, .ativos .botao-texto, .voltar, .marca, .cab-filtros a, .home-rodape a, details.espec summary {
     display: inline-flex; align-items: center; min-height: var(--alvo-toque); }
   .opcao { display: flex; }
   .aba { display: inline-flex; }

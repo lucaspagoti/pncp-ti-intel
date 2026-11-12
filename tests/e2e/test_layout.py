@@ -70,7 +70,9 @@ def test_impressao_esconde_lateral_busca_e_paginacao(page: Page, base_url):
     [
         ("/", ".home-lede"),
         ("/?q=notebook", ".marca"),
-        ("/", ".exemplos a"),
+        ("/", ".categoria-qtd"),
+        ("/", ".recortes .qtd.warn"),
+        ("/", ".recortes .qtd:not(.warn)"),
         ("/", ".home-rodape"),
         ("/?q=microsoft", ".ata-objeto > a"),
         ("/?q=microsoft", ".ata-meta"),
@@ -178,12 +180,12 @@ def _alvos_de_44px(alvos) -> None:
         assert caixa and caixa["height"] >= 44, (alvo.inner_text(), caixa)
 
 
-def test_celular_opcoes_links_e_exemplos_com_alvo_de_44px(page: Page, base_url):
+def test_celular_opcoes_links_categorias_e_recortes_com_alvo_de_44px(page: Page, base_url):
     """QA-003 (W5): as opções de filtro e os links soltos também têm 44 px de toque."""
     page.set_viewport_size(CELULAR)
     page.goto(base_url)
-    _alvos_de_44px(page.locator(".exemplos a").all())
-    _alvos_de_44px([page.get_by_role("link", name="Ver todas as atas")])
+    _alvos_de_44px(page.locator(".categoria").all())
+    _alvos_de_44px(page.locator(".recortes a").all())
     page.goto(base_url + TODAS)
     page.locator(".botao-filtros").click()
     _alvos_de_44px(page.locator(".opcao").all())

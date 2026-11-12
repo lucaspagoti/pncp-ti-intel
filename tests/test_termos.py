@@ -50,3 +50,43 @@ def test_marcar_escapa_e_marca_a_palavra():
         "Câmera de videomonitoramento"
     )
     assert str(termos.marcar(None, ["x"])) == ""
+
+
+def test_categorias_do_insumo_sao_validas():
+    """O arquivo que o Lucas revisa (ADR 0043): slug único e seguro, rótulo e termos preenchidos."""
+    lidas = termos.categorias()
+    assert len(lidas) == 8
+    assert len({c.slug for c in lidas}) == len(lidas)
+    for c in lidas:
+        assert c.slug.replace("-", "").isalnum() and c.slug == c.slug.lower()
+        assert c.rotulo and c.termos
+    assert termos.categoria("rede").rotulo == "Rede e segurança"
+    # Ninguém pediu videomonitoramento nem telefonia.
+    assert {"videomonitoramento", "telefonia"}.isdisjoint({c.slug for c in lidas})
+
+
+def test_categoria_fora_da_lista_fechada_vira_nada():
+    for slug in ("", "nao-existe", "rede'; DROP TABLE atas;--", "REDE", "rede "):
+        assert termos.categoria(slug) is None
+
+
+def test_categorias_le_o_formato_e_ignora_linha_torta(tmp_path):
+    arquivo = tmp_path / "cat.txt"
+    arquivo.write_text(
+        "# comentário\n"
+        "a | Rótulo A | um = dois palavras\n"
+        "linha sem barras\n"
+        "Maiúscula | Ruim | x\n"  # slug com maiúscula é recusado
+        "sem-termos | Vazia |\n"
+        "b | Rótulo B | tres # comentário no fim\n",
+        encoding="utf-8",
+    )
+    termos.categorias.cache_clear()
+    try:
+        lidas = termos.categorias(arquivo)
+    finally:
+        termos.categorias.cache_clear()
+    assert [(c.slug, c.rotulo, c.termos) for c in lidas] == [
+        ("a", "Rótulo A", ("um", "dois palavras")),
+        ("b", "Rótulo B", ("tres",)),
+    ]

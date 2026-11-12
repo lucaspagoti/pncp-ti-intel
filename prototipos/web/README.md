@@ -3,7 +3,7 @@
 Referência visual e de escopo da web (ADR 0033), com a identidade própria da ADR 0039. Telas
 estáticas, dados de exemplo, sem backend:
 
-- `index.html` — home: a busca em destaque, exemplos e a data dos dados;
+- `index.html` — home: a busca em destaque, a grade de 8 categorias, a faixa de recortes e a data dos dados (ADR 0043);
 - `resultados.html` — busca por "notebook" com filtro: cartões de ata, filtros na lateral
   (recolhidos no celular), pílulas, aviso e paginação;
 - `ata.html` — detalhe em coluna única;

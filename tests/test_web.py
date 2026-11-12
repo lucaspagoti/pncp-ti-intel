@@ -682,7 +682,8 @@ async def test_sem_parametro_a_primeira_visita_e_a_home(cliente):
     assert "<h1>Portal de Atas de TI</h1>" in r.text and 'name="q"' in r.text
     # Só o que o leitor precisa para começar: sem lista, sem filtros.
     assert 'class="lista-atas' not in r.text and 'id="casca"' not in r.text
-    assert 'href="/?q=notebook"' in r.text and 'href="/?explorar=1"' in r.text
+    assert 'href="/?categoria=computadores"' in r.text and 'href="/?explorar=1"' in r.text
+    assert 'class="exemplos"' not in r.text and "Ver todas as atas" not in r.text
     assert f"Dados de <strong>{web_dados.HOJE:%d/%m/%Y}</strong>" in r.text
     assert re.search(r"em [\d.]+ atas vigentes", r.text)
     # Campo vazio enviado pelo formulário da home também volta para a home.
@@ -818,3 +819,85 @@ def test_url_do_proderj_so_aceita_o_proprio_site():
         "https://www.rj.gov.br/outro/node/1",
     ):
         assert _url_proderj(ruim) == ""
+
+
+async def test_home_mostra_categorias_e_recortes_com_contagem(cliente):
+    r = await cliente.get("/")
+    assert len(re.findall(r'class="categoria"', r.text)) == 8
+    # Cada categoria traz o número de atas que a busca dela acharia (aqui, uma de cada).
+    for slug, rotulo in (("computadores", "Computadores"), ("impressao", "Impressão")):
+        card = re.search(rf'<a class="categoria" href="/\?categoria={slug}">(.*?)</a>', r.text)
+        assert card and rotulo in card.group(1) and "1 ata<" in card.group(1)
+    assert "Videomonitoramento" not in r.text and "Telefonia" not in r.text
+    por_rotulo = dict(
+        re.findall(r'<a href="([^"]+)">([^<]+?) <span class="qtd[^"]*">([\d.]+)</span>', r.text)[i][
+            :2
+        ][::-1]
+        for i in range(5)
+    )
+    assert por_rotulo["Todas as atas"] == "/?explorar=1"
+    assert por_rotulo["PRODERJ"] == "/?escopo=proderj"
+    vence = por_rotulo["Vencem em 30 dias"]
+    assert (
+        f"vence_ate={web_dados.HOJE + timedelta(days=30)}" in vence and "ordem=vencimento" in vence
+    )
+    assert f"desde={web_dados.HOJE - timedelta(days=7)}" in por_rotulo["Entraram nesta semana"]
+
+
+async def test_categoria_filtra_pelos_termos_dela(cliente):
+    r = await cliente.get("/", params={"categoria": "computadores"})
+    assert "notebooks para a rede" in titulos(r.text) and "Outsourcing" not in titulos(r.text)
+    r = await cliente.get("/", params={"categoria": "impressao"})
+    assert "Outsourcing" in titulos(r.text) and "notebooks" not in titulos(r.text)
+    # A categoria aparece como pílula e segue escondida no formulário (a lateral não a perde).
+    assert "Categoria" in r.text and "Impressão" in r.text
+    assert 'type="hidden" name="categoria" value="impressao"' in r.text
+
+
+async def test_categoria_com_termo_restringe_dentro_dela(cliente):
+    r = await cliente.get("/", params={"categoria": "computadores", "q": "mouse"})
+    assert "notebooks para a rede" in titulos(r.text)  # o mouse é item do notebook
+    r = await cliente.get("/", params={"categoria": "impressao", "q": "mouse"})
+    assert titulos(r.text) == ""
+
+
+async def test_categoria_invalida_e_ignorada(cliente):
+    for valor in ("nao-existe", "x'; DROP TABLE atas;--", "COMPUTADORES"):
+        r = await cliente.get("/", params={"categoria": valor})
+        assert r.status_code == 200
+        assert "notebooks" in titulos(r.text) and "Outsourcing" in titulos(r.text)
+        assert 'name="categoria"' not in r.text
+
+
+async def test_recortes_de_data_vence_ate_e_desde(cliente, conn_ingest):
+    # Só a do dia 5 vence até daqui a 10 dias; as do dia 60 ficam de fora.
+    r = await cliente.get("/", params={"vence_ate": str(web_dados.HOJE + timedelta(days=10))})
+    assert "licença Microsoft" in titulos(r.text) and "notebooks" not in titulos(r.text)
+    # Vistas pela primeira vez hoje (SIGA), há 3 dias (A1) e há 30 dias (A2).
+    for fonte, id_origem, dias in (
+        ("siga_rj", "S1", 0),
+        ("compras_arp", "A1", 3),
+        ("compras_arp", "A2", 30),
+    ):
+        await conn_ingest.execute(
+            "INSERT INTO atas_vistas (fonte, id_origem, primeira_vez_vista) VALUES (%s, %s, %s)",
+            (fonte, id_origem, web_dados.HOJE - timedelta(days=dias)),
+        )
+    await atualizar(conn_ingest)
+    r = await cliente.get("/", params={"desde": str(web_dados.HOJE - timedelta(days=7))})
+    assert "notebooks" in titulos(r.text) and "Outsourcing" in titulos(r.text)
+    assert "licença Microsoft" not in titulos(r.text)  # vista há 30 dias
+    r = await cliente.get("/", params={"desde": str(web_dados.HOJE + timedelta(days=1))})
+    assert titulos(r.text) == ""
+    r = await cliente.get("/", params={"vence_ate": "ontem", "desde": "32/13/2026"})
+    assert r.status_code == 200 and "notebooks" in titulos(r.text)  # data inválida some
+    assert 'name="vence_ate"' not in r.text
+
+
+async def test_exportar_respeita_categoria_e_datas(cliente):
+    r = await cliente.get("/exportar.csv", params={"categoria": "impressao"})
+    assert "Outsourcing" in r.text and "notebooks" not in r.text
+    r = await cliente.get(
+        "/exportar.csv", params={"vence_ate": str(web_dados.HOJE + timedelta(days=10))}
+    )
+    assert "Microsoft" in r.text and "notebooks" not in r.text

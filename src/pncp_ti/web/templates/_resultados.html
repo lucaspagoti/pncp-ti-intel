@@ -41,6 +41,10 @@
 
 <main class="principal">
   <div class="topo">
+    {# Filtros sem controle na lateral: vão escondidos para não se perderem quando outro muda. #}
+    {%- for campo, valor in (('categoria', f.categoria), ('vence_ate', f.vence_ate), ('desde', f.desde)) if valor %}
+    <input type="hidden" name="{{ campo }}" value="{{ valor }}">
+    {%- endfor %}
     <div class="busca" role="search">
       <div class="campo-busca">{{ icone('buscar') }}<input type="search" id="q" name="q" value="{{ f.q }}" maxlength="200" placeholder="Busque pelo item: notebook, monitor, switch…" aria-label="Buscar objeto ou item da ata"><button class="busca-botao" type="submit" aria-label="Buscar">{{ icone('seta') }}</button></div>
     </div>

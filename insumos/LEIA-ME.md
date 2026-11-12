@@ -8,6 +8,7 @@ O Claude Code consegue buscar tudo o que é público. Estes insumos dependem do 
 | `perguntas_reais.csv` | Antes de iniciar a Fase 3, depois do aceite da F2 | Revise as sugestões antigas (algumas tratam de contratos/preços/anexos fora do escopo disponível) e complete 20 perguntas que você realmente faria sobre atas vigentes de TI. Não inclua dados pessoais. |
 | `amostra_rotulada.csv` | Fase "Filtro de TI e preços" | Não preencha agora. O sistema gera a amostra; você marca o que é TI. |
 | `normas/` | Opcional, só se quiser usar pesquisa de preços pra alguma decisão formal | Coloque normas de pesquisa de preços ou de contratação de TI que você queira como referência. Não bloqueia nenhuma fase. |
+| `categorias_busca.txt` | Categorias da home da web (W11, ADR 0043) | Revise a lista inicial: rótulo e termos de cada categoria. Uma linha por categoria, `slug \| Rótulo \| termo = termo`. Evite palavra ambígua sozinha. |
 | Design system pessoal | Fase "Operação" (painel opcional) | Aponte onde estão os tokens/arquivos do design system, se você tiver um. |
 
 ## Cuidados

@@ -64,6 +64,9 @@ foi abandonado em 13/10/2026.
 - **W4 a W6 — Identidade visual própria** (ADR 0039): home de busca, resultados em cartões,
   filtros que aplicam sozinhos e detalhe em coluna única, com o protótipo em `prototipos/web/`
   como referência. Sem migração.
+- **W11 — Explorar sem buscar** (ADR 0043): a home ganha 8 categorias de TI com contagem
+  (`insumos/categorias_busca.txt`, o Lucas revisa) e uma faixa de recortes (vencem em 30 dias, novas
+  da semana, PRODERJ, RJ, todas). Filtros novos na URL: `categoria`, `vence_ate` e `desde`.
 
 - **W10 — PRODERJ** (ADR 0042, migração **0012**): abas "Todas as atas | PRODERJ" sobre a lista e, no
   detalhe da ata do PRODERJ, o botão "Ver no site do PRODERJ" (ou o mesmo botão desativado quando a
