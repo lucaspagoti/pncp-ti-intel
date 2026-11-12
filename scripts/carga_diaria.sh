@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Carga diária (ADR 0017 e 0020): SIGA RJ, Compras ARP e busca PNCP, cada uma independente da outra.
-# SIGA e busca PNCP que falham por instabilidade (saída 1) ganham uma nova tentativa depois de
+# Carga diária (ADR 0017, 0020 e 0042): SIGA RJ, links do PRODERJ, Compras ARP e busca PNCP, cada
+# uma independente da outra.
+# SIGA, PRODERJ e busca PNCP que falham por instabilidade (saída 1) ganham uma nova tentativa depois de
 # uma espera, se houver folga até o TimeoutStartSec=5h da unit (ADR 0037). O ARP não: leva mais
 # de 2 h e repeti-lo estouraria a unit. Saída 2 é erro determinístico (dado ou contrato da
 # API): precisa de gente, não de nova tentativa.
@@ -19,7 +20,7 @@ rodar() {
 
 status=0
 instaveis=()
-for fonte in siga arp pncp_busca; do
+for fonte in siga proderj arp pncp_busca; do
     rodar "$fonte"
     saida=$?
     if [ "$saida" -eq 1 ] && [ "$fonte" != arp ]; then

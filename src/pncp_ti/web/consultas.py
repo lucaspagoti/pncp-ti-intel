@@ -34,6 +34,10 @@ ROTULOS_ORDEM = {
     "preco": "Menor preço",
 }
 FONTES = {"siga_rj": "SIGA RJ", "compras_arp": "Compras ARP", "pncp_busca": "PNCP"}
+# Escopo da lista (ADR 0042): "PRODERJ" são as atas do SIGA gerenciadas pelo PRODERJ.
+ESCOPOS = {"proderj": "PRODERJ"}
+# `%%` porque a condição entra em consultas parametrizadas do psycopg.
+PREDICADO_PRODERJ = "fonte = 'siga_rj' AND unidade_gerenciadora ILIKE 'PRODERJ%%'"
 SEM_ESFERA = "Não informada"
 ESFERAS = ("Federal", "Estadual", "Municipal", "Distrital", "Não se aplica", SEM_ESFERA)
 DIAS_CRIT = 30
@@ -61,6 +65,7 @@ def como_texto(valor: Decimal | None) -> str:
 @dataclass(frozen=True, slots=True)
 class Filtros:
     q: str = ""
+    escopo: str = ""
     fonte: str = ""
     esfera: str = ""
     uf: str = ""
@@ -75,6 +80,7 @@ class Filtros:
         """Só o que está preenchido, para refazer a URL (paginação, exportação)."""
         bruto = {
             "q": self.q,
+            "escopo": self.escopo,
             "fonte": self.fonte,
             "esfera": self.esfera,
             "uf": self.uf,
@@ -118,6 +124,7 @@ def _preco(valor: str | None) -> Decimal | None:
 
 def ler_filtros(params: Mapping[str, str]) -> Filtros:
     """Normaliza a query string; valor fora da lista fechada vira vazio."""
+    escopo = params.get("escopo", "")
     fonte = params.get("fonte", "")
     esfera = params.get("esfera", "")
     uf = _texto(params.get("uf")).upper()
@@ -128,6 +135,7 @@ def ler_filtros(params: Mapping[str, str]) -> Filtros:
         pagina = 1
     return Filtros(
         q=_texto(params.get("q")),
+        escopo=escopo if escopo in ESCOPOS else "",
         fonte=fonte if fonte in FONTES else "",
         esfera=esfera if esfera in ESFERAS else "",
         uf=uf if len(uf) == 2 and uf.isalpha() else "",
@@ -207,6 +215,8 @@ def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
     p: dict[str, Any] = {}
     if f.q:
         cond.append("documento @@ tq")
+    if f.escopo == "proderj" and sem != "escopo":
+        cond.append(PREDICADO_PRODERJ)
     if f.fonte and sem != "fonte":
         cond.append("fonte = %(fonte)s")
         p["fonte"] = f.fonte
@@ -356,7 +366,31 @@ async def facetas(conn: psycopg.AsyncConnection, f: Filtros) -> dict[str, dict[s
             contagem = {r["valor"]: r["n"] for r in await cur.fetchall()}
         ordem = FONTES if campo == "fonte" else ESFERAS
         resultado[campo] = {v: contagem[v] for v in ordem if contagem.get(v)}
+    # Abas "Todas | PRODERJ": as duas contagens sob os demais filtros, com o escopo de fora.
+    cte, origem, p = _origem(f)
+    onde, pw = _where(f, sem="escopo")
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            f"{cte}SELECT count(*) AS todas, "
+            f"count(*) FILTER (WHERE {PREDICADO_PRODERJ}) AS proderj "
+            f"FROM {origem} WHERE {onde}",
+            {**p, **pw},
+        )
+        linha = await cur.fetchone()
+    resultado["escopo"] = {"": linha["todas"], "proderj": linha["proderj"]}
     return resultado
+
+
+async def link_proderj(
+    conn: psycopg.AsyncConnection, fonte: str, id_ata: str
+) -> dict[str, str | None] | None:
+    """`None` se a ata não é do PRODERJ; senão `{"url": ...}` (`url` nula: não consta no site)."""
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            "SELECT url FROM v_ata_proderj WHERE fonte = %s AND id_ata = %s", (fonte, id_ata)
+        )
+        linha = await cur.fetchone()
+    return None if linha is None else {"url": linha["url"]}
 
 
 def filtros_ativos(f: Filtros) -> list[tuple[str, str, Filtros]]:

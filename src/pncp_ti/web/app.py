@@ -72,6 +72,11 @@ def _url_segura(valor: str | None) -> str:
     return valor if valor and valor.startswith(("https://", "http://")) else ""
 
 
+def _url_proderj(valor: str | None) -> str:
+    """O botão do PRODERJ só aponta para páginas do próprio site do órgão."""
+    return valor if valor and valor.startswith("https://www.rj.gov.br/proderj/") else ""
+
+
 async def conexao(request: Request) -> AsyncIterator[psycopg.AsyncConnection]:
     async with request.app.state.pool.connection() as conn:
         yield conn
@@ -112,6 +117,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
         data=_data,
         numero=_numero,
         url_segura=_url_segura,
+        url_proderj=_url_proderj,
         preco_br=consultas.como_texto,
         dias_restantes=consultas.dias_restantes,
         marcar=termos.marcar,
@@ -119,6 +125,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
     templates.env.globals.update(
         FONTES=consultas.FONTES,
         ESFERAS=consultas.ESFERAS,
+        ESCOPOS=consultas.ESCOPOS,
         ORDENS=consultas.ROTULOS_ORDEM,
         TAMANHO_PAGINA=consultas.TAMANHO_PAGINA,
         EXEMPLOS=EXEMPLOS_DE_BUSCA,
@@ -208,6 +215,7 @@ def criar_app(dsn: str | None = None) -> FastAPI:
             "a": registro,
             "itens": await consultas.itens(conn, fonte, id_ata),
             "cargas": await consultas.cargas(conn),
+            "proderj": await consultas.link_proderj(conn, fonte, id_ata),
         }
         return templates.TemplateResponse(request, "ata.html", contexto)
 

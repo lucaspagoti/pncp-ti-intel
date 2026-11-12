@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 from datetime import date, timedelta
+from uuid import uuid4
 
 import httpx
 import psycopg
@@ -13,6 +14,7 @@ import web_dados
 
 from pncp_ti.busca import atualizar_busca
 from pncp_ti.config import admin_dsn, get_settings, web_dsn
+from pncp_ti.fontes import proderj as proderj_mod
 from pncp_ti.web import consultas
 from pncp_ti.web.app import criar_app
 from pncp_ti.web.exportar import gerar_csv, neutralizar
@@ -718,3 +720,101 @@ def test_janela_de_paginas():
     assert janela(3, 10) == [1, 2, 3, 4, None, 10]  # a lacuna de uma página vira o número
     assert janela(10, 10) == [1, None, 9, 10]
     assert janela(500, 500) == [1, None, 499, 500]
+
+
+# --- PRODERJ: abas "Todas | PRODERJ" e botão da contratação (ADR 0042) ---------------------------
+
+
+@pytest.fixture
+async def proderj(conn_ingest, dados):
+    """Duas atas do PRODERJ no SIGA: uma com página no site, outra que não consta."""
+    siga = (
+        await (
+            await conn_ingest.execute("SELECT id FROM cargas WHERE fonte = 'siga_rj' AND ativa")
+        ).fetchone()
+    )["id"]
+    comandos = [
+        web_dados.ata_proderj(siga, "P1", "MICROSOFT", "SEI-430002/000030/2024"),
+        web_dados.ata_proderj(siga, "P2", "OUTSOURCING DE IMPRESSÃO", "SEI-430002/009999/2025"),
+        web_dados.REFRESH,
+    ]
+    for comando, parametros in comandos:
+        await conn_ingest.execute(comando, parametros)
+    elo = proderj_mod.Link(
+        "430002/30/2024", 1779, proderj_mod.URL_NODE.format(1779), "PE-RP 012/2025", "homologadas"
+    )
+    await proderj_mod.publicar(conn_ingest, {elo.processo: elo}, 1, uuid4())
+    await conn_ingest.commit()
+
+
+async def test_aba_proderj_lista_so_as_atas_do_orgao(cliente, proderj):
+    r = await cliente.get("/", params={"escopo": "proderj"})
+    assert titulos(r.text) in {
+        "MICROSOFT | OUTSOURCING DE IMPRESSÃO",
+        "OUTSOURCING DE IMPRESSÃO | MICROSOFT",
+    }
+    assert "2 atas vigentes" in r.text
+    assert re.search(r'id="escopo-proderj"[^>]*checked', r.text)
+    assert "pilula" not in r.text  # a aba já diz o escopo; não vira pílula de filtro
+
+
+async def test_abas_trazem_as_duas_contagens_sob_os_demais_filtros(cliente, proderj):
+    r = await cliente.get("/", params={"explorar": "1"})
+    assert re.search(r"Todas as atas <span class=\"qtd\">5</span>", r.text)
+    assert re.search(r"PRODERJ <span class=\"qtd\">2</span>", r.text)
+    r = await cliente.get("/", params={"q": "microsoft"})
+    assert re.search(r"PRODERJ <span class=\"qtd\">1</span>", r.text)
+
+
+async def test_sem_atas_do_proderj_nao_ha_aba(cliente):
+    r = await cliente.get("/", params={"explorar": "1"})
+    assert r.status_code == 200 and 'id="escopo-proderj"' not in r.text
+
+
+async def test_escopo_desconhecido_e_ignorado(cliente, proderj):
+    r = await cliente.get("/", params={"escopo": "outro"})
+    assert "5 atas vigentes" in r.text and not re.search(r'id="escopo-proderj"[^>]*checked', r.text)
+
+
+async def test_escopo_fica_na_exportacao_csv(cliente, proderj):
+    r = await cliente.get("/exportar.csv", params={"escopo": "proderj"})
+    assert (
+        "MICROSOFT" in r.text
+        and "notebooks" not in r.text
+        and "Outsourcing de impressão" not in r.text
+    )
+
+
+async def test_detalhe_com_pagina_leva_ao_site_do_proderj(cliente, proderj):
+    r = await cliente.get("/ata/siga_rj/P1")
+    assert 'href="https://www.rj.gov.br/proderj/node/1779"' in r.text
+    assert "Ver no site do PRODERJ" in r.text and "aria-disabled" not in r.text
+    assert 'rel="noopener noreferrer"' in r.text
+
+
+async def test_detalhe_sem_pagina_mostra_o_botao_desativado(cliente, proderj):
+    r = await cliente.get("/ata/siga_rj/P2")
+    assert 'aria-disabled="true"' in r.text and "Não consta no site do PRODERJ" in r.text
+    assert "Ver no site do PRODERJ" not in r.text and "rj.gov.br" not in r.text.replace(
+        "rj.gov.br/proderj/licitacoes", ""
+    )
+
+
+async def test_detalhe_de_outro_orgao_nao_tem_botao_do_proderj(cliente, proderj):
+    r = await cliente.get("/ata/siga_rj/S1")
+    assert r.status_code == 200 and "PRODERJ" not in r.text
+
+
+def test_url_do_proderj_so_aceita_o_proprio_site():
+    from pncp_ti.web.app import _url_proderj
+
+    assert _url_proderj("https://www.rj.gov.br/proderj/node/1779")
+    for ruim in (
+        None,
+        "",
+        "javascript:alert(1)",
+        "https://evil.example/proderj/node/1",
+        "http://www.rj.gov.br/proderj/node/1",
+        "https://www.rj.gov.br/outro/node/1",
+    ):
+        assert _url_proderj(ruim) == ""

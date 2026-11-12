@@ -55,34 +55,48 @@ def precisa_bash():
 
 
 def test_tudo_certo_nao_repete(tmp_path):
-    codigo, chamadas, _ = rodar(tmp_path, {"siga": [0], "arp": [0], "pncp_busca": [0]})
-    assert (codigo, chamadas) == (0, ["siga", "arp", "pncp_busca"])
+    codigo, chamadas, _ = rodar(
+        tmp_path, {"siga": [0], "proderj": [0], "arp": [0], "pncp_busca": [0]}
+    )
+    assert (codigo, chamadas) == (0, ["siga", "proderj", "arp", "pncp_busca"])
 
 
 def test_busca_instavel_ganha_nova_tentativa_e_recupera(tmp_path):
-    codigo, chamadas, _ = rodar(tmp_path, {"siga": [0], "arp": [0], "pncp_busca": [1, 0]})
-    assert (codigo, chamadas) == (0, ["siga", "arp", "pncp_busca", "pncp_busca"])
+    codigo, chamadas, _ = rodar(
+        tmp_path, {"siga": [0], "proderj": [0], "arp": [0], "pncp_busca": [1, 0]}
+    )
+    assert (codigo, chamadas) == (0, ["siga", "proderj", "arp", "pncp_busca", "pncp_busca"])
 
 
 def test_falha_de_novo_na_nova_tentativa_falha_a_carga(tmp_path):
-    codigo, chamadas, erro = rodar(tmp_path, {"siga": [0], "arp": [0], "pncp_busca": [1, 1]})
-    assert (codigo, chamadas) == (1, ["siga", "arp", "pncp_busca", "pncp_busca"])
+    codigo, chamadas, erro = rodar(
+        tmp_path, {"siga": [0], "proderj": [0], "arp": [0], "pncp_busca": [1, 1]}
+    )
+    assert (codigo, chamadas) == (1, ["siga", "proderj", "arp", "pncp_busca", "pncp_busca"])
     assert "depois da nova tentativa" in erro
 
 
-@pytest.mark.parametrize("fonte,codigo_saida", [("arp", 1), ("pncp_busca", 2), ("siga", 2)])
+@pytest.mark.parametrize(
+    "fonte,codigo_saida", [("arp", 1), ("pncp_busca", 2), ("siga", 2), ("proderj", 2)]
+)
 def test_arp_e_erro_deterministico_nao_repetem(tmp_path, fonte, codigo_saida):
-    saidas = {"siga": [0], "arp": [0], "pncp_busca": [0], fonte: [codigo_saida]}
+    saidas = {"siga": [0], "proderj": [0], "arp": [0], "pncp_busca": [0], fonte: [codigo_saida]}
     codigo, chamadas, _ = rodar(tmp_path, saidas)
-    assert (codigo, chamadas) == (1, ["siga", "arp", "pncp_busca"])
+    assert (codigo, chamadas) == (1, ["siga", "proderj", "arp", "pncp_busca"])
 
 
 def test_sem_folga_ate_o_limite_nao_repete(tmp_path):
     codigo, chamadas, erro = rodar(
         tmp_path,
-        {"siga": [0], "arp": [0], "pncp_busca": [1, 0]},
+        {"siga": [0], "proderj": [0], "arp": [0], "pncp_busca": [1, 0]},
         PNCP_TI_ESPERA_NOVA_TENTATIVA="10",
         PNCP_TI_LIMITE_NOVA_TENTATIVA="5",
     )
-    assert (codigo, chamadas) == (1, ["siga", "arp", "pncp_busca"])
+    assert (codigo, chamadas) == (1, ["siga", "proderj", "arp", "pncp_busca"])
     assert "sem tempo para nova tentativa" in erro
+
+
+def test_proderj_instavel_ganha_nova_tentativa_no_fim(tmp_path):
+    saidas = {"siga": [0], "proderj": [1, 0], "arp": [0], "pncp_busca": [0]}
+    codigo, chamadas, _ = rodar(tmp_path, saidas)
+    assert (codigo, chamadas) == (0, ["siga", "proderj", "arp", "pncp_busca", "proderj"])
