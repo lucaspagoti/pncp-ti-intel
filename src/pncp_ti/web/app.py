@@ -41,7 +41,6 @@ CABECALHOS_SEGURANCA = {
 # Descrição de item maior que isso vira resumo com a especificação completa num <details>.
 LIMITE_DESCRICAO = 160
 # Buscas de exemplo da home: as do aceite da R4 e a da W3.
-EXEMPLOS_DE_BUSCA = ("notebook", "monitor", "outsourcing de impressão", "licença Microsoft")
 OPCOES_CONEXAO = "-c default_transaction_read_only=on -c statement_timeout=8000"
 
 
@@ -128,7 +127,6 @@ def criar_app(dsn: str | None = None) -> FastAPI:
         ESCOPOS=consultas.ESCOPOS,
         ORDENS=consultas.ROTULOS_ORDEM,
         TAMANHO_PAGINA=consultas.TAMANHO_PAGINA,
-        EXEMPLOS=EXEMPLOS_DE_BUSCA,
         LIMITE_DESCRICAO=LIMITE_DESCRICAO,
     )
 
@@ -162,8 +160,11 @@ def criar_app(dsn: str | None = None) -> FastAPI:
         # Sem nenhum parâmetro preenchido, a primeira visita é a home (ADR 0039). Dentro da
         # casca (HTMX) a lista nunca volta para a home: sem filtro, mostra todas as atas.
         if not parcial and not any(request.query_params.values()):
+            home = await consultas.contagens_home(conn)
             contexto = {
-                "total": await consultas.total_atas(conn),
+                "total": home["total"],
+                "categorias": home["categorias"],
+                "recortes": home["recortes"],
                 "cargas": await consultas.cargas(conn),
             }
             return templates.TemplateResponse(request, "home.html", contexto)

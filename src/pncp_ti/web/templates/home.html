@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_comum.html" import icone, selo, fontes_dos_dados %}
+{% from "_comum.html" import icone, icone_categoria, selo, fontes_dos_dados %}
 {% block corpo %}
 <main class="home">
   <div class="home-coluna">
@@ -9,11 +9,18 @@
     <form class="busca" role="search" action="/" method="get">
       <div class="campo-busca">{{ icone('buscar') }}<input type="search" id="q" name="q" maxlength="200" placeholder="Busque pelo item: notebook, monitor, switch…" aria-label="Buscar objeto ou item da ata" autofocus><button class="busca-botao" type="submit" aria-label="Buscar">{{ icone('seta') }}</button></div>
     </form>
-    <p class="exemplos">
-      {%- for exemplo in EXEMPLOS %}
-      <a href="/?q={{ exemplo | urlencode }}">{{ exemplo }}</a>
-      {%- endfor %}</p>
-    <p class="home-rodape">{{ fontes_dos_dados(cargas) }} <a href="/?explorar=1">Ver todas as atas</a></p>
+    <p class="rotulo-secao">Ou navegue por categoria</p>
+    <nav class="categorias" aria-label="Categorias de TI">
+      {%- for cat, n in categorias %}
+      <a class="categoria" href="/?categoria={{ cat.slug }}"><span class="categoria-icone">{{ icone_categoria(cat.slug) }}</span><span class="categoria-nome">{{ cat.rotulo }}</span><span class="categoria-qtd">{{ n | numero }} ata{{ '' if n == 1 else 's' }}</span></a>
+      {%- endfor %}
+    </nav>
+    <nav class="recortes" aria-label="Recortes prontos">
+      {%- for r in recortes %}
+      <a href="{{ r.url }}">{{ r.rotulo }} <span class="qtd{{ ' warn' if r.alerta }}">{{ r.n | numero }}</span></a>
+      {%- endfor %}
+    </nav>
+    <p class="home-rodape">{{ fontes_dos_dados(cargas) }}</p>
   </div>
 </main>
 {% endblock %}

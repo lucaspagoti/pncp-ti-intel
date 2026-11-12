@@ -31,6 +31,9 @@ read -r status _ <<<"$(pegar "$base/")"
 read -r status _ <<<"$(pegar "$base/?explorar=1")"
 [ "$status" = 200 ] && grep -q 'href="/ata/' "$tmp/corpo" \
     && ok "todas as atas" || falha "todas as atas (HTTP $status)"
+read -r status _ <<<"$(pegar "$base/?categoria=rede")"
+[ "$status" = 200 ] && grep -q 'href="/ata/' "$tmp/corpo" \
+    && ok "categoria" || falha "categoria (HTTP $status)"
 
 detalhe=""
 for termo in "outsourcing de impressão" "notebook" "licença Microsoft"; do

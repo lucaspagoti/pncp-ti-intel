@@ -1,4 +1,4 @@
-# Roadmap da web (W0–W6)
+# Roadmap da web (W0–W11)
 
 Fecha a R4 (`docs/FASES.md`), cujo aceite é a demonstração do Lucas. Fica fora das fases R. Cada
 fase é uma sprint. Decisões em 19/10/2026: o Codex é o QA executor (ADR 0029), o Playwright
@@ -127,6 +127,15 @@ Pedido pelo Lucas em 11/11/2026: o PRODERJ é o órgão de maior vínculo dele. 
 `proderj` na carga diária. Sem status de licitação nem outras fases: a base segue só de atas vigentes.
 - **Aceite:** com os dados reais, a aba PRODERJ mostra as atas vigentes do órgão e cada ata com
   contratação no site abre a página certa; ata sem página mostra o botão desativado.
+
+## W11 · Explorar sem buscar (ADR 0043)
+
+Pedido pelo Lucas em 12/11/2026: a home só tinha a busca e o "Ver todas as atas" era um link no
+rodapé. Ganha uma grade de 8 categorias de TI (insumo `insumos/categorias_busca.txt`, revisado por ele)
+e uma faixa de recortes: vencem em 30 dias, entraram nesta semana, PRODERJ, Rio de Janeiro e todas.
+Filtros novos `categoria`, `vence_ate` e `desde`. Sem migração.
+- **Aceite:** com os dados reais, cada categoria e cada recorte da home mostra o mesmo número de atas
+  que a lista aberta por ele; a categoria aparece como pílula e a busca vale dentro dela.
 
 ## W8 · Nome e ícone (ADR 0041)
 

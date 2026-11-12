@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import psycopg
@@ -70,7 +71,10 @@ class Filtros:
     esfera: str = ""
     uf: str = ""
     orgao: str = ""
+    categoria: str = ""
     vigente_ate: date | None = None
+    vence_ate: date | None = None
+    desde: date | None = None
     preco_min: Decimal | None = None
     preco_max: Decimal | None = None
     ordem: str = "relevancia"
@@ -85,7 +89,10 @@ class Filtros:
             "esfera": self.esfera,
             "uf": self.uf,
             "orgao": self.orgao,
+            "categoria": self.categoria,
             "vigente_ate": self.vigente_ate.isoformat() if self.vigente_ate else "",
+            "vence_ate": self.vence_ate.isoformat() if self.vence_ate else "",
+            "desde": self.desde.isoformat() if self.desde else "",
             "preco_min": como_texto(self.preco_min),
             "preco_max": como_texto(self.preco_max),
             "ordem": self.ordem if self.ordem != "relevancia" else "",
@@ -128,6 +135,7 @@ def ler_filtros(params: Mapping[str, str]) -> Filtros:
     fonte = params.get("fonte", "")
     esfera = params.get("esfera", "")
     uf = _texto(params.get("uf")).upper()
+    categoria = params.get("categoria", "")
     ordem = params.get("ordem", "relevancia")
     try:
         pagina = max(1, min(int(params.get("pagina", "1")), 10_000))
@@ -140,7 +148,10 @@ def ler_filtros(params: Mapping[str, str]) -> Filtros:
         esfera=esfera if esfera in ESFERAS else "",
         uf=uf if len(uf) == 2 and uf.isalpha() else "",
         orgao=_texto(params.get("orgao")),
+        categoria=categoria if termos.categoria(categoria) else "",
         vigente_ate=_data(params.get("vigente_ate")),
+        vence_ate=_data(params.get("vence_ate")),
+        desde=_data(params.get("desde")),
         preco_min=_preco(params.get("preco_min")),
         preco_max=_preco(params.get("preco_max")),
         ordem=ordem if ordem in ORDENS else "relevancia",
@@ -156,8 +167,20 @@ _COLUNAS = (
 
 
 def alternativas(f: Filtros) -> list[str]:
-    """O termo buscado e os sinônimos revisados dele (`insumos/sinonimos_busca.txt`)."""
-    return [f.q, *termos.sinonimos(f.q)] if f.q else []
+    """O termo buscado e os sinônimos revisados dele (`insumos/sinonimos_busca.txt`).
+
+    Sem termo, a categoria escolhida (`insumos/categorias_busca.txt`, ADR 0043) faz o papel da
+    busca: seus termos são as alternativas. Com termo, a categoria só restringe (ver `_where`).
+    """
+    if f.q:
+        return [f.q, *termos.sinonimos(f.q)]
+    cat = termos.categoria(f.categoria)
+    return list(cat.termos) if cat else []
+
+
+def _tem_termo(f: Filtros) -> bool:
+    """A busca por texto está ativa: um termo digitado ou uma categoria."""
+    return bool(f.q or termos.categoria(f.categoria))
 
 
 # Com termo, a busca junta os itens que casam (ADR 0036): pela cabeça (radical ou palavra exata) ou
@@ -196,8 +219,8 @@ _NOTA = (
 
 
 def _origem(f: Filtros) -> tuple[str, str, dict[str, Any]]:
-    """(CTE, FROM) da busca; sem termo, só a view."""
-    if not f.q:
+    """(CTE, FROM) da busca; sem termo nem categoria, só a view."""
+    if not _tem_termo(f):
         return "", "v_busca_atas", {}
     alts = alternativas(f)
     p: dict[str, Any] = {f"q{n}": a for n, a in enumerate(alts)}
@@ -209,12 +232,25 @@ def _origem(f: Filtros) -> tuple[str, str, dict[str, Any]]:
     return cte, "v_busca_atas CROSS JOIN alvo LEFT JOIN casam USING (fonte, id_ata)", p
 
 
+def _tsquery_categoria(n_termos: int, prefixo: str = "cat") -> str:
+    """`websearch_to_tsquery` de cada termo da categoria, unidos por OU; só nomes de parâmetro."""
+    return " || ".join(
+        f"websearch_to_tsquery('portuguese', unaccent(%({prefixo}{n})s))" for n in range(n_termos)
+    )
+
+
 def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
     """WHERE dos filtros; `sem` deixa um campo de fora (contagem da faceta desse campo)."""
     cond = ["true"]
     p: dict[str, Any] = {}
-    if f.q:
+    if _tem_termo(f):
         cond.append("documento @@ tq")
+    cat = termos.categoria(f.categoria)
+    if f.q and cat:
+        # Termo dentro da categoria: o documento precisa casar com algum termo da categoria.
+        for n, termo in enumerate(cat.termos):
+            p[f"cat{n}"] = termo
+        cond.append("documento @@ (" + _tsquery_categoria(len(cat.termos)) + ")")
     if f.escopo == "proderj" and sem != "escopo":
         cond.append(PREDICADO_PRODERJ)
     if f.fonte and sem != "fonte":
@@ -237,6 +273,12 @@ def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
     if f.vigente_ate:
         cond.append("fim >= %(vigente_ate)s")
         p["vigente_ate"] = f.vigente_ate
+    if f.vence_ate:
+        cond.append("fim <= %(vence_ate)s")
+        p["vence_ate"] = f.vence_ate
+    if f.desde:
+        cond.append("primeira_vez_vista >= %(desde)s")
+        p["desde"] = f.desde
     if f.preco_min is not None or f.preco_max is not None:
         # Um mesmo item precisa caber na faixa (mín. e máx. agregados deixariam passar uma ata
         # com itens de R$ 100 e R$ 1.000 numa faixa de R$ 200 a R$ 500). Com termo, vale o preço
@@ -251,7 +293,7 @@ def _where(f: Filtros, sem: str = "") -> tuple[str, dict[str, Any]]:
         # Item que casa sem preço válido não herda o preço de outro item da ata.
         precos = (
             "CASE WHEN n_casam > 0 THEN COALESCE(precos_casam, '{}') ELSE precos END"
-            if f.q
+            if _tem_termo(f)
             else "precos"
         )
         cond.append(f"EXISTS (SELECT 1 FROM unnest({precos}) AS p WHERE {' AND '.join(faixa)})")
@@ -262,7 +304,7 @@ def _consulta(f: Filtros, limite: int, deslocamento: int) -> tuple[str, dict[str
     cte, origem, p = _origem(f)
     onde, pw = _where(f)
     p.update(pw, limite=limite, deslocamento=deslocamento)
-    if f.q:
+    if _tem_termo(f):
         extra = (
             f"{_NOTA} AS rank, n_casam, item_casado, "
             "CASE WHEN n_casam > 0 THEN preco_min_casam ELSE preco_min END AS preco_min_exibido, "
@@ -410,10 +452,16 @@ def filtros_ativos(f: Filtros) -> list[tuple[str, str, Filtros]]:
         ativos.append(("UF", f.uf, sem(uf="")))
     if f.orgao:
         ativos.append(("Órgão", f.orgao, sem(orgao="")))
+    if cat := termos.categoria(f.categoria):
+        ativos.append(("Categoria", cat.rotulo, sem(categoria="")))
     if f.vigente_ate:
         ativos.append(
             ("Vigente até pelo menos", f.vigente_ate.strftime("%d/%m/%Y"), sem(vigente_ate=None))
         )
+    if f.vence_ate:
+        ativos.append(("Vence até", f.vence_ate.strftime("%d/%m/%Y"), sem(vence_ate=None)))
+    if f.desde:
+        ativos.append(("Novas desde", f.desde.strftime("%d/%m/%Y"), sem(desde=None)))
     if f.preco_min is not None:
         ativos.append(("Preço mín.", "R$ " + como_texto(f.preco_min), sem(preco_min=None)))
     if f.preco_max is not None:
@@ -452,3 +500,67 @@ async def itens(
             (fonte, id_ata, limite),
         )
         return await cur.fetchall()
+
+
+DIAS_VENCENDO = 30
+DIAS_NOVAS = 7
+
+
+async def contagens_home(conn: psycopg.AsyncConnection) -> dict[str, Any]:
+    """Números da home: total, recortes e uma contagem por categoria (ADR 0043).
+
+    Uma consulta para os recortes e uma por categoria: `count(*) FILTER` com `@@` varre a view
+    inteira (mais de 1 s); o `WHERE` usa o índice GIN do documento (cerca de 100 ms no todo).
+    """
+    cats = termos.categorias()
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            "SELECT count(*) AS todas, count(*) FILTER (WHERE fim <= %(vence)s) AS vencem, "
+            "count(*) FILTER (WHERE primeira_vez_vista >= %(desde)s) AS novas, "
+            f"count(*) FILTER (WHERE {PREDICADO_PRODERJ}) AS proderj, "
+            "count(*) FILTER (WHERE uf = 'RJ') AS rj FROM v_busca_atas",
+            {
+                "vence": hoje() + timedelta(days=DIAS_VENCENDO),
+                "desde": hoje() - timedelta(days=DIAS_NOVAS),
+            },
+        )
+        linha = await cur.fetchone()
+        contagem: list[tuple[termos.Categoria, int]] = []
+        for cat in cats:
+            await cur.execute(
+                "SELECT count(*) AS n FROM v_busca_atas WHERE documento @@ ("
+                + _tsquery_categoria(len(cat.termos))
+                + ")",
+                {f"cat{n}": termo for n, termo in enumerate(cat.termos)},
+            )
+            contagem.append((cat, (await cur.fetchone())["n"]))
+    return {"total": linha["todas"], "categorias": contagem, "recortes": recortes(linha)}
+
+
+def recortes(linha: Mapping[str, int]) -> list[dict[str, Any]]:
+    """Faixa da home: rótulo, endereço e contagem. Vencimento em alerta (`--warn`)."""
+    h = hoje()
+    return [
+        {
+            "rotulo": "Vencem em 30 dias",
+            "url": "/?"
+            + urlencode(
+                {
+                    "vence_ate": (h + timedelta(days=DIAS_VENCENDO)).isoformat(),
+                    "ordem": "vencimento",
+                }
+            ),
+            "n": linha["vencem"],
+            "alerta": True,
+        },
+        {
+            "rotulo": "Entraram nesta semana",
+            "url": "/?"
+            + urlencode({"desde": (h - timedelta(days=DIAS_NOVAS)).isoformat(), "ordem": "novas"}),
+            "n": linha["novas"],
+            "alerta": False,
+        },
+        {"rotulo": "PRODERJ", "url": "/?escopo=proderj", "n": linha["proderj"], "alerta": False},
+        {"rotulo": "Rio de Janeiro", "url": "/?uf=RJ", "n": linha["rj"], "alerta": False},
+        {"rotulo": "Todas as atas", "url": "/?explorar=1", "n": linha["todas"], "alerta": False},
+    ]

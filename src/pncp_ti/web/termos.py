@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 from markupsafe import Markup, escape
 
 SINONIMOS = Path(__file__).resolve().parents[3] / "insumos" / "sinonimos_busca.txt"
+CATEGORIAS = Path(__file__).resolve().parents[3] / "insumos" / "categorias_busca.txt"
 MAX_ALTERNATIVAS = 3
 PARADAS = frozenset(
     "a o as os de da do das dos e em no na nos nas para por com sem um uma ou ao aos".split()
@@ -75,6 +77,36 @@ def _grupos(caminho: Path = SINONIMOS) -> tuple[tuple[str, ...], ...]:
         if len(termos) > 1:
             grupos.append(termos)
     return tuple(grupos)
+
+
+@dataclass(frozen=True, slots=True)
+class Categoria:
+    slug: str
+    rotulo: str
+    termos: tuple[str, ...]
+
+
+@lru_cache(maxsize=1)
+def categorias(caminho: Path = CATEGORIAS) -> tuple[Categoria, ...]:
+    """Categorias da home (ADR 0043), na ordem do arquivo: `slug | Rótulo | termo = termo`."""
+    if not caminho.exists():
+        return ()
+    lidas: list[Categoria] = []
+    for linha in caminho.read_text(encoding="utf-8").splitlines():
+        linha = linha.split("#", 1)[0].strip()
+        partes = [p.strip() for p in linha.split("|")]
+        if len(partes) != 3:
+            continue
+        slug, rotulo, lista = partes
+        termos = tuple(t.strip() for t in lista.split("=") if t.strip())
+        if re.fullmatch(r"[a-z0-9-]+", slug) and rotulo and termos:
+            lidas.append(Categoria(slug, rotulo, termos))
+    return tuple(lidas)
+
+
+def categoria(slug: str) -> Categoria | None:
+    """A categoria do slug, ou nada para valor fora da lista fechada."""
+    return next((c for c in categorias() if c.slug == slug), None) if slug else None
 
 
 def sinonimos(q: str) -> list[str]:

@@ -1,0 +1,13 @@
+# Categorias da home do Portal de Atas de TI (ADR 0043). Revisado pelo Lucas, como o termos_ti.txt.
+# Uma linha por categoria, na ordem em que aparecem: slug | Rótulo | termo = termo = termo
+# Cada termo é uma busca (palavras de um termo valem juntas; termos diferentes valem separados).
+# O slug vai na URL (/?categoria=rede): só letras minúsculas, números e hífen.
+# Evite palavra ambígua sozinha ("servidor" pega servidor público): prefira frases.
+impressao | Impressão | impressora = toner = outsourcing de impressão
+suporte | Suporte e manutenção | manutenção de computadores = suporte técnico = service desk = manutenção de impressoras
+rede | Rede e segurança | switch = roteador = firewall = access point
+computadores | Computadores | notebook = desktop = microcomputador = computador
+licencas | Licenças de software | licença de software = software
+monitores | Monitores | monitor
+servidores | Servidores e armazenamento | servidor de rede = servidor rack = servidor de dados = storage
+perifericos | Periféricos | teclado = mouse = webcam = headset

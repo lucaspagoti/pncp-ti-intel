@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from comum import RESULTADOS, TODAS
 from conftest import CELULAR, DESKTOP
@@ -17,16 +19,53 @@ def test_home_mostra_so_a_busca(page: Page, base_url):
     expect(page.locator(".home-rodape")).to_contain_text("Dados de")
 
 
-def test_exemplo_de_busca_abre_os_resultados(page: Page, base_url):
+def test_categoria_abre_a_lista_filtrada(page: Page, base_url):
     page.goto(base_url)
-    page.locator(".exemplos").get_by_role("link", name="notebook").click()
-    expect(page).to_have_url(f"{base_url}/?q=notebook")
-    expect(page.locator(RESULTADOS)).to_have_text(["Aquisição de notebooks para a rede estadual"])
+    page.locator(".categorias").get_by_role("link", name="Computadores").click()
+    expect(page).to_have_url(f"{base_url}/?categoria=computadores")
+    expect(page.locator(RESULTADOS).filter(has_text="notebooks")).to_have_count(1)
+    expect(page.locator(".pilula")).to_have_text(re.compile(r"Categoria\s+Computadores"))
+    # Tirar a pílula (último filtro) mantém a lista de todas as atas, não volta para a home.
+    page.get_by_label("Remover categoria").click()
+    expect(page.locator(".pilula")).to_have_count(0)
+    expect(page.locator(RESULTADOS).first).to_be_visible()
+
+
+def test_categoria_mantida_ao_mudar_outro_filtro(page: Page, base_url):
+    page.goto(f"{base_url}/?categoria=computadores")
+    page.get_by_label("Ordenar por").select_option("vencimento")
+    expect(page).to_have_url(re.compile(r"categoria=computadores"))
+    expect(page.locator(".pilula")).to_have_text(re.compile(r"Categoria\s+Computadores"))
+
+
+def test_recortes_levam_a_listas_prontas(page: Page, base_url):
+    page.goto(base_url)
+    page.locator(".recortes").get_by_role("link", name="Vencem em 30 dias").click()
+    expect(page).to_have_url(re.compile(r"vence_ate=\d{4}-\d{2}-\d{2}&ordem=vencimento"))
+    expect(page.locator(".pilula")).to_have_text(re.compile(r"Vence até"))
+    page.goto(base_url)
+    page.locator(".recortes").get_by_role("link", name="Rio de Janeiro").click()
+    expect(page).to_have_url(f"{base_url}/?uf=RJ")
+
+
+@pytest.mark.parametrize(
+    ("tela", "colunas"), [(DESKTOP, 4), (CELULAR, 2)], ids=["desktop", "celular"]
+)
+def test_grade_de_categorias_tem_4_colunas_e_2_no_celular(page: Page, base_url, tela, colunas):
+    page.set_viewport_size(tela)
+    page.goto(base_url)
+    expect(page.locator(".categoria")).to_have_count(8)
+    usadas = page.evaluate(
+        "() => new Set([...document.querySelectorAll('.categoria')]"
+        ".map(e => Math.round(e.getBoundingClientRect().left))).size"
+    )
+    assert usadas == colunas
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
 
 def test_ver_todas_as_atas_lista_sem_filtro(page: Page, base_url):
     page.goto(base_url)
-    page.get_by_role("link", name="Ver todas as atas").click()
+    page.locator(".recortes").get_by_role("link", name="Todas as atas").click()
     expect(page).to_have_url(f"{base_url}{TODAS}")
     expect(page.locator(RESULTADOS).first).to_be_visible()
     expect(page.locator(".pilula")).to_have_count(0)
@@ -55,7 +94,7 @@ def test_campo_de_busca_fica_no_eixo_do_titulo(page: Page, base_url, tela):
     page.set_viewport_size(tela)
     page.goto(base_url)
     titulo = _centro(page, ".home h1")
-    for seletor in (".campo-busca", ".exemplos", ".home-rodape"):
+    for seletor in (".campo-busca", ".categorias", ".recortes", ".home-rodape"):
         assert abs(_centro(page, seletor) - titulo) <= 1, seletor
 
 
