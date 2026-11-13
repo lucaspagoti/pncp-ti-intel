@@ -40,6 +40,26 @@ def test_desktop_mostra_lateral_com_filtros(page: Page, base_url):
     expect(page.locator(".rodape-lateral")).to_contain_text("Dados de")
 
 
+def test_tela_larga_centraliza_lateral_e_lista_juntas(page: Page, base_url):
+    """W12: em monitor largo, lateral e lista ficam juntas no meio; a lista mantém 1000 px."""
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto(base_url + TODAS)
+    casca = page.locator(".casca").bounding_box()
+    largura = page.evaluate("document.documentElement.clientWidth")
+    esquerda, direita = casca["x"], largura - casca["x"] - casca["width"]
+    assert esquerda > 200 and abs(esquerda - direita) <= 1, (esquerda, direita)
+    lateral = page.locator(".lateral").bounding_box()
+    lista = page.locator(".lista-atas").bounding_box()
+    assert lista["width"] == 1000 and lista["x"] - (lateral["x"] + lateral["width"]) <= 16
+    _sem_rolagem_horizontal(page)
+
+
+def test_tela_de_ate_1296_continua_sem_margem_externa(page: Page, base_url):
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(base_url + TODAS)
+    assert page.locator(".casca").bounding_box()["x"] == 0
+
+
 def test_celular_recolhe_filtros_e_mantem_aberto_apos_filtrar(page: Page, base_url):
     page.set_viewport_size(CELULAR)
     page.goto(base_url + TODAS)

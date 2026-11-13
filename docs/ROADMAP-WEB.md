@@ -1,4 +1,4 @@
-# Roadmap da web (W0–W11)
+# Roadmap da web (W0–W12)
 
 Fecha a R4 (`docs/FASES.md`), cujo aceite é a demonstração do Lucas. Fica fora das fases R. Cada
 fase é uma sprint. Decisões em 19/10/2026: o Codex é o QA executor (ADR 0029), o Playwright
@@ -127,6 +127,15 @@ Pedido pelo Lucas em 11/11/2026: o PRODERJ é o órgão de maior vínculo dele. 
 `proderj` na carga diária. Sem status de licitação nem outras fases: a base segue só de atas vigentes.
 - **Aceite:** com os dados reais, a aba PRODERJ mostra as atas vigentes do órgão e cada ata com
   contratação no site abre a página certa; ata sem página mostra o botão desativado.
+
+## W12 · Busca centralizada em tela larga (ADR 0044)
+
+Pedido pelo Lucas em 12/11/2026: em monitor de 1920 px sobrava um vazio grande à direita da lista.
+Depois de comparar cinco opções num HTML, lateral e lista passam a ficar juntas no meio da tela
+(token `--casca`, 1296 px). Sem migração; telas de até 1296 px não mudam.
+- **Aceite:** em 1920 px, as margens à esquerda e à direita da página de resultados são iguais e a
+  lista mantém 1000 px; em 1366 px as margens são de cerca de 35 px; até 1296 px e no celular,
+  nada muda.
 
 ## W11 · Explorar sem buscar (ADR 0043)
 
