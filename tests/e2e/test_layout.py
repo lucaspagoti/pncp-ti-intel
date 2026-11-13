@@ -33,6 +33,26 @@ def test_capturas_de_referencia_sem_rolagem_horizontal(page: Page, base_url, pyt
         page.screenshot(path=saida / f"{nome}-{tela['width']}.png", full_page=True)
 
 
+def test_barra_de_busca_fixa_flutua_sem_faixa_em_volta(page: Page, base_url):
+    """W13: ao rolar, só o campo fica por cima da lista; em volta dele é transparente e clicável."""
+    page.goto(base_url + TODAS)
+    page.mouse.wheel(0, 600)
+    page.wait_for_function("window.scrollY > 0")
+    estilo = page.evaluate(
+        """() => { const s = getComputedStyle(document.querySelector('.topo'));
+                   return [s.backgroundColor, s.backdropFilter, s.pointerEvents]; }"""
+    )
+    assert estilo == ["rgba(0, 0, 0, 0)", "none", "none"], estilo
+    expect(page.locator(".topo .busca input[type=search]")).to_be_visible()
+    campo = page.locator(".topo .campo-busca").bounding_box()
+    acima = page.evaluate(
+        "([x, y]) => document.elementFromPoint(x, y).closest('.topo') === null",
+        [campo["x"] + 40, campo["y"] - 8],
+    )
+    assert acima, "a faixa acima do campo ainda captura o clique"
+    _sem_rolagem_horizontal(page)
+
+
 def test_desktop_mostra_lateral_com_filtros(page: Page, base_url):
     page.goto(base_url + TODAS)
     expect(page.locator(".lateral")).to_be_visible()
