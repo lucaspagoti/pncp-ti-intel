@@ -307,10 +307,42 @@ def test_ata_flutua_ao_passar_o_mouse_como_a_categoria(page: Page, base_url):
     assert ata.evaluate("(el) => getComputedStyle(el).transform") == "matrix(1, 0, 0, 1, 0, -1)"
 
 
-def test_ata_nao_se_move_com_movimento_reduzido(page: Page, base_url):
+def _transform_e_sombra(cartao) -> list[str]:
+    return cartao.evaluate(
+        "(el) => [getComputedStyle(el).transform, getComputedStyle(el).boxShadow]"
+    )
+
+
+def test_ata_flutua_no_foco_de_teclado(page: Page, base_url):
+    page.goto(base_url + TODAS)
+    page.mouse.move(0, 0)
+    ata = page.locator(".ata").first
+    repouso = _transform_e_sombra(ata)[1]
+    page.locator("#q").focus()
+    while not ata.evaluate("(el) => el.contains(document.activeElement)"):
+        page.keyboard.press("Tab")
+    page.wait_for_timeout(400)
+    transform, sombra = _transform_e_sombra(ata)
+    assert transform == "matrix(1, 0, 0, 1, 0, -1)" and sombra != repouso
+
+
+def test_movimento_reduzido_so_troca_a_sombra(page: Page, base_url):
+    """Com movimento reduzido, ata (hover e foco) e categoria não sobem; a sombra ainda cresce."""
     page.emulate_media(reduced_motion="reduce")
     page.goto(base_url + TODAS)
     ata = page.locator(".ata").first
+    repouso = _transform_e_sombra(ata)[1]
     ata.hover()
     page.wait_for_timeout(100)
-    assert ata.evaluate("(el) => getComputedStyle(el).transform") == "none"
+    assert _transform_e_sombra(ata)[0] == "none" and _transform_e_sombra(ata)[1] != repouso
+    page.mouse.move(0, 0)
+    ata.locator(".ata-objeto a").focus()
+    page.wait_for_timeout(100)
+    assert _transform_e_sombra(ata)[0] == "none"
+    page.goto(base_url + "/")
+    categoria = page.locator(".categoria").first
+    repouso = _transform_e_sombra(categoria)[1]
+    categoria.hover()
+    page.wait_for_timeout(100)
+    transform, sombra = _transform_e_sombra(categoria)
+    assert transform == "none" and sombra != repouso
