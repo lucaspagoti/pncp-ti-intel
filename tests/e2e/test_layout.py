@@ -294,3 +294,23 @@ def test_barra_de_progresso_aparece_quando_a_casca_esta_ocupada(page: Page, base
     expect(page.locator(".progresso")).to_have_css("opacity", "0")
     page.evaluate("document.documentElement.setAttribute('data-ocupado', '')")
     expect(page.locator(".progresso")).to_have_css("opacity", "1")
+
+
+def test_ata_flutua_ao_passar_o_mouse_como_a_categoria(page: Page, base_url):
+    """W14: a ata sobe 1 px e a sombra cresce com transição, como o cartão de categoria da home."""
+    page.goto(base_url + TODAS)
+    ata = page.locator(".ata").first
+    duracao = ata.evaluate("(el) => getComputedStyle(el).transitionDuration")
+    assert all(d != "0s" for d in duracao.split(", ")), duracao
+    ata.hover()
+    page.wait_for_timeout(400)
+    assert ata.evaluate("(el) => getComputedStyle(el).transform") == "matrix(1, 0, 0, 1, 0, -1)"
+
+
+def test_ata_nao_se_move_com_movimento_reduzido(page: Page, base_url):
+    page.emulate_media(reduced_motion="reduce")
+    page.goto(base_url + TODAS)
+    ata = page.locator(".ata").first
+    ata.hover()
+    page.wait_for_timeout(100)
+    assert ata.evaluate("(el) => getComputedStyle(el).transform") == "none"
