@@ -37,7 +37,13 @@ def test_barra_de_busca_fixa_flutua_sem_faixa_em_volta(page: Page, base_url):
     """W13: ao rolar, só o campo fica por cima da lista; em volta dele é transparente e clicável."""
     page.goto(base_url + TODAS)
     page.mouse.wheel(0, 600)
-    page.wait_for_function("window.scrollY > 0")
+    # Sem wait_for_function: a predicate em texto vira eval na página e a CSP (script-src 'self')
+    # bloqueia de forma intermitente. evaluate usa a ponte do Playwright e não passa pela CSP.
+    for _ in range(50):
+        if page.evaluate("() => window.scrollY") > 0:
+            break
+        page.wait_for_timeout(50)
+    assert page.evaluate("() => window.scrollY") > 0
     estilo = page.evaluate(
         """() => { const s = getComputedStyle(document.querySelector('.topo'));
                    return [s.backgroundColor, s.backdropFilter, s.pointerEvents]; }"""
