@@ -37,7 +37,13 @@ def test_barra_de_busca_fixa_flutua_sem_faixa_em_volta(page: Page, base_url):
     """W13: ao rolar, só o campo fica por cima da lista; em volta dele é transparente e clicável."""
     page.goto(base_url + TODAS)
     page.mouse.wheel(0, 600)
-    page.wait_for_function("window.scrollY > 0")
+    # Sem wait_for_function: a predicate em texto vira eval na página e a CSP (script-src 'self')
+    # bloqueia de forma intermitente. evaluate usa a ponte do Playwright e não passa pela CSP.
+    for _ in range(50):
+        if page.evaluate("() => window.scrollY") > 0:
+            break
+        page.wait_for_timeout(50)
+    assert page.evaluate("() => window.scrollY") > 0
     estilo = page.evaluate(
         """() => { const s = getComputedStyle(document.querySelector('.topo'));
                    return [s.backgroundColor, s.backdropFilter, s.pointerEvents]; }"""
@@ -294,3 +300,55 @@ def test_barra_de_progresso_aparece_quando_a_casca_esta_ocupada(page: Page, base
     expect(page.locator(".progresso")).to_have_css("opacity", "0")
     page.evaluate("document.documentElement.setAttribute('data-ocupado', '')")
     expect(page.locator(".progresso")).to_have_css("opacity", "1")
+
+
+def test_ata_flutua_ao_passar_o_mouse_como_a_categoria(page: Page, base_url):
+    """W14: a ata sobe 1 px e a sombra cresce com transição, como o cartão de categoria da home."""
+    page.goto(base_url + TODAS)
+    ata = page.locator(".ata").first
+    duracao = ata.evaluate("(el) => getComputedStyle(el).transitionDuration")
+    assert all(d != "0s" for d in duracao.split(", ")), duracao
+    ata.hover()
+    page.wait_for_timeout(400)
+    assert ata.evaluate("(el) => getComputedStyle(el).transform") == "matrix(1, 0, 0, 1, 0, -1)"
+
+
+def _transform_e_sombra(cartao) -> list[str]:
+    return cartao.evaluate(
+        "(el) => [getComputedStyle(el).transform, getComputedStyle(el).boxShadow]"
+    )
+
+
+def test_ata_flutua_no_foco_de_teclado(page: Page, base_url):
+    page.goto(base_url + TODAS)
+    page.mouse.move(0, 0)
+    ata = page.locator(".ata").first
+    repouso = _transform_e_sombra(ata)[1]
+    page.locator("#q").focus()
+    while not ata.evaluate("(el) => el.contains(document.activeElement)"):
+        page.keyboard.press("Tab")
+    page.wait_for_timeout(400)
+    transform, sombra = _transform_e_sombra(ata)
+    assert transform == "matrix(1, 0, 0, 1, 0, -1)" and sombra != repouso
+
+
+def test_movimento_reduzido_so_troca_a_sombra(page: Page, base_url):
+    """Com movimento reduzido, ata (hover e foco) e categoria não sobem; a sombra ainda cresce."""
+    page.emulate_media(reduced_motion="reduce")
+    page.goto(base_url + TODAS)
+    ata = page.locator(".ata").first
+    repouso = _transform_e_sombra(ata)[1]
+    ata.hover()
+    page.wait_for_timeout(100)
+    assert _transform_e_sombra(ata)[0] == "none" and _transform_e_sombra(ata)[1] != repouso
+    page.mouse.move(0, 0)
+    ata.locator(".ata-objeto a").focus()
+    page.wait_for_timeout(100)
+    assert _transform_e_sombra(ata)[0] == "none"
+    page.goto(base_url + "/")
+    categoria = page.locator(".categoria").first
+    repouso = _transform_e_sombra(categoria)[1]
+    categoria.hover()
+    page.wait_for_timeout(100)
+    transform, sombra = _transform_e_sombra(categoria)
+    assert transform == "none" and sombra != repouso
