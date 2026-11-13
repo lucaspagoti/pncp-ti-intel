@@ -5,7 +5,6 @@
   /* Cor. Um acento só (ação e foco); cor de alerta só para prazo. */
   --bg: #f5f5f7;
   --surface: #ffffff;
-  --surface-veu: rgba(245, 245, 247, .84);  /* barra fixa translúcida sobre o fundo */
   --ink: #1d1d1f;             /* 16,8:1 */
   --ink-2: #636366;           /* 5,99:1 na superfície, 5,5:1 no fundo */
   --line: #e3e4e8;            /* fio de separação, nunca texto */

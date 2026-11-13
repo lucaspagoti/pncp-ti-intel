@@ -139,9 +139,13 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--a
 .principal { min-width: 0; padding: 0 var(--s-6) var(--s-7) var(--s-4); }
 .principal > * { max-width: var(--coluna); }
 
-/* Barra de busca fixa e translúcida. */
-.topo { position: sticky; top: 0; z-index: 3; padding: var(--s-5) 0 var(--s-3); background: var(--surface-veu);
-        -webkit-backdrop-filter: saturate(1.8) blur(20px); backdrop-filter: saturate(1.8) blur(20px); }
+/* Barra de busca fixa: só o campo fica por cima da lista. Em volta dele é transparente e o clique
+   atravessa, para a lista passar por baixo sem faixa (ADR 0045). */
+.topo { position: sticky; top: 0; z-index: 3; padding: var(--s-5) 0 var(--s-3); pointer-events: none; }
+.topo .busca { pointer-events: auto; }
+/* Elevação da home: o campo se destaca do cartão branco que passa por baixo. */
+.topo .campo-busca { box-shadow: inset 0 0 0 var(--borda) var(--control-line), var(--shadow-lift); }
+.topo .campo-busca:focus-within { box-shadow: inset 0 0 0 var(--borda) var(--accent), var(--ring), var(--shadow-lift); }
 
 .resumo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3) var(--s-4); padding: var(--s-4) 0; }
 .resumo h1 { font-size: var(--fs-5); line-height: var(--lh-5); font-weight: var(--w-strong); letter-spacing: var(--tracking-display); }
